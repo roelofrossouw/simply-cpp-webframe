@@ -107,8 +107,17 @@
          */
         private function Format(): ?string
         {
-            // Quiet when it isn't installed: the email goes out unformatted
-            $Process = @proc_open(['bootstrap-email'], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $Pipes, sys_get_temp_dir());
+            // PHP-FPM clears the environment, so bootstrap-email is looked for in the usual places too (gem installs it in
+            // /usr/local/bin), and gets a PATH that finds the ruby it runs with. Quiet when it isn't installed: the email
+            // goes out unformatted.
+            $Path = array_unique(array_filter([...explode(':', (string)getenv('PATH')), '/usr/local/bin', '/usr/bin', '/bin']));
+            $Command = current(array_filter(array_map(fn($Folder) => "$Folder/bootstrap-email", $Path), 'is_executable'));
+            if ($Command === false)
+            {
+                return null;
+            }
+            $Process = proc_open([$Command], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $Pipes, sys_get_temp_dir(),
+                ['PATH' => implode(':', $Path), 'HOME' => sys_get_temp_dir()]);
             if (!is_resource($Process))
             {
                 return null;
@@ -144,7 +153,7 @@
         private function ShowPreview(string $To, string $Subject): void
         {
             \Page::AddContent($Alert = new AlertWarning('Mail disabled', $Message = new \HTML\Paragraph('')));
-            $Message->AddChild('The email was not sent because sending email is disabled in the configuration (MailDisabled).');
+            $Message->AddChild('The email was not sent because sending email is disabled in the settings (mail.disabled).');
             if (\Auth\Base::SystemAdmin())
             {
                 $Message->AddSibling($Paragraph = new \HTML\Paragraph('Email preview'));
