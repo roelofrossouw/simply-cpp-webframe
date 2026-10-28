@@ -100,7 +100,8 @@ values ('main', 0, 'Home', 'bi-house', '/home.php', false, 'home', true, 'always
        ('page', 1, 'Data Deletion Instructions', 'bi-trash', '/framework/datadeletion.php', false, 'datadeletion', true, 'always')
 on conflict (code) do nothing;
 
--- Administer (admins only): Users and Menu; Your profile in the status bar, for anyone signed in (since 1.1.0)
+-- Administer (admins only): Users, Menu and Config (the settings file); Your profile in the status bar, for anyone signed
+-- in (since 1.1.0; Config since 1.2.0)
 insert into framework.menu (section, position, name, icon, target, popup, code, public, shown)
 values ('main', 80, 'Administer', 'bi-gear', null, false, 'administer', false, 'always'),
        ('status', 1, 'Your profile', 'bi-person-circle', '/framework/profile.php', true, 'profile', false, 'signed_in')
@@ -109,7 +110,8 @@ on conflict (code) do nothing;
 insert into framework.menu (parent_id, section, position, name, icon, target, popup, code)
 select a.id, 'main', s.position, s.name, s.icon, s.target, false, s.code
   from (values (1, 'Users', 'bi-people', '/framework/admin/users.php', 'users'),
-               (2, 'Menu', 'bi-menu-button-wide', '/framework/admin/menu.php', 'menu')) s(position, name, icon, target, code)
+               (2, 'Menu', 'bi-menu-button-wide', '/framework/admin/menu.php', 'menu'),
+               (3, 'Config', 'bi-filetype-json', '/framework/admin/config.php', 'config')) s(position, name, icon, target, code)
   join framework.menu a on a.code = 'administer'
 on conflict (code) do nothing;
 
@@ -118,7 +120,7 @@ insert into framework.menu_access (menu_id, access_id, can_edit)
 select m.id, l.access_id, true
   from framework.menu m
   join access.levels l on l.code = 'admin'
- where m.code in ('home', 'login', 'logout', 'privacy', 'terms', 'datadeletion', 'administer', 'users', 'menu', 'profile')
+ where m.code in ('home', 'login', 'logout', 'privacy', 'terms', 'datadeletion', 'administer', 'users', 'menu', 'config', 'profile')
 on conflict do nothing;
 
 insert into framework.menu_access (menu_id, access_id)

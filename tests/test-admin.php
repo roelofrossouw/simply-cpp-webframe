@@ -38,6 +38,12 @@
   Check(str_contains($Menu, 'Main menu') && str_contains($Menu, '/framework/admin/menuupdate.php'), 'Menu shows the sections, saving through menuupdate.php');
   Check(!preg_match('/Warning|Deprecated|Fatal|Something Went Wrong/', $Menu), 'Menu without errors' . (preg_match('/(Warning|Deprecated|Fatal)[^\n]*/', $Menu, $M) ? ': ' . $M[0] : ''));
 
+  $Config = Render('admin/config.php');
+  Check(str_contains($Config, 'app.name') && str_contains($Config, 'Test site') && str_contains($Config, 'auth.github.client_id'), 'Config shows the settings');
+  Check(!str_contains($Config, 'test secret, not for use anywhere') && !str_contains($Config, 'test-secret') && !str_contains($Config, 'secret\\'),
+    'but never a secret');
+  Check(!preg_match('/Warning|Deprecated|Fatal|Something Went Wrong/', $Config), 'Config without errors' . (preg_match('/(Warning|Deprecated|Fatal)[^\n]*/', $Config, $M) ? ': ' . $M[0] : ''));
+
   $Profile = Render('profile.php');
   Check(str_contains($Profile, 'Your profile') && str_contains($Profile, 'Ann'), 'the profile');
   Check(!preg_match('/Warning|Deprecated|Fatal|Something Went Wrong/', $Profile), 'the profile without errors' . (preg_match('/(Warning|Deprecated|Fatal)[^\n]*/', $Profile, $M) ? ': ' . $M[0] : ''));

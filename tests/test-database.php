@@ -23,7 +23,7 @@
   Same('6', DB::Value('select count(*) from framework.menu where code in (\'home\', \'login\', \'logout\', \'privacy\', \'terms\', \'datadeletion\')'),
     'the schema\'s menu items, once');
 
-  Same('10', DB::Value('select count(*) from framework.menu where code in (\'home\', \'login\', \'logout\', \'privacy\', \'terms\', \'datadeletion\', \'administer\', \'users\', \'menu\', \'profile\')'),
+  Same('11', DB::Value('select count(*) from framework.menu where code in (\'home\', \'login\', \'logout\', \'privacy\', \'terms\', \'datadeletion\', \'administer\', \'users\', \'menu\', \'config\', \'profile\')'),
     'the schema\'s items, Administer, Users, Menu and the profile among them');
   $Storage = Store::Get();
 

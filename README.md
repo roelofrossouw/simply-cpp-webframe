@@ -33,7 +33,7 @@ plain PHP: nothing to compile, and no extension.
 | `DB` | PostgreSQL with parameters: `Rows()`, `Row()`, `Value()`, `Assoc()`, `Exists()`, `Exec()`, `Transaction()`. |
 | `Storage\` | Where users, access and the menu are kept: `Postgres` (the default), or a class of your own (`Storage\Backend`). |
 | `Rest`, `Server`, `Post`, `QueryString`, `ErrorHandler` | Small helpers: an HTTP client, the request, and errors shown in the page (in full for admins). |
-| `public/` | What the site serves under `/framework`: `js/app.js`, `css/style.css`, the service worker, the sign-in and sign-out pages, the menu (`landing.php`), Administer → Users and Menu (`admin/`), Your profile (`profile.php`), and the privacy policy, terms of use and data deletion pages, written from the settings. |
+| `public/` | What the site serves under `/framework`: `js/app.js`, `css/style.css`, the service worker, the sign-in and sign-out pages, the menu (`landing.php`), Administer → Users, Menu and Config (`admin/`), Your profile (`profile.php`), and the privacy policy, terms of use and data deletion pages, written from the settings. |
 | `sql/schema.sql` | The tables: `access.users`, `access.levels`, `access.grants`, `framework.menu`, `framework.menu_access`. |
 
 The classes keep short global names (`Config`, `Page`, `DB`, `User`) and the namespaces `HTML`, `BS`, `Auth` and `Storage`,
@@ -149,8 +149,10 @@ signed out). `framework.menu_access` gives access levels the View right on an it
 too. Add your access levels to `access.levels`, and grant them in `access.grants`.
 
 The schema adds **Administer** to the main menu, for admins: **Users** (everyone who signed in, with a switch per access
-level; admins can't take away their own admin or block themselves) and **Menu** (every item, a tab per section, with
-its fields, Public and Shown, and View and Edit per access level; a change that would take Menu from admins is undone).
+level; admins can't take away their own admin or block themselves), **Menu** (every item, a tab per section, with
+its fields, Public and Shown, and View and Edit per access level; a change that would take Menu from admins is undone)
+and **Config** (the settings file by section; it saves when the web server may write the file, and never shows a secret:
+a secret's field stays empty, and saving it empty keeps it).
 **Your profile** is in the status bar for anyone signed in: what the site calls them, their photo, and a test email.
 Change their access in the menu like any other page's. A site's own admin pages can do the same with
 `MenuLayout::Add()`, `Update()`, `SetAccess()` and `Delete()`, and `User::All()`, `User::SetAccess()` and
@@ -171,6 +173,10 @@ The class loads from the site's classes like any other. `DB` stays available for
 
 [examples/hello](examples/hello) is a whole site: `public/index.php`, `public/home.php` (Hello world!, and who you are
 once signed in), the settings and the Apache site. Copy it, change the settings, load the schema, and enable the site.
+
+What it shows before you sign in, with Google and GitHub set up:
+
+![The Hello world example: the menu with Home and Sign in, a "Hello world!" card with Sign in with Google and Sign in with GitHub buttons, and the status bar with the company and the policies](docs/hello.png)
 
 ## Building and testing
 

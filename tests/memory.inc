@@ -46,6 +46,7 @@
         8 => $Item(8, 'administer2', 'Administer', null, false),
         9 => $Item(9, 'users2', 'Users', '/framework/admin/users.php', false, Parent: 8),
         10 => $Item(10, 'menu2', 'Menu', '/framework/admin/menu.php', false, Parent: 8),
+        12 => $Item(12, 'config2', 'Config', '/framework/admin/config.php', false, Parent: 8),
         11 => $Item(11, 'profile', 'Your profile', '/framework/profile.php', false, 'signed_in', 'status', Access: ['admin', 'public']),
       ];
     }
