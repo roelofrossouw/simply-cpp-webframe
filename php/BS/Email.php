@@ -78,13 +78,22 @@
                 $Headers['X-Original-To'] = $To;
             }
             $Body = $this->Part($Boundary, 'text/plain', $this->PlainText())
-                . $this->Part($Boundary, 'text/html', $this->Format($Html = self::ForMail((string)$this)) ?? $Html)
+                . $this->Part($Boundary, 'text/html', $this->Html())
                 . "--$Boundary--\r\n";
 
             // The envelope sender is the From address, so bounces go there (mail() escapes the parameter itself)
             $Envelope = preg_match('/<([^>]+)>/', $From, $Match) ? $Match[1] : $From;
             $Parameters = filter_var($Envelope, FILTER_VALIDATE_EMAIL) ? '-f' . $Envelope : '';
             return mail($Recipient, self::EncodeHeader($Subject), $Body, $Headers, $Parameters);
+        }
+
+        /**
+         * The HTML Send() sends: ForMail(), then bootstrap-email (unformatted when it isn't there), e.g. for a preview
+         */
+        public function Html(): string
+        {
+            $Html = self::ForMail((string)$this);
+            return $this->Format($Html) ?? $Html;
         }
 
         /**

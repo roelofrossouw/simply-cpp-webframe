@@ -55,6 +55,7 @@
   $Email->AddChild('Hello');
   $Formatted = (new ReflectionMethod(BS\Email::class, 'Format'))->invoke($Email, (string)$Email);
   Check(is_string($Formatted) && $Formatted !== '' && $Formatted !== (string)$Email, 'emails go through SC\BootstrapEmail when it\'s there');
+  Same(SC\BootstrapEmail::format(BS\Email::ForMail((string)$Email)), $Email->Html(), 'Html() is what Send() sends: ForMail(), then formatted');
 
   // What mail clients can't show: icons left out, Bootstrap 5.3 classes as bootstrap-email's, lead text inline
   $Mail = BS\Email::ForMail((string)new BS\Badge('New') . (string)new BS\Button('Open', BS\Icon::House)
