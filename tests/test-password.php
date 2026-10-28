@@ -143,6 +143,9 @@
   Check(!str_contains($Form, 'name="username"'), 'with no username');
   Check(str_contains($Form, 'resetpassword.php') && str_contains($Form, 'signup.php'), 'with Forgot your password? and Create an account');
   NoErrors($Form, 'the sign-in form');
+  Check(str_contains($Form, 'bi-house') && str_contains($Form, 'https://www.example.com"'), 'as a page of its own, with Home');
+  Check(!str_contains(Render('login.php', Cookies: ['ajax' => '1'], Query: ['provider' => 'password']), 'bi-house'), 'but not in the app, which has the menu');
+  Check(str_contains(Render('signup.php'), 'bi-house') && str_contains(Render('resetpassword.php'), 'bi-house'), 'the other password pages too');
   $Choice = Render('login.php');
   Check(str_contains($Choice, 'name="email"') && str_contains($Choice, 'Sign in with GitHub'), 'without a provider: the form, and the other providers');
 

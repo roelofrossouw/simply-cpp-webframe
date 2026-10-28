@@ -401,6 +401,7 @@
       $Card->Format->Margin(Side::Top, PadSize::Pad4);
       $Card->AddHeader('Please sign in');
       $Card->AddChild($this->Form());
+      self::AddHome($Card);
     }
 
     /**

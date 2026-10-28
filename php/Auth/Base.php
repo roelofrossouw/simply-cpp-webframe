@@ -409,6 +409,21 @@
       }
     }
 
+    /**
+     * A Home button at the foot of a sign-in card, for when it's a page of its own (e.g. back from a provider, or a link
+     * from an email), without the menu; in the app the menu is there already
+     */
+    public static function AddHome(\BS\Card $Card): void
+    {
+      if (\Server::IsAJAX())
+      {
+        return;
+      }
+      $Card->AddFooter($Home = new \BS\Button('Home', \BS\Icon::House));
+      $Home->Link(Config::Origin());
+      $Home->Color(\BS\Color::Secondary);
+    }
+
     private function ShowProviders(): void
     {
       \Page::AddContent($Card = new \BS\Card());
@@ -426,6 +441,7 @@
         $Card->AddChild($Button = new \BS\Button('Sign in with ' . $Class::TITLE, $Class::ICON, $this->LoginURI() . '?provider=' . $Name));
         $Button->Format->Margin(\BS\Side::All, \BS\PadSize::Pad2);
       }
+      self::AddHome($Card);
     }
 
     protected function ShowLogin(): void

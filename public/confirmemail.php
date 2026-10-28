@@ -12,6 +12,8 @@
   $Card->Format->Center();
   $Card->Format->MaxWidth(ScreenSize::Small->Width());
   $Card->Format->Margin(Side::Top, PadSize::Pad4);
+  // Its own page, without the menu: a way back
+  Auth\Base::AddHome($Card);
   $Card->AddHeader('Your new email address');
 
   // The link works while the password and the old address are the same, and nobody took the new one meanwhile

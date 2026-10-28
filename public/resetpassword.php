@@ -15,6 +15,8 @@
   $Card->Format->Center();
   $Card->Format->MaxWidth(ScreenSize::Small->Width());
   $Card->Format->Margin(Side::Top, PadSize::Pad4);
+  // Its own page, without the menu: a way back
+  Auth\Base::AddHome($Card);
 
   if (!Password::CanEmail())
   {
