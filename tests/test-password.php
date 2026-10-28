@@ -45,10 +45,18 @@
     return;
   }
 
+  // The pages' emails go to a file instead, through a sendmail of our own (PHP's sendmail_path)
+  $MailFile = tempnam(sys_get_temp_dir(), 'sc-webframe-mail');
+  $Sendmail = "$MailFile.sh";
+  file_put_contents($Sendmail, "#!/bin/sh\ncat >> " . escapeshellarg($MailFile) . "\n");
+  chmod($Sendmail, 0700);
+  register_shutdown_function(fn() => array_map('unlink', [$MailFile, $Sendmail]));
+
   function Render(string $Page, array $Post = [], array $Cookies = [], array $Query = []): string
   {
-    return (string)shell_exec(escapeshellarg(PHP_BINARY) . ' -d error_reporting=-1 -d display_errors=1 ' . escapeshellarg(__FILE__) . ' '
-      . escapeshellarg($Page) . ' ' . escapeshellarg(json_encode([$Post, $Cookies, $Query])) . ' 2>&1');
+    global $Sendmail;
+    return (string)shell_exec(escapeshellarg(PHP_BINARY) . ' -d error_reporting=-1 -d display_errors=1 -d sendmail_path=' . escapeshellarg($Sendmail)
+      . ' ' . escapeshellarg(__FILE__) . ' ' . escapeshellarg($Page) . ' ' . escapeshellarg(json_encode([$Post, $Cookies, $Query])) . ' 2>&1');
   }
 
   function NoErrors(string $Html, string $What): void
@@ -179,3 +187,32 @@
   $Guess = Render('profile.php', ['current_password' => 'a guess', 'new_password' => 'my own battery', 'repeat_password' => 'my own battery'],
     $Own, ['action' => 'password']);
   Check(str_contains($Guess, 'current password isn'), 'not without it');
+
+  // Create an account: the email's link, then names and a password make it, signed in
+  $Ask = Render('signup.php');
+  Check(str_contains($Ask, 'name="email"'), 'sign-up asks for an email address');
+  NoErrors($Ask, 'sign-up');
+  Check(str_contains(Render('login.php', Query: ['provider' => 'password']), 'signup.php'), 'the sign-in form offers it');
+  file_put_contents($MailFile, '');
+  $Asked = Render('signup.php', ['email' => 'Dave@Example.com']);
+  Check(str_contains($Asked, 'Check your email'), 'it sends a link');
+  NoErrors($Asked, 'asking for a sign-up link');
+  $Mail = quoted_printable_decode((string)file_get_contents($MailFile));
+  Check(str_contains($Mail, 'dave@example.com') && preg_match('/signup\.php\?token=([\w.-]+)/', $Mail, $Found) === 1, 'the email has the link');
+  $Link = $Found[1] ?? '';
+  Same('dave@example.com', Password::SignUpEmail($Link), 'for that address');
+  $Finish = Render('signup.php', Query: ['token' => $Link]);
+  Check(str_contains($Finish, 'name="first_name"') && str_contains($Finish, 'name="password"'), 'the link asks for names and a password');
+  NoErrors($Finish, 'the sign-up link');
+  $Made = Render('signup.php', ['token' => $Link, 'first_name' => 'Dave', 'last_name' => '', 'password' => 'daves battery', 'repeat' => 'daves battery']);
+  Check(str_contains($Made, 'Welcome!') && str_contains($Made, 'window.location'), 'makes the account and signs in');
+  NoErrors($Made, 'making the account');
+  $Weak = Render('signup.php', ['token' => $Link, 'first_name' => 'Dave', 'password' => 'short', 'repeat' => 'short']);
+  Check(str_contains($Weak, 'at least 8 characters') && !str_contains($Weak, 'Welcome'), 'not with a short password');
+  Same(null, Password::SignUpEmail((string)new Auth\JWT(['purpose' => 'reset', 'email' => 'dave@example.com'], 600)), 'a reset token is no sign-up link');
+  Same(null, Password::SignUpEmail(Password::SignUpToken('bob@example.com')), 'nor for an address that has an account');
+  file_put_contents($MailFile, '');
+  Check(str_contains(Render('signup.php', ['email' => 'bob@example.com']), 'Check your email'), 'which gets the same answer');
+  $Mail = quoted_printable_decode((string)file_get_contents($MailFile));
+  Check(str_contains($Mail, 'resetpassword.php') && !str_contains($Mail, 'signup.php?token'), 'but an email to reset the password instead');
+  Check(str_contains(Render('signup.php', ['email' => 'not an address']), 'look right'), 'an address that isn\'t one');

@@ -33,7 +33,7 @@ plain PHP: nothing to compile, and no extension.
 | `DB` | PostgreSQL with parameters: `Rows()`, `Row()`, `Value()`, `Assoc()`, `Exists()`, `Exec()`, `Transaction()`. |
 | `Storage\` | Where users, access and the menu are kept: `Postgres` (the default), or a class of your own (`Storage\Backend`). |
 | `Rest`, `Server`, `Post`, `QueryString`, `ErrorHandler` | Small helpers: an HTTP client, the request, and errors shown in the page (in full for admins). |
-| `public/` | What the site serves under `/framework`: `js/app.js`, `css/style.css`, the service worker, the sign-in and sign-out pages, Forgot your password? (`resetpassword.php`), the menu (`landing.php`), Administer → Users, Menu and Config (`admin/`), Your profile (`profile.php`), and the privacy policy, terms of use and data deletion pages, written from the settings. |
+| `public/` | What the site serves under `/framework`: `js/app.js`, `css/style.css`, the service worker, the sign-in and sign-out pages, Forgot your password? (`resetpassword.php`), Create an account (`signup.php`), the menu (`landing.php`), Administer → Users, Menu and Config (`admin/`), Your profile (`profile.php`), and the privacy policy, terms of use and data deletion pages, written from the settings. |
 | `sql/schema.sql` | The tables: `access.users`, `access.levels`, `access.grants`, `access.passwords`, `access.sign_in_failures`, `framework.menu`, `framework.menu_access`. |
 
 The classes keep short global names (`Config`, `Page`, `DB`, `User`) and the namespaces `HTML`, `BS`, `Auth` and `Storage`,
@@ -79,7 +79,7 @@ It needs PHP 8.3 or later, with the pgsql, curl, gd and mbstring extensions (the
    | `auth.apple` | `client_id` (the Services ID), `team_id`, `key_id`, `key_file` (the .p8 in `keys_dir`) |
    | `auth.github` | `client_id`, `client_secret` |
    | `auth.facebook` | `app_id`, `app_secret` |
-   | `auth.password` | `enabled` (`true` to offer it), `min_length` (10), `session_days` (30), `reset` (`false` to leave out Forgot your password?); see [Signing in with a password](#signing-in-with-a-password) |
+   | `auth.password` | `enabled` (`true` to offer it), `min_length` (10), `session_days` (30), `reset` (`false` to leave out Forgot your password?), `signup` (`true`: anyone may make an account); see [Signing in with a password](#signing-in-with-a-password) |
    | `mail` | `from`, `redirect` (send every email there instead), `disabled` |
    | `storage` | `class`: a `Storage\Backend` of your own instead of `Storage\Postgres` |
    | `menu` | `editor`: the page that manages the menu, which admins must always keep (default: the package's `admin/menu.php`, when the menu has it; `""` for none) |
@@ -133,9 +133,15 @@ It needs PHP 8.3 or later, with the pgsql, curl, gd and mbstring extensions (the
 ## Signing in with a password
 
 With `"password": {"enabled": true}` in the settings' `auth` section, people can also sign in with a username (or their
-email address) and a password. Nobody signs up by themselves: an admin adds them under Administer → Users (**Add a
-user**: username, email, names and a first password), and sets a new password with the key button next to them. They
-change their own password, names and email on Your profile.
+email address) and a password. An admin adds them under Administer → Users (**Add a user**: username, email, names and
+a first password), and sets a new password with the key button next to them. They change their own password, names and
+email on Your profile.
+
+With `"signup": true` as well, the sign-in form offers **Create an account** (`/framework/signup.php`): anyone gives an
+email address, and the email gets a link (an hour) to choose their names and a password. That makes the account, with
+the address as its username and Public access, and signs them in. An address that has an account gets a reminder to
+sign in or reset the password instead, and the page answers the same either way. It needs mail. On a new site, sign in
+as the admin first: with `auth.first_admin` at `true`, the first account made would become the admin.
 
 - Passwords are kept as Argon2id hashes (bcrypt where PHP lacks Argon2), at least `min_length` characters, and not the
   username.

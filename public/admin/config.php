@@ -46,6 +46,7 @@
       'auth.password.min_length' => ['The shortest password allowed (default 10)', false],
       'auth.password.session_days' => ['Days a sign-in lasts before the password is asked again (default 30)', false],
       'auth.password.reset' => ['false to leave out "Forgot your password?", which emails a link (default true)', false],
+      'auth.password.signup' => ['true to let anyone make their own account with an email address they can read (default false)', false],
     ],
     'Sign in with Google' => [
       'auth.google.client_id' => ['Client ID', false],

@@ -14,6 +14,6 @@
   "auth": {
     "secret": "test secret, not for use anywhere",
     "github": {"client_id": "test-id", "client_secret": "test-secret"},
-    "password": {"enabled": true, "min_length": 8}
+    "password": {"enabled": true, "min_length": 8, "signup": true}
   }
 }

@@ -229,7 +229,7 @@
       return $this->SetAuthToken($this->DoAccessToken());
     }
 
-    private function SetAuthToken(JWT $Token): bool
+    protected function SetAuthToken(JWT $Token): bool
     {
       if ($Token->Expired())
       {

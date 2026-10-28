@@ -107,7 +107,8 @@
          */
         private function Format(): ?string
         {
-            $Process = proc_open(['bootstrap-email'], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $Pipes, sys_get_temp_dir());
+            // Quiet when it isn't installed: the email goes out unformatted
+            $Process = @proc_open(['bootstrap-email'], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $Pipes, sys_get_temp_dir());
             if (!is_resource($Process))
             {
                 return null;

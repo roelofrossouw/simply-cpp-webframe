@@ -22,30 +22,6 @@
     return;
   }
 
-  // A sign-in form's parts: a form posting here, and its fields
-  function ResetForm(Card $Card, array $Fields, string $Caption): HTML\Form
-  {
-    $Card->AddChild($Form = new HTML\Form());
-    $Form->Method = 'post';
-    $Form->Action = Config::FrameworkURL('resetpassword.php');
-    $Form->Format->Margin(Side::All, PadSize::Pad2);
-    foreach ($Fields as $Name => [$Label, $Type, $AutoComplete])
-    {
-      $Form->AddChild($Input = new Input($Name, $Label, $Type));
-      $Input->InputElement()->Required = true;
-      $Input->InputElement()->AutoComplete = $AutoComplete;
-      if ($Type == HTML\InputType::Password)
-      {
-        $Input->InputElement()->MinLength = Password::MinLength();
-      }
-      $Input->Format->Margin(Side::Bottom, PadSize::Pad2);
-    }
-    $Form->AddChild($Submit = new HTML\Button($Caption));
-    $Submit->Type = 'submit';
-    $Submit->AddClasses(['btn', 'btn-primary', 'mt-2']);
-    return $Form;
-  }
-
   function SignInLink(Card $Card, string $Caption): void
   {
     $Card->AddChild($Link = new Button($Caption, Icon::BoxArrowInRight));
@@ -77,7 +53,7 @@
       $Card->AddChild(new AlertWarning('Not changed', $Problem));
     }
     $Card->AddParagraph('Choose a new password for ' . Storage\Store::Get()->Password($UserID)['subject'] . ', at least ' . Password::MinLength() . ' characters.');
-    $Form = ResetForm($Card, ['password' => ['New password', HTML\InputType::Password, 'new-password'],
+    $Form = Password::PageForm($Card, $Here, ['password' => ['New password', HTML\InputType::Password, 'new-password'],
       'repeat' => ['New password again', HTML\InputType::Password, 'new-password']], 'Change password');
     $Form->AddChild($Hidden = new HTML\Input('token', HTML\InputType::Hidden));
     $Hidden->Value($Token);
@@ -124,4 +100,4 @@
   }
 
   $Card->AddParagraph('Give your username or email address, and we\'ll email you a link to choose a new password.');
-  ResetForm($Card, ['name' => ['Username or email', HTML\InputType::Text, 'username']], 'Send me a link');
+  Password::PageForm($Card, $Here, ['name' => ['Username or email', HTML\InputType::Text, 'username']], 'Send me a link');

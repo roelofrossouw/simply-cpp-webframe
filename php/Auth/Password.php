@@ -18,6 +18,7 @@
    *   min_length   - the shortest password allowed (default 10)
    *   session_days - how long a sign-in lasts without the password (default 30)
    *   reset        - false to leave out "Forgot your password?", which emails a link (default: on, while mail is)
+   *   signup       - true to let anyone with an email address make their own account (default false), see signup.php
    */
   class Password extends Base
   {
@@ -54,6 +55,15 @@
     public static function CanReset(): bool
     {
       return self::Configured() && Config::Get('auth.password.reset', true) !== false && Config::Get('mail.disabled') !== true;
+    }
+
+    /**
+     * Whether people may make their own account with their email address (auth.password.signup, off by default), which
+     * needs mail: the link to finish it is emailed
+     */
+    public static function CanSignUp(): bool
+    {
+      return self::Configured() && Config::Get('auth.password.signup') === true && Config::Get('mail.disabled') !== true;
     }
 
     /**
@@ -185,6 +195,37 @@
       return $User !== null && hash_equals(self::Fingerprint($User['hash']), (string)$Token->Get('pv')) ? (int)$User['user_id'] : null;
     }
 
+    /**
+     * A sign-up link's token: the email address it was sent to, signed with our own key, for RESET_SECONDS
+     */
+    public static function SignUpToken(string $Email): JWT
+    {
+      return new JWT(['purpose' => 'signup', 'email' => mb_strtolower(trim($Email))], self::RESET_SECONDS);
+    }
+
+    /**
+     * The email address a SignUpToken() was sent to, while it's signed by us and not expired, and nobody has the address
+     * as their username yet (so each link makes one account)
+     */
+    public static function SignUpEmail(string $Token): ?string
+    {
+      $Token = JWT::FromToken($Token);
+      if ($Token === null || $Token->Expired() || $Token->Get('iss') !== Config::Origin() || $Token->Get('purpose') !== 'signup')
+      {
+        return null;
+      }
+      $Email = (string)$Token->Get('email');
+      return filter_var($Email, FILTER_VALIDATE_EMAIL) && !self::Taken($Email) ? $Email : null;
+    }
+
+    /**
+     * Whether a password user already has the email address as their username or email
+     */
+    public static function Taken(string $Email): bool
+    {
+      return Store::Get()->PasswordUserID($Email) !== null;
+    }
+
     // Changes when the password does, and tells nothing about it
     private static function Fingerprint(string $Hash): string
     {
@@ -205,12 +246,7 @@
         $Result = self::Check((string)\Post::Get('username'), (string)\Post::Get('password'));
         if (is_int($Result))
         {
-          $Token = $this->SignIn($Result);
-          if (!$Token->Expired() && ($Session = self::Token($Result, 'session', 86400 * self::SessionDays())) !== null)
-          {
-            $this->SetCookie('password_session', $Session, $Session->TTL());
-          }
-          return $Token;
+          return $this->StartSession($Result);
         }
         sleep(1);
         $this->Problem = $Result ?? 'That username or password isn\'t right.';
@@ -227,6 +263,29 @@
         $this->ClearCookie('password_session');
       }
       return parent::DoAccessToken();
+    }
+
+    // A password user's sign-in token, and the session cookie that renews it
+    private function StartSession(int $UserID): JWT
+    {
+      $Token = $this->SignIn($UserID);
+      if (!$Token->Expired() && ($Session = self::Token($UserID, 'session', 86400 * self::SessionDays())) !== null)
+      {
+        $this->SetCookie('password_session', $Session, $Session->TTL());
+      }
+      return $Token;
+    }
+
+    /**
+     * Signs a password user in on this request, e.g. after they made their account (see signup.php)
+     *
+     * @return bool False when they may not sign in (blocked)
+     */
+    public static function SignInAs(int $UserID): bool
+    {
+      $Provider = new self();
+      Base::Factory($Provider);
+      return $Provider->SetAuthToken($Provider->StartSession($UserID));
     }
 
     private static function SessionDays(): int
@@ -254,6 +313,34 @@
       $Card->Format->Margin(Side::Top, PadSize::Pad4);
       $Card->AddHeader('Please sign in');
       $Card->AddChild($this->Form());
+    }
+
+    /**
+     * A form of the password pages (resetpassword.php, signup.php), posting to $Action: its fields by name, as
+     * [label, type, autocomplete, required (default true)], and a submit button
+     */
+    public static function PageForm(Card $Card, string $Action, array $Fields, string $Caption): \HTML\Form
+    {
+      $Card->AddChild($Form = new \HTML\Form());
+      $Form->Method = 'post';
+      $Form->Action = $Action;
+      $Form->Format->Margin(Side::All, PadSize::Pad2);
+      foreach ($Fields as $Name => $Field)
+      {
+        [$Label, $Type, $AutoComplete] = $Field;
+        $Form->AddChild($Input = new Input($Name, $Label, $Type));
+        $Input->InputElement()->Required = $Field[3] ?? true;
+        $Input->InputElement()->AutoComplete = $AutoComplete;
+        if ($Type == \HTML\InputType::Password)
+        {
+          $Input->InputElement()->MinLength = self::MinLength();
+        }
+        $Input->Format->Margin(Side::Bottom, PadSize::Pad2);
+      }
+      $Form->AddChild($Submit = new \HTML\Button($Caption));
+      $Submit->Type = 'submit';
+      $Submit->AddClasses(['btn', 'btn-primary', 'mt-2']);
+      return $Form;
     }
 
     /**
@@ -287,6 +374,11 @@
       {
         $Form->AddChild($Forgot = new \HTML\Anchor('Forgot your password?', Config::FrameworkURL('resetpassword.php'), IsLink: true));
         $Forgot->Format->Margin(Side::Start, PadSize::Pad3);
+      }
+      if (self::CanSignUp())
+      {
+        $Form->AddChild($SignUp = new \HTML\Anchor('Create an account', Config::FrameworkURL('signup.php'), IsLink: true));
+        $SignUp->Format->Margin(Side::Start, PadSize::Pad3);
       }
       return $Form;
     }
