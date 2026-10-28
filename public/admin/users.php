@@ -22,6 +22,14 @@
   $Result->Format->Padding(\BS\Side::All, \BS\PadSize::Pad3);
   $Result->Format->MaxWidth(\BS\ScreenSize::ExtraLarge->Width());
   $Result->Format->Center();
+  // Users who sign in with a password are added here
+  $Passwords = \Auth\Password::Configured() && $CanEdit;
+  if ($Passwords)
+  {
+    $Result->AddChild($Add = new \BS\Button('Add a user', \BS\Icon::PersonPlus, Config::FrameworkURL('admin/password.php')));
+    $Add->Modal();
+    $Add->Format->Margin(\BS\Side::Bottom, \BS\PadSize::Pad3);
+  }
   // Scrolls sideways inside its own box on screens narrower than large, instead of running off the page
   $Result->AddChild($Wrapper = new \BS\ResponsiveTable(\BS\ScreenSize::Large));
   $Table = $Wrapper->Table();
@@ -47,7 +55,17 @@
     $Row = $Table->Body()->AddRow();
     $Row->AddCell(($Record['name'] ?: '-') . (User::Blocked($Access) ? ' (blocked)' : ''));
     $Row->AddCell($Record['email'] ?? '-');
-    $Row->AddCell(User::ProviderTitle($Record['provider']));
+    $Provider = $Row->AddCell(User::ProviderTitle($Record['provider']) . (empty($Record['username']) ? '' : " ({$Record['username']})"));
+    if ($Passwords && $Record['provider'] == 'password')
+    {
+      $Provider->AddChild($Set = new \BS\Button(null, \BS\Icon::Key, Config::FrameworkURL('admin/password.php') . '?userid=' . (int)$Record['user_id']));
+      $Set->Modal();
+      $Set->Color(\BS\Color::Secondary);
+      $Set->AddClass('btn-sm');
+      $Set->Format->Margin(\BS\Side::Start, \BS\PadSize::Pad2);
+      $Set->AddAttribute('title', 'Set a password');
+      $Set->AddAttribute('aria-label', 'Set a password for ' . ($Record['name'] ?: $Record['email'] ?? 'user ' . $Record['user_id']));
+    }
     $Row->AddCell(empty($Record['last_login']) ? 'never' : date('d/m/Y H:i', strtotime($Record['last_login'])));
 
     foreach ($Levels as $Code => $Description)

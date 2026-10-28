@@ -26,7 +26,7 @@
     /** The access levels that can be granted, code => description, in order */
     public function Levels(): array;
 
-    /** Every user: user_id, provider, email, first_name, last_name, created, last_login, access (codes) */
+    /** Every user: user_id, provider, username (password users'), email, first_name, last_name, created, last_login, access (codes) */
     public function Users(): array;
 
     /** Grants an access level or revokes it (revoking keeps the grant, with when) */
@@ -49,6 +49,36 @@
 
     /** Removes the user's photo, and keeps the provider's from coming back */
     public function RemovePhoto(int $UserID): ?string;
+
+    /**
+     * The password user a username or email address names (any case; a username before an email), or null
+     */
+    public function PasswordUserID(string $Name): ?int;
+
+    /**
+     * A password user's sign-in: user_id, subject (the username), email, hash, failures (wrong passwords since the last
+     * right one) and last_failure (a Unix time, or null); null when the user doesn't sign in with a password
+     */
+    public function Password(int $UserID): ?array;
+
+    /**
+     * Makes a user who signs in with a username and password, with public access
+     *
+     * @return int|string Their id, or why they weren't made
+     */
+    public function AddPasswordUser(string $Username, ?string $Email, ?string $FirstName, ?string $LastName, string $Hash): int|string;
+
+    /** A password user's new password hash; clears their wrong passwords */
+    public function SetPassword(int $UserID, string $Hash): ?string;
+
+    /** A password user's email address, which they may change themselves (no sign-in provider gives it) */
+    public function SetEmail(int $UserID, ?string $Email): ?string;
+
+    /** Records a wrong password: the user's (when there is one), and the address's */
+    public function PasswordFailed(?int $UserID, string $Address): void;
+
+    /** How many wrong passwords came from an address in the last $Seconds */
+    public function AddressFailures(string $Address, int $Seconds): int;
 
     /**
      * Every menu item, parents before their children, ordered by position: the item's fields, depth, access (the codes

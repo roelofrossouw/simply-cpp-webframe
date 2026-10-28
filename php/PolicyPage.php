@@ -95,9 +95,18 @@
     /**
      * The sign-in services that are set up, as words: "Google, GitHub or Facebook"
      */
+    /**
+     * Whether some sign-in goes through an outside service, rather than only a password
+     */
+    public static function HasServices(): bool
+    {
+      return !empty(array_diff(\Auth\Base::Providers(), [\Auth\Password::class]));
+    }
+
     public static function Services(): string
     {
-      $Names = array_map(fn($Class) => $Class::TITLE, array_values(\Auth\Base::Providers()));
+      // The outside services: a password is our own
+      $Names = array_map(fn($Class) => $Class::TITLE, array_values(array_diff(\Auth\Base::Providers(), [\Auth\Password::class])));
       return count($Names) > 1 ? implode(', ', array_slice($Names, 0, -1)) . ' or ' . end($Names) : (implode('', $Names) ?: 'a sign-in service');
     }
 

@@ -6,6 +6,8 @@
 --   framework.menu      the pages, in a tree per section: main (the menu at the top), status (the bar at the bottom),
 --                       page (in no menu, opened from elsewhere)
 --   framework.menu_access  which access levels may view each item's page, and which may also change things there
+--   access.passwords    the password users' hashes, and their wrong passwords lately (since 1.3.0)
+--   access.sign_in_failures  wrong passwords by address, to slow down guessing
 --
 -- Run it once, in the database the settings' database section names, as a role that may create schemas:
 --   psql "host=db.example.com dbname=app user=app" -v ON_ERROR_STOP=1 -f /usr/share/sc-webframe/sql/schema.sql
@@ -26,8 +28,8 @@ comment on schema access is 'Users, access levels and the grants linking them';
 create table if not exists access.users
 (
   user_id         bigint generated always as identity primary key,
-  provider        text        not null check (provider in ('google', 'apple', 'microsoft', 'github', 'facebook')),
-  subject         text        not null,                                       -- the provider's id for the user ('sub')
+  provider        text        not null,                                       -- see users_provider_check below
+  subject         text        not null,                                       -- the provider's id for the user ('sub'); password users' username, lower case
   email           text,
   first_name      text,
   last_name       text,
@@ -41,6 +43,32 @@ create table if not exists access.users
   photo_source    text check (photo_source in ('provider', 'user', 'none')), -- none: removed, the provider's isn't used either
   unique (provider, subject)
 );
+
+-- The providers a user can sign in with, password since 1.3.0 (replaced, so older databases get the new list too)
+alter table access.users drop constraint if exists users_provider_check;
+alter table access.users add constraint users_provider_check
+  check (provider in ('google', 'apple', 'microsoft', 'github', 'facebook', 'password'));
+
+-- Users who sign in with a username and password (provider 'password'): the hash (PHP's password_hash()), and the wrong
+-- passwords since the last right one, which lock the sign-in for a while
+create table if not exists access.passwords
+(
+  user_id      bigint      primary key references access.users on delete cascade,
+  hash         text        not null,
+  changed      timestamptz not null default now(),
+  failures     integer     not null default 0,
+  last_failure timestamptz
+);
+
+-- Wrong passwords (and reset requests) by the address they came from, for slowing down guessing across usernames;
+-- rows older than a day are removed as new ones come in
+create table if not exists access.sign_in_failures
+(
+  address text        not null,
+  at      timestamptz not null default now()
+);
+
+create index if not exists sign_in_failures_address on access.sign_in_failures (address, at);
 
 create table if not exists access.levels
 (

@@ -23,6 +23,8 @@
   Same('6', DB::Value('select count(*) from framework.menu where code in (\'home\', \'login\', \'logout\', \'privacy\', \'terms\', \'datadeletion\')'),
     'the schema\'s menu items, once');
 
+  Same(['t'], array_column(DB::Rows('select count(*) = 1 as one from pg_constraint where conname = \'users_provider_check\''), 'one'),
+    'one provider check, which allows passwords');
   Same('11', DB::Value('select count(*) from framework.menu where code in (\'home\', \'login\', \'logout\', \'privacy\', \'terms\', \'datadeletion\', \'administer\', \'users\', \'menu\', \'config\', \'profile\')'),
     'the schema\'s items, Administer, Users, Menu and the profile among them');
   $Storage = Store::Get();
@@ -90,5 +92,41 @@
   Same('Move or remove the items under it first.', $Storage->DeleteMenuItem($Parent, null), 'a submenu with items stays');
   Same(null, $Storage->DeleteMenuItem($Child, null), 'remove the page');
   Same(null, $Storage->DeleteMenuItem($Parent, null), 'then the submenu');
+
+  // Password users
+  $Name = 'pw-' . bin2hex(random_bytes(3));
+  $Bob = $Storage->AddPasswordUser(" Bob-$Name ", "Bob-$Name@Example.com", 'Bob', '', 'hash one');
+  Check(is_int($Bob), 'add a password user');
+  Same("Someone already has the username bob-$Name.", $Storage->AddPasswordUser("BOB-$Name", null, null, null, 'x'),
+    'usernames are unique, any case');
+  Same($Bob, $Storage->PasswordUserID("bob-$Name"), 'found by username');
+  Same($Bob, $Storage->PasswordUserID(" BOB-$Name@example.COM"), 'or email, any case');
+  Same(null, $Storage->PasswordUserID('nobody'), 'not an unknown one');
+  Same(null, $Storage->PasswordUserID('ann@example.com'), 'nor someone who signs in with GitHub');
+  $Row = $Storage->Password($Bob);
+  Same(["bob-$Name", 'hash one', '0', null], [$Row['subject'], $Row['hash'], $Row['failures'], $Row['last_failure']], 'the password row');
+  Same(['public'], $Storage->Access($Bob), 'with public access');
+  Same(null, $Storage->Password($ID), 'a GitHub user has no password');
+  Same('t', $Storage->Profile($Bob)['names_from_user'], 'their names are theirs to change');
+  $Address = '192.0.2.' . random_int(1, 254);
+  $Storage->PasswordFailed($Bob, $Address);
+  $Storage->PasswordFailed(null, $Address);
+  Same('1', $Storage->Password($Bob)['failures'], 'a wrong password counts for the user');
+  Check(abs((int)$Storage->Password($Bob)['last_failure'] - time()) < 60, 'with when');
+  Same(2, $Storage->AddressFailures($Address, 60), 'and both for the address');
+  $Changed = DB::Value('select changed from access.passwords where user_id = $1', [$Bob]);
+  Same(null, $Storage->SetPassword($Bob, 'hash one'), 'the same hash again (a right password)');
+  Same(['0', $Changed], [$Storage->Password($Bob)['failures'], DB::Value('select changed from access.passwords where user_id = $1', [$Bob])],
+    'clears the count, and isn\'t a change');
+  Same(null, $Storage->SetPassword($Bob, 'hash two'), 'a new hash');
+  Same('hash two', $Storage->Password($Bob)['hash'], 'is kept');
+  Same('This user doesn\'t sign in with a password.', $Storage->SetPassword($ID, 'x'), 'a GitHub user\'s password can\'t be set');
+  Same(null, $Storage->SetEmail($Bob, 'new@example.com'), 'a password user sets their email');
+  Same('The sign-in provider gives this user\'s email address.', $Storage->SetEmail($ID, 'x@example.com'), 'others can\'t');
+  Same("bob-$Name", array_column($Storage->Users(), 'username', 'user_id')[$Bob], 'Users shows the username');
+  Same(null, array_column($Storage->Users(), 'username', 'user_id')[$ID], 'only for password users');
+  Same((string)$Bob, $Storage->SignIn('password', "bob-$Name", null, null, null)['user_id'], 'signing in is the same user');
+  DB::Exec('delete from access.sign_in_failures where address = $1', [$Address]);
+  DB::Exec('delete from access.users where user_id = $1', [$Bob]);
 
   DB::Exec('delete from access.users where user_id = $1', [$ID]);

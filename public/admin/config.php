@@ -41,6 +41,12 @@
       'mail.redirect' => ['Send every email here instead, for testing', false],
       'mail.disabled' => ['Don\'t send email at all (true or false)', false],
     ],
+    'Sign in with a password' => [
+      'auth.password.enabled' => ['true to let users an admin adds (Administer → Users) sign in with a username and password', false],
+      'auth.password.min_length' => ['The shortest password allowed (default 10)', false],
+      'auth.password.session_days' => ['Days a sign-in lasts before the password is asked again (default 30)', false],
+      'auth.password.reset' => ['false to leave out "Forgot your password?", which emails a link (default true)', false],
+    ],
     'Sign in with Google' => [
       'auth.google.client_id' => ['Client ID', false],
       'auth.google.client_secret' => ['Client secret', true],

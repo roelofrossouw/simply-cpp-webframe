@@ -19,7 +19,7 @@
   Same('/home.php', Config::Home(), 'Home defaults to /home.php');
 
   // Only the providers with a section are on
-  Same(['github'], array_keys(Auth\Base::Providers()), 'only GitHub is set up');
+  Same(['password', 'github'], array_keys(Auth\Base::Providers()), 'only passwords and GitHub are set up');
   Same('GitHub', PolicyPage::Services(), 'the policies name the services that are set up');
 
   // Each part quoted, quotes and backslashes escaped

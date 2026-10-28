@@ -26,12 +26,15 @@
 
   $Policy->Section('What we collect',
     'We keep a small amount of information about you:',
-    [
-      "From the service you sign in with ($Services): an identifier for your account with that service, and your name and email address, but only what you agree to share on its sign-in screen.",
-      'What you add yourself: a profile photo, a nickname, how you\'d like to be addressed, and your name if your sign-in service didn\'t share it.',
-      'What we record: when you first and last signed in, and the access an administrator gave you.',
-    ],
-    'We don\'t collect passwords, payment details or your location, and we don\'t use analytics or advertising trackers.');
+    array_merge(
+      PolicyPage::HasServices() ? ["From the service you sign in with ($Services): an identifier for your account with that service, and your name and email address, but only what you agree to share on its sign-in screen."] : [],
+      \Auth\Password::Configured() ? ['If you sign in with a password: your username, name and email address as an administrator or you entered them, and your password, kept only as a one-way hash that can\'t be turned back into it.'] : [],
+      [
+        'What you add yourself: a profile photo, a nickname, how you\'d like to be addressed, and your name if your sign-in service didn\'t share it.',
+        'What we record: when you first and last signed in, and the access an administrator gave you.',
+      ]),
+    (\Auth\Password::Configured() ? 'We don\'t collect payment details' : 'We don\'t collect passwords, payment details')
+      . ' or your location, and we don\'t use analytics or advertising trackers.');
 
   $Policy->Section('How we use it',
     'We use your information only to run ' . $AppName . ':',

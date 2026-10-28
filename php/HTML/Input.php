@@ -7,7 +7,7 @@
      *
      * @property string $Accept audio/*|video/*|image/*|(other)
      * @property string $Alt text
-     * @property string $AutoComplete on|off
+     * @property string $AutoComplete on|off|username|current-password|new-password|email|name|given-name|family-name|one-time-code|(other)
      * @property bool $AutoFocus
      * @property bool $Checked
      * @property string $DirName inputname.dir

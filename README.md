@@ -1,7 +1,7 @@
 # simply-cpp-webframe
 
 A PHP web framework: pages built from HTML and Bootstrap 5 classes, a menu that decides who may open which page,
-access levels in PostgreSQL, and sign-in with Google, Microsoft, Apple, GitHub or Facebook. Pages load into the site
+access levels in PostgreSQL, and sign-in with Google, Microsoft, Apple, GitHub, Facebook, or a username and password. Pages load into the site
 without full reloads, open in popups, side panels and toasts, and refresh themselves.
 
 It is part of [simply-cpp](https://github.com/roelofrossouw/simply-cpp), shipped through its apt repository, but it is
@@ -27,14 +27,14 @@ plain PHP: nothing to compile, and no extension.
 | `BS\` | Bootstrap 5.3 components and layout: cards, buttons, menus, forms, tables, popups (`ModalDialog`), side panels (`OffCanvas`), toasts, alerts, grids, and their enums (`Color`, `Icon`, `ScreenSize`, ...). `BS\Email` sends a page as an HTML email. |
 | `Page`, `Framework` | The page being built: `Page::AddContent()` adds to it, and it is shown when the script ends, as a whole page or, for requests from `js/app.js`, as the part that changes. |
 | `Config` | The settings file, and `Config::Init()`, which starts every page: the sign-in, and whether this user may open it. |
-| `Auth\` | Sign-in: `Google`, `Microsoft`, `Apple`, `GitHub`, `Facebook`, each on when its section is in the settings, and `JWT`, the signed sign-in tokens (30 minutes, renewed while in use). |
+| `Auth\` | Sign-in: `Google`, `Microsoft`, `Apple`, `GitHub`, `Facebook`, each on when its section is in the settings, `Password` (users an admin adds), and `JWT`, the signed sign-in tokens (30 minutes, renewed while in use). |
 | `User` | The people who signed in: their access, profile, display name and photo. |
 | `MenuLayout` | The menu and status bar, built from `framework.menu`; the access levels that may view or edit each page. |
 | `DB` | PostgreSQL with parameters: `Rows()`, `Row()`, `Value()`, `Assoc()`, `Exists()`, `Exec()`, `Transaction()`. |
 | `Storage\` | Where users, access and the menu are kept: `Postgres` (the default), or a class of your own (`Storage\Backend`). |
 | `Rest`, `Server`, `Post`, `QueryString`, `ErrorHandler` | Small helpers: an HTTP client, the request, and errors shown in the page (in full for admins). |
-| `public/` | What the site serves under `/framework`: `js/app.js`, `css/style.css`, the service worker, the sign-in and sign-out pages, the menu (`landing.php`), Administer → Users, Menu and Config (`admin/`), Your profile (`profile.php`), and the privacy policy, terms of use and data deletion pages, written from the settings. |
-| `sql/schema.sql` | The tables: `access.users`, `access.levels`, `access.grants`, `framework.menu`, `framework.menu_access`. |
+| `public/` | What the site serves under `/framework`: `js/app.js`, `css/style.css`, the service worker, the sign-in and sign-out pages, Forgot your password? (`resetpassword.php`), the menu (`landing.php`), Administer → Users, Menu and Config (`admin/`), Your profile (`profile.php`), and the privacy policy, terms of use and data deletion pages, written from the settings. |
+| `sql/schema.sql` | The tables: `access.users`, `access.levels`, `access.grants`, `access.passwords`, `access.sign_in_failures`, `framework.menu`, `framework.menu_access`. |
 
 The classes keep short global names (`Config`, `Page`, `DB`, `User`) and the namespaces `HTML`, `BS`, `Auth` and `Storage`,
 so a site's pages read simply. A site's own classes should use their own namespace.
@@ -79,12 +79,13 @@ It needs PHP 8.3 or later, with the pgsql, curl, gd and mbstring extensions (the
    | `auth.apple` | `client_id` (the Services ID), `team_id`, `key_id`, `key_file` (the .p8 in `keys_dir`) |
    | `auth.github` | `client_id`, `client_secret` |
    | `auth.facebook` | `app_id`, `app_secret` |
+   | `auth.password` | `enabled` (`true` to offer it), `min_length` (10), `session_days` (30), `reset` (`false` to leave out Forgot your password?); see [Signing in with a password](#signing-in-with-a-password) |
    | `mail` | `from`, `redirect` (send every email there instead), `disabled` |
    | `storage` | `class`: a `Storage\Backend` of your own instead of `Storage\Postgres` |
    | `menu` | `editor`: the page that manages the menu, which admins must always keep (default: the package's `admin/menu.php`, when the menu has it; `""` for none) |
 
-   A provider is offered once its section is there. Each provider's redirect (callback) URL is
-   `https://<your site>/framework/login.php`.
+   A provider is offered once its section is there (passwords once `auth.password.enabled` is `true`). Each provider's
+   redirect (callback) URL is `https://<your site>/framework/login.php`.
 
    PHP finds the file through the first of: the `WEBFRAME_CONFIG` constant (defined before `autoload.php`), the
    `WEBFRAME_CONFIG` environment variable (`SetEnv` in Apache, which PHP-FPM gets too), the `webframe.config` php.ini
@@ -129,6 +130,25 @@ It needs PHP 8.3 or later, with the pgsql, curl, gd and mbstring extensions (the
 
    Then sign out and in again: the access you have goes into the sign-in token.
 
+## Signing in with a password
+
+With `"password": {"enabled": true}` in the settings' `auth` section, people can also sign in with a username (or their
+email address) and a password. Nobody signs up by themselves: an admin adds them under Administer → Users (**Add a
+user**: username, email, names and a first password), and sets a new password with the key button next to them. They
+change their own password, names and email on Your profile.
+
+- Passwords are kept as Argon2id hashes (bcrypt where PHP lacks Argon2), at least `min_length` characters, and not the
+  username.
+- A right password signs in like the other providers (the 30 minute token) and sets a session cookie that renews it for
+  `session_days`. Changing the password ends every other session.
+- Five wrong passwords in a row lock that user's sign-in for 15 minutes; twenty from one address in 15 minutes, across
+  usernames, lock that address. Unknown usernames take as long as wrong passwords.
+- **Forgot your password?** emails a link to the address the user has, which works for an hour, once. It answers the same
+  whether or not the user exists. It needs mail (`mail.disabled` not `true`); `reset: false` leaves it out.
+
+The schema since 1.3.0 adds `access.passwords` and `access.sign_in_failures`, and allows `password` as a provider; load
+it again after upgrading.
+
 ## Pages and access
 
 Every page starts with `Config::Init()`. Who may open it comes from the menu, closed by default: a page is allowed for
@@ -149,11 +169,12 @@ signed out). `framework.menu_access` gives access levels the View right on an it
 too. Add your access levels to `access.levels`, and grant them in `access.grants`.
 
 The schema adds **Administer** to the main menu, for admins: **Users** (everyone who signed in, with a switch per access
-level; admins can't take away their own admin or block themselves), **Menu** (every item, a tab per section, with
+level; admins can't take away their own admin or block themselves; with passwords on, Add a user and Set a password), **Menu** (every item, a tab per section, with
 its fields, Public and Shown, and View and Edit per access level; a change that would take Menu from admins is undone)
 and **Config** (the settings file by section; it saves when the web server may write the file, and never shows a secret:
 a secret's field stays empty, and saving it empty keeps it).
-**Your profile** is in the status bar for anyone signed in: what the site calls them, their photo, and a test email.
+**Your profile** is in the status bar for anyone signed in: what the site calls them, their photo, a test email, and for
+password users their email and password.
 Change their access in the menu like any other page's. A site's own admin pages can do the same with
 `MenuLayout::Add()`, `Update()`, `SetAccess()` and `Delete()`, and `User::All()`, `User::SetAccess()` and
 `User::Levels()`.
@@ -167,7 +188,9 @@ implement `Storage\Backend` and name the class in the settings:
 "storage": {"class": "MySite\\AgentStorage"}
 ```
 
-The class loads from the site's classes like any other. `DB` stays available for the site's own tables either way.
+The class loads from the site's classes like any other. Since 1.3.0 the interface includes the password users'
+methods (`PasswordUserID()`, `Password()`, `AddPasswordUser()`, `SetPassword()`, `SetEmail()`, `PasswordFailed()`,
+`AddressFailures()`). `DB` stays available for the site's own tables either way.
 
 ## The Hello world example
 

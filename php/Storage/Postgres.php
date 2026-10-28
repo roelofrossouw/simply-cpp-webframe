@@ -70,7 +70,8 @@
 
     public function Users(): array
     {
-      $Users = DB::Rows('select u.user_id, u.provider, u.email, u.first_name, u.last_name, u.created, u.last_login,
+      $Users = DB::Rows('select u.user_id, u.provider, case when u.provider = \'password\' then u.subject end as username, u.email, u.first_name,
+          u.last_name, u.created, u.last_login,
           coalesce((select json_agg(l.code order by l.access_id) from access.grants g join access.levels l using (access_id)
                      where g.user_id = u.user_id and g.revoked is null), \'[]\') as access
         from access.users u order by u.last_login desc nulls last, u.user_id');
@@ -139,6 +140,71 @@
     {
       return DB::Exec('update access.users set photo = null, photo_updated = now(), photo_source = \'none\' where user_id = $1',
         [$UserID]) > 0 ? null : 'Unknown user.';
+    }
+
+    public function PasswordUserID(string $Name): ?int
+    {
+      $ID = DB::Value('select user_id from access.users
+        where provider = \'password\' and (subject = lower(trim($1)) or lower(email) = lower(trim($1)))
+        order by subject = lower(trim($1)) desc, user_id limit 1', [$Name]);
+      return $ID === null ? null : (int)$ID;
+    }
+
+    public function Password(int $UserID): ?array
+    {
+      return DB::Row('select u.user_id, u.subject, u.email, p.hash, p.failures, extract(epoch from p.last_failure)::bigint as last_failure
+        from access.users u join access.passwords p using (user_id) where u.user_id = $1 and u.provider = \'password\'', [$UserID]);
+    }
+
+    public function AddPasswordUser(string $Username, ?string $Email, ?string $FirstName, ?string $LastName, string $Hash): int|string
+    {
+      $Username = mb_strtolower(trim($Username));
+      if (DB::Exists('select 1 from access.users where provider = \'password\' and subject = $1', [$Username]))
+      {
+        return "Someone already has the username $Username.";
+      }
+      return DB::Transaction(function () use ($Username, $Email, $FirstName, $LastName, $Hash) {
+        $ID = (int)DB::Value('insert into access.users (provider, subject, email, first_name, last_name, names_from_user)
+          values (\'password\', $1, nullif(trim($2), \'\'), nullif(trim($3), \'\'), nullif(trim($4), \'\'), true)
+          returning user_id', [$Username, $Email, $FirstName, $LastName]);
+        DB::Exec('insert into access.passwords (user_id, hash) values ($1, $2)', [$ID, $Hash]);
+        DB::Exec('insert into access.grants (user_id, access_id) select $1, access_id from access.levels where code = \'public\'', [$ID]);
+        return $ID;
+      });
+    }
+
+    public function SetPassword(int $UserID, string $Hash): ?string
+    {
+      if (!DB::Exists('select 1 from access.users where user_id = $1 and provider = \'password\'', [$UserID]))
+      {
+        return 'This user doesn\'t sign in with a password.';
+      }
+      DB::Exec('insert into access.passwords (user_id, hash) values ($1, $2)
+        on conflict (user_id) do update set hash = excluded.hash, failures = 0, last_failure = null,
+          changed = case when passwords.hash = excluded.hash then passwords.changed else now() end', [$UserID, $Hash]);
+      return null;
+    }
+
+    public function SetEmail(int $UserID, ?string $Email): ?string
+    {
+      return DB::Exec('update access.users set email = nullif(trim($2), \'\') where user_id = $1 and provider = \'password\'',
+        [$UserID, $Email]) > 0 ? null : 'The sign-in provider gives this user\'s email address.';
+    }
+
+    public function PasswordFailed(?int $UserID, string $Address): void
+    {
+      if ($UserID !== null)
+      {
+        DB::Exec('update access.passwords set failures = failures + 1, last_failure = now() where user_id = $1', [$UserID]);
+      }
+      DB::Exec('delete from access.sign_in_failures where at < now() - interval \'1 day\'');
+      DB::Exec('insert into access.sign_in_failures (address) values ($1)', [$Address]);
+    }
+
+    public function AddressFailures(string $Address, int $Seconds): int
+    {
+      return (int)DB::Value('select count(*) from access.sign_in_failures where address = $1 and at > now() - make_interval(secs => $2)',
+        [$Address, $Seconds]);
     }
 
     public function Menu(): array

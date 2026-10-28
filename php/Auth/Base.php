@@ -11,6 +11,7 @@
     const array COMMON_FIELDS = ['firstname', 'lastname', 'email', 'userid'];
     // Sign-in options, by the name used in ?provider= and the state parameter
     const array PROVIDERS = [
+      'password' => Password::class,
       'google' => Google::class,
       'microsoft' => Microsoft::class,
       'apple' => Apple::class,
@@ -215,7 +216,7 @@
 
     public static function ID(): ?string
     {
-      return self::$Shared->GetData('userid', null);
+      return isset(self::$Shared) ? self::$Shared->GetData('userid', null) : null;
     }
 
     private function LogoutURI(): string
@@ -416,6 +417,12 @@
       $Card->AddHeader('Please sign in');
       foreach (self::Providers() as $Name => $Class)
       {
+        // The password form itself, the others' buttons below it
+        if ($Class === Password::class)
+        {
+          $Card->AddChild((new Password())->Form());
+          continue;
+        }
         $Card->AddChild($Button = new \BS\Button('Sign in with ' . $Class::TITLE, $Class::ICON, $this->LoginURI() . '?provider=' . $Name));
         $Button->Format->Margin(\BS\Side::All, \BS\PadSize::Pad2);
       }

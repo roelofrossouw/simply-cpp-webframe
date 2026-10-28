@@ -39,10 +39,12 @@
   // No sign-in provider set up: no Sign in item at all
   $Providers = Config::Get('auth.github');
   Config::Set('auth.github', null);
+  Config::Set('auth.password.enabled', false);
   $Menu = new BS\Menu(new HTML\Text('Test'));
   MenuLayout::Build($Menu);
   Check(!str_contains((string)$Menu, 'Sign in') && str_contains((string)$Menu, 'Home'), 'no providers: Sign in is left out');
   Config::Set('auth.github', $Providers);
+  Config::Set('auth.password.enabled', true);
 
   // A page loads the package's script and style, with a version from their contents
   $Framework = new Framework();

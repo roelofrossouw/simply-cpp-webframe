@@ -25,9 +25,15 @@
       . ' for example when you no longer need it.');
 
   $Terms->Section('Your account',
-    'You sign in with your ' . PolicyPage::Services() . ' account. Please:',
+    match (true)
+    {
+      !\Auth\Password::Configured() => 'You sign in with your ' . PolicyPage::Services() . ' account. Please:',
+      PolicyPage::HasServices() => 'You sign in with your ' . PolicyPage::Services() . ' account, or with your username and password. Please:',
+      default => 'You sign in with your username and password. Please:',
+    },
     [
-      'keep that account secure, ideally with two-step verification turned on',
+      PolicyPage::HasServices() ? 'keep that account secure, ideally with two-step verification turned on'
+        : 'keep your password to yourself, and don\'t use it on other sites',
       'don\'t let anyone else use the site as you',
       PolicyPage::Text('tell us straight away at ', clone $Email, ' if you think someone else has used it'),
     ],

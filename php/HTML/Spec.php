@@ -697,7 +697,8 @@
         'attributes' => [
           'accept' => ['audio/*', 'video/*', 'image/*', '*'],
           'alt' => 'text',
-          'autocomplete' => ['on', 'off'],
+          // Also the autofill field names, e.g. username, current-password, new-password, email
+          'autocomplete' => ['on', 'off', 'username', 'current-password', 'new-password', 'email', 'name', 'given-name', 'family-name', 'one-time-code', '*'],
           'autofocus' => 'bool',
           'checked' => 'bool',
           'dirname' => 'inputname.dir',
