@@ -81,6 +81,11 @@
   $Paragraph->AddChild(new HTML\Anchor('the link', 'https://example.com', IsLink: true));
   $Paragraph->AddChild('.');
   Same("<p>Read <strong>this</strong>, then <a href=\"https://example.com\">the link</a>.</p>\n", (string)$Paragraph, 'a paragraph with inline elements');
+  $Menu = new BS\Menu(new HTML\Text('Test'));
+  Check(str_contains((string)$Menu->AddItem(BS\Icon::House, 'Home', '/home.php', 'home'), '</i> <span>Home</span>'), 'a menu item: a space between its icon and caption');
+  $Tabs = new BS\Tabs();
+  $Tabs->AddTab('Settings', 'Content', true, BS\Icon::Gear);
+  Check(preg_match('#</i> Settings#', (string)$Tabs) === 1, 'a tab: a space between its icon and caption');
   $Words = new HTML\Paragraph('Two');
   $Words->AddChild('words');
   Same("<p>Two words</p>\n", (string)$Words, 'text children still get a space between them');

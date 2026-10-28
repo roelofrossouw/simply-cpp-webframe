@@ -62,7 +62,8 @@
 
     public function __toString(): string
     {
-      return $this->PreSiblingString() . $this->OwnString() . $this->SiblingString();
+      // Siblings follow like words too, e.g. an icon and its caption (Icon::Element()->AddSibling($Caption))
+      return self::Join([$this->PreSiblingString(), $this->OwnString(), $this->SiblingString()]);
     }
 
     public function Tag(): string
@@ -72,7 +73,7 @@
 
     private function PreSiblingString(): string
     {
-      return empty($this->PreSiblings) ? '' : (implode('', $this->PreSiblings));
+      return self::Join($this->PreSiblings);
     }
 
     protected function OwnString(): string
@@ -134,8 +135,14 @@
      */
     protected function Contents(): string
     {
+      return self::Join($this->Children);
+    }
+
+    // Parts joined as words, see Contents()
+    private static function Join(array $Parts): string
+    {
       $Result = '';
-      foreach ($this->Children as $Child)
+      foreach ($Parts as $Child)
       {
         $Part = (string)$Child;
         if ($Result !== '' && $Part !== '' && !preg_match('/\s$/u', $Result) && !preg_match('/^[\s.,;:!?)\]}\'’"…]/u', $Part))
@@ -154,7 +161,7 @@
 
     private function SiblingString(): string
     {
-      return empty($this->Siblings) ? '' : (implode('', $this->Siblings));
+      return self::Join($this->Siblings);
     }
 
     /**
