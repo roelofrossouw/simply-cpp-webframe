@@ -78,7 +78,7 @@
                 $Headers['X-Original-To'] = $To;
             }
             $Body = $this->Part($Boundary, 'text/plain', $this->PlainText())
-                . $this->Part($Boundary, 'text/html', $this->Format() ?? (string)$this)
+                . $this->Part($Boundary, 'text/html', $this->Format($Html = self::ForMail((string)$this)) ?? $Html)
                 . "--$Boundary--\r\n";
 
             // The envelope sender is the From address, so bounces go there (mail() escapes the parameter itself)
@@ -106,14 +106,50 @@
         /**
          * Email-safe HTML from bootstrap-email, or null when it isn't available or fails
          */
-        private function Format(): ?string
+        // Bootstrap 5.3 classes bootstrap-email doesn't know, as the ones it does, or as inline styles
+        private const array MAIL_CLASSES = [
+            'text-body-secondary' => 'text-muted', 'text-body-tertiary' => 'text-muted',
+            'text-bg-primary' => 'bg-primary', 'text-bg-secondary' => 'bg-secondary', 'text-bg-success' => 'bg-success',
+            'text-bg-danger' => 'bg-danger', 'text-bg-warning' => 'bg-warning', 'text-bg-info' => 'bg-info',
+            'text-bg-light' => 'bg-light', 'text-bg-dark' => 'bg-dark',
+        ];
+        private const array MAIL_STYLES = ['lead' => 'font-size: 20px; font-weight: 300;'];
+
+        /**
+         * The page as mail clients can show it: Bootstrap Icons are left out (mail clients don't have the font), and
+         * classes bootstrap-email doesn't know become ones it does (MAIL_CLASSES) or inline styles (MAIL_STYLES)
+         */
+        public static function ForMail(string $Html): string
+        {
+            $Html = preg_replace('#<i\b[^>]*\bclass="(?:[^"]*\s)?bi(?:\s[^"]*)?"[^>]*>\s*</i>\s?#', '', $Html);
+            return preg_replace_callback('#<([a-z][a-z0-9]*)\b([^>]*?)\sclass="([^"]*)"([^>]*)>#i', function ($Tag) {
+                $Classes = preg_split('/\s+/', trim($Tag[3]));
+                $Styles = '';
+                foreach ($Classes as $Class)
+                {
+                    if (isset(self::MAIL_CLASSES[$Class]))
+                    {
+                        $Classes[] = self::MAIL_CLASSES[$Class];
+                    }
+                    $Styles .= self::MAIL_STYLES[$Class] ?? '';
+                }
+                $Rest = $Tag[2] . $Tag[4];
+                if ($Styles !== '')
+                {
+                    $Rest = preg_match('/\sstyle="/', $Rest) ? preg_replace('/\sstyle="/', ' style="' . $Styles . ' ', $Rest, 1) : $Rest . ' style="' . $Styles . '"';
+                }
+                return '<' . $Tag[1] . ' class="' . implode(' ', array_unique($Classes)) . '"' . $Rest . '>';
+            }, $Html);
+        }
+
+        private function Format(string $Html): ?string
         {
             // sc-phplib's port (SC\BootstrapEmail, sc-phplib 1.14.0 or later) does it in-process, with the same output
             if (class_exists('SC\BootstrapEmail'))
             {
                 try
                 {
-                    return \SC\BootstrapEmail::format((string)$this);
+                    return \SC\BootstrapEmail::format($Html);
                 }
                 catch (\Throwable $Error)
                 {
@@ -135,7 +171,7 @@
             {
                 return null;
             }
-            fwrite($Pipes[0], (string)$this);
+            fwrite($Pipes[0], $Html);
             fclose($Pipes[0]);
             $Result = stream_get_contents($Pipes[1]);
             $Errors = stream_get_contents($Pipes[2]);

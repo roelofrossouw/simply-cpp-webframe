@@ -83,8 +83,13 @@
       }
       $this->CheckFirstChildren();
       $this->CheckRequiredAttributes();
-      return $this->OpenTag() . $this->Contents() . $this->ClosingTag() . PHP_EOL;
+      // Text-level elements stay on the line, so no space comes between them and the text around them
+      return $this->OpenTag() . $this->Contents() . $this->ClosingTag() . (in_array($this->Tag, self::INLINE, true) ? '' : PHP_EOL);
     }
+
+    // Text-level (phrasing) elements, which run with the text around them
+    private const array INLINE = ['a', 'abbr', 'b', 'bdi', 'bdo', 'cite', 'code', 'data', 'del', 'dfn', 'em', 'i', 'ins', 'kbd', 'mark', 'q',
+      's', 'samp', 'small', 'span', 'strong', 'sub', 'sup', 'time', 'u', 'var'];
 
     protected function OpenTag(): string
     {
@@ -123,9 +128,23 @@
       return $this->Tag !== '' && Spec::Element($this->Tag)['void'];
     }
 
+    /**
+     * The children, a space between each, as words: none where one already ends or starts with white space, or the
+     * next starts with punctuation (so 'Read ', a link, '.' reads "Read the link.", not "the link .")
+     */
     protected function Contents(): string
     {
-      return implode(' ', $this->Children);
+      $Result = '';
+      foreach ($this->Children as $Child)
+      {
+        $Part = (string)$Child;
+        if ($Result !== '' && $Part !== '' && !preg_match('/\s$/u', $Result) && !preg_match('/^[\s.,;:!?)\]}\'’"…]/u', $Part))
+        {
+          $Result .= ' ';
+        }
+        $Result .= $Part;
+      }
+      return $Result;
     }
 
     protected function ClosingTag(): string

@@ -53,8 +53,27 @@
   }
   $Email = new BS\Email();
   $Email->AddChild('Hello');
-  $Formatted = (new ReflectionMethod(BS\Email::class, 'Format'))->invoke($Email);
+  $Formatted = (new ReflectionMethod(BS\Email::class, 'Format'))->invoke($Email, (string)$Email);
   Check(is_string($Formatted) && $Formatted !== '' && $Formatted !== (string)$Email, 'emails go through SC\BootstrapEmail when it\'s there');
+
+  // What mail clients can't show: icons left out, Bootstrap 5.3 classes as bootstrap-email's, lead text inline
+  $Mail = BS\Email::ForMail((string)new BS\Badge('New') . (string)new BS\Button('Open', BS\Icon::House)
+    . '<p class="lead">Big</p><p class="text-body-secondary small" style="color: red;">Quiet</p>');
+  Check(!str_contains($Mail, 'bi-house') && str_contains($Mail, 'Open'), 'icons are left out of emails, their captions stay');
+  Check(preg_match('/class="[^"]*text-bg-\w+[^"]*\bbg-\w+/', $Mail) === 1, 'badges keep their colour (bg-*)');
+  Check(str_contains($Mail, 'class="lead" style="font-size: 20px; font-weight: 300;"'), 'lead text is styled inline');
+  Check(str_contains($Mail, 'text-muted') && str_contains($Mail, 'style="color: red;'), 'muted text is text-muted, a style it had stays');
+
+  // Text and the elements in it run together: no space before punctuation
+  $Paragraph = new HTML\Paragraph('Read ');
+  $Paragraph->AddChild(new HTML\Strong('this'));
+  $Paragraph->AddChild(', then ');
+  $Paragraph->AddChild(new HTML\Anchor('the link', 'https://example.com', IsLink: true));
+  $Paragraph->AddChild('.');
+  Same("<p>Read <strong>this</strong>, then <a href=\"https://example.com\">the link</a>.</p>\n", (string)$Paragraph, 'a paragraph with inline elements');
+  $Words = new HTML\Paragraph('Two');
+  $Words->AddChild('words');
+  Same("<p>Two words</p>\n", (string)$Words, 'text children still get a space between them');
 
   // Alerts: the icon in a column of its own beside the text (not floated, so the text doesn't wrap under it)
   $Alert = (string)new BS\AlertSuccess('Saved', 'All done.');
