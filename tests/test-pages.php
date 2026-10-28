@@ -60,7 +60,16 @@
   $Mail = BS\Email::ForMail((string)new BS\Badge('New') . (string)new BS\Button('Open', BS\Icon::House)
     . '<p class="lead">Big</p><p class="text-body-secondary small" style="color: red;">Quiet</p>');
   Check(!str_contains($Mail, 'bi-house') && str_contains($Mail, 'Open'), 'icons are left out of emails, their captions stay');
-  Check(preg_match('/class="[^"]*text-bg-\w+[^"]*\bbg-\w+/', $Mail) === 1, 'badges keep their colour (bg-*)');
+  Check(str_contains($Mail, 'badge-secondary') && !str_contains($Mail, ' bg-secondary'), 'badges keep their colour (badge-*)');
+  $Card = new BS\Card();
+  $Card->AddHeader('Head');
+  $Card->AddChild($Amount = new HTML\Paragraph('R 10.00'));
+  $Amount->AddClass('text-end');
+  $Card->AddFooter('Foot');
+  $Parts = BS\Email::ForMail((string)$Card . '<div class="text-bg-info text-start">Box</div>');
+  Check(str_contains($Parts, 'card-header card-body bg-light') && str_contains($Parts, 'card-footer card-body bg-light'), 'a card\'s header and footer as padded parts');
+  Check(str_contains($Parts, 'text-end text-right') && str_contains($Parts, 'text-start') && str_contains($Parts, 'text-left'), 'text-end and text-start as text-right and text-left');
+  Check(str_contains($Parts, 'text-bg-info text-start bg-info'), 'text-bg-* on other elements as bg-*');
   Check(str_contains($Mail, 'class="lead" style="font-size: 20px; font-weight: 300;"'), 'lead text is styled inline');
   Check(str_contains($Mail, 'text-muted') && str_contains($Mail, 'style="color: red;'), 'muted text is text-muted, a style it had stays');
 

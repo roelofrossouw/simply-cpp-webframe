@@ -106,31 +106,36 @@
         /**
          * Email-safe HTML from bootstrap-email, or null when it isn't available or fails
          */
-        // Bootstrap 5.3 classes bootstrap-email doesn't know, as the ones it does, or as inline styles
+        // Bootstrap 5.3 classes bootstrap-email (1.8) doesn't know, as the ones it does: its older names, and card parts as
+        // padded, shaded card bodies
         private const array MAIL_CLASSES = [
-            'text-body-secondary' => 'text-muted', 'text-body-tertiary' => 'text-muted',
-            'text-bg-primary' => 'bg-primary', 'text-bg-secondary' => 'bg-secondary', 'text-bg-success' => 'bg-success',
-            'text-bg-danger' => 'bg-danger', 'text-bg-warning' => 'bg-warning', 'text-bg-info' => 'bg-info',
-            'text-bg-light' => 'bg-light', 'text-bg-dark' => 'bg-dark',
+            'text-body-secondary' => ['text-muted'], 'text-body-tertiary' => ['text-muted'],
+            'text-end' => ['text-right'], 'text-start' => ['text-left'],
+            'card-header' => ['card-body', 'bg-light'], 'card-footer' => ['card-body', 'bg-light'],
         ];
+        // And the ones it has no class for, as inline styles
         private const array MAIL_STYLES = ['lead' => 'font-size: 20px; font-weight: 300;'];
 
         /**
-         * The page as mail clients can show it: Bootstrap Icons are left out (mail clients don't have the font), and
-         * classes bootstrap-email doesn't know become ones it does (MAIL_CLASSES) or inline styles (MAIL_STYLES)
+         * The page as mail clients can show it, for bootstrap-email:
+         * - Bootstrap Icons are left out: mail clients don't have the font (buttons and alerts keep their text)
+         * - text-bg-<colour> becomes badge-<colour> on badges, bg-<colour> elsewhere
+         * - other Bootstrap 5.3 classes become the ones bootstrap-email knows (MAIL_CLASSES), or inline styles (MAIL_STYLES)
          */
         public static function ForMail(string $Html): string
         {
             $Html = preg_replace('#<i\b[^>]*\bclass="(?:[^"]*\s)?bi(?:\s[^"]*)?"[^>]*>\s*</i>\s?#', '', $Html);
             return preg_replace_callback('#<([a-z][a-z0-9]*)\b([^>]*?)\sclass="([^"]*)"([^>]*)>#i', function ($Tag) {
                 $Classes = preg_split('/\s+/', trim($Tag[3]));
+                $Badge = in_array('badge', $Classes, true);
                 $Styles = '';
                 foreach ($Classes as $Class)
                 {
-                    if (isset(self::MAIL_CLASSES[$Class]))
+                    if (preg_match('/^text-bg-(\w+)$/', $Class, $Colour))
                     {
-                        $Classes[] = self::MAIL_CLASSES[$Class];
+                        $Classes[] = ($Badge ? 'badge-' : 'bg-') . $Colour[1];
                     }
+                    array_push($Classes, ...(self::MAIL_CLASSES[$Class] ?? []));
                     $Styles .= self::MAIL_STYLES[$Class] ?? '';
                 }
                 $Rest = $Tag[2] . $Tag[4];
