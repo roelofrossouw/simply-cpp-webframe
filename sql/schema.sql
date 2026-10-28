@@ -6,7 +6,7 @@
 --   framework.menu      the pages, in a tree per section: main (the menu at the top), status (the bar at the bottom),
 --                       page (in no menu, opened from elsewhere)
 --   framework.menu_access  which access levels may view each item's page, and which may also change things there
---   access.passwords    the password users' hashes, and their wrong passwords lately (since 1.3.0)
+--   access.passwords    the password accounts' hashes, and their wrong passwords lately (since 1.3.0)
 --   access.sign_in_failures  wrong passwords by address, to slow down guessing
 --
 -- Run it once, in the database the settings' database section names, as a role that may create schemas:
@@ -29,7 +29,7 @@ create table if not exists access.users
 (
   user_id         bigint generated always as identity primary key,
   provider        text        not null,                                       -- see users_provider_check below
-  subject         text        not null,                                       -- the provider's id for the user ('sub'); password users' username, lower case
+  subject         text        not null,                                       -- the provider's id for the user ('sub'); password users' email, lower case
   email           text,
   first_name      text,
   last_name       text,
@@ -49,8 +49,9 @@ alter table access.users drop constraint if exists users_provider_check;
 alter table access.users add constraint users_provider_check
   check (provider in ('google', 'apple', 'microsoft', 'github', 'facebook', 'password'));
 
--- Users who sign in with a username and password (provider 'password'): the hash (PHP's password_hash()), and the wrong
--- passwords since the last right one, which lock the sign-in for a while
+-- Users who sign in with their email address and a password (provider 'password'), once a link emailed to them chose
+-- it (until then they have no row): the hash (PHP's password_hash()), and the wrong passwords since the last right one,
+-- which lock the sign-in for a while
 create table if not exists access.passwords
 (
   user_id      bigint      primary key references access.users on delete cascade,

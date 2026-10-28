@@ -28,7 +28,7 @@
     'We keep a small amount of information about you:',
     array_merge(
       PolicyPage::HasServices() ? ["From the service you sign in with ($Services): an identifier for your account with that service, and your name and email address, but only what you agree to share on its sign-in screen."] : [],
-      \Auth\Password::Configured() ? ['If you sign in with a password: your username, name and email address as an administrator or you entered them, and your password, kept only as a one-way hash that can\'t be turned back into it.'] : [],
+      \Auth\Password::Configured() ? ['If you sign in with a password: your email address and name, as an administrator or you entered them, and your password, kept only as a one-way hash that can\'t be turned back into it.'] : [],
       [
         'What you add yourself: a profile photo, a nickname, how you\'d like to be addressed, and your name if your sign-in service didn\'t share it.',
         'What we record: when you first and last signed in, and the access an administrator gave you.',

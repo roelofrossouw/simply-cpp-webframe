@@ -20,10 +20,6 @@
       {
         $Saved = User::SetName($UserID, (string)Post::Get('first_name'), (string)Post::Get('last_name'));
       }
-      if ($Saved && Post::Get('email') !== null && User::Profile($UserID)['provider'] == 'password')
-      {
-        $Saved = User::SetEmail($UserID, (string)Post::Get('email'));
-      }
       $Notice = $Saved ? new AlertSuccess('Saved', 'Your profile is up to date.') : new AlertWarning('Not saved', 'Something in the form wasn\'t right, please check it and try again.');
       break;
     case 'photo':
@@ -35,16 +31,23 @@
     case 'testemail':
       $Notice = SendTestEmail(User::Profile($UserID));
       break;
-    case 'password':
-      $New = (string)Post::Get('new_password');
-      $Problem = match (true)
+    // A password account changes its password and email address through links emailed to it
+    case 'passwordlink':
+      $Account = Storage\Store::Get()->Password($UserID);
+      $Notice = $Account !== null && \Auth\Password::SendPasswordLink($UserID)
+        ? new AlertSuccess('Check your email', "We sent {$Account['email']} a link to choose a new password. Your password works until you do.")
+        : new AlertWarning('Not sent', 'Something went wrong while sending the email. Please try again later.');
+      break;
+    case 'email':
+      $New = \Auth\Password::Address((string)Post::Get('new_email'));
+      $Notice = match (true)
       {
-        !\Auth\Password::Verify($UserID, (string)Post::Get('current_password')) => 'Your current password isn\'t right.',
-        $New !== (string)Post::Get('repeat_password') => 'The two new passwords aren\'t the same.',
-        default => \Auth\Password::Set($UserID, $New),
+        Storage\Store::Get()->Password($UserID) === null => new AlertWarning('Not changed', 'Your email address comes from your sign-in provider.'),
+        $New === null => new AlertWarning('Not changed', 'That email address doesn\'t look right.'),
+        \Auth\Password::Taken($New) => new AlertWarning('Not changed', 'There is an account for that address already.'),
+        !\Auth\Password::SendEmailLink($UserID, $New) => new AlertWarning('Not sent', 'Something went wrong while sending the email. Please try again later.'),
+        default => new AlertSuccess('Check your email', "We sent $New a link. Your email address changes once you open it; until then you sign in with the one you have."),
       };
-      $Notice = $Problem === null ? new AlertSuccess('Password changed', 'Use your new password from now on. You stay signed in here; your other sign-ins end.')
-        : new AlertWarning('Password not changed', $Problem);
       break;
     case 'removephoto':
       User::RemovePhoto($UserID);
@@ -160,7 +163,7 @@
   $Heading->Format->Margin(Side::Top, PadSize::Pad4);
   $Form->AddChild(new HTML\Paragraph(match (true)
   {
-    $IsPassword => 'You sign in with a password, so these details are yours to keep up to date. We send password reset links to your email.',
+    $IsPassword => 'You sign in with your email address and a password, so your name is yours to keep up to date.',
     $CanEditName => "$Provider didn't share your name with us, so you can fill it in here. Your email comes from $Provider.",
     default => "These details come from your $Provider account, so you can change them there.",
   }));
@@ -178,11 +181,8 @@
   $Details->NewRow(1);
   $Details->Col($Email = new Input('email', $IsPassword ? 'Email' : "Email (from $Provider)", HTML\InputType::Email));
   $Email->Value($Profile['email'] ?? '');
-  if (!$IsPassword)
-  {
-    $Email->InputElement()->ReadOnly = true;
-    $Email->InputElement()->RemoveAttribute('name');
-  }
+  $Email->InputElement()->ReadOnly = true;
+  $Email->InputElement()->RemoveAttribute('name');
   if (filter_var($Profile['email'] ?? '', FILTER_VALIDATE_EMAIL))
   {
     $Details->Col($Test = new Button('Send me a test email', Icon::Envelope, "$Here?action=testemail"));
@@ -196,31 +196,26 @@
   $Since->Format->Color(Color::BodySecondary);
   $Since->Format->Margin(Side::Top, PadSize::Pad3);
 
-  // Your password: a form of its own, so Save doesn't post it
+  // Your sign-in: both changes go through a link emailed to you; a form of its own, so Save doesn't post it
   if ($IsPassword)
   {
     $Dialog->AddChild($Change = new HTML\Form());
-    $Change->AddChild($Heading = new HTML\Header(5, 'Your password'));
+    $Change->AddChild($Heading = new HTML\Header(5, 'Your sign-in'));
     $Heading->Format->Margin(Side::Top, PadSize::Pad4);
+    $Change->AddChild(new HTML\Paragraph('We email you a link to change your password, or to your new address to change your email.'));
     $Change->AddChild($Fields = new Grid(1));
-    $Fields->Columns(3, ScreenSize::Small);
-    foreach (['current_password' => ['Current password', 'current-password'], 'new_password' => ['New password', 'new-password'],
-               'repeat_password' => ['New password again', 'new-password']] as $Field => [$Caption, $AutoComplete])
-    {
-      $Fields->Col($Input = new Input($Field, $Caption, HTML\InputType::Password));
-      $Input->InputElement()->Required = true;
-      $Input->InputElement()->AutoComplete = $AutoComplete;
-      if ($Field != 'current_password')
-      {
-        $Input->InputElement()->MinLength = \Auth\Password::MinLength();
-      }
-    }
-    $Change->AddChild($Rule = new HTML\Paragraph('At least ' . \Auth\Password::MinLength() . ' characters.'));
-    $Rule->AddClass('small');
-    $Rule->Format->Color(Color::BodySecondary);
-    $Change->AddChild($ChangeButton = new Button('Change password', Icon::Key, "$Here?action=password"));
-    $ChangeButton->Color(Color::Secondary);
-    $ChangeButton->Modal();
+    $Fields->Columns(2, ScreenSize::Small);
+    $Fields->Col($NewEmail = new Input('new_email', 'New email address', HTML\InputType::Email));
+    $NewEmail->InputElement()->Required = true;
+    $NewEmail->InputElement()->AutoComplete = 'email';
+    $Fields->Col($EmailButton = new Button('Change email', Icon::Envelope, "$Here?action=email"));
+    $EmailButton->Color(Color::Secondary);
+    $EmailButton->Modal();
+    $Change->AddChild($PasswordButton = new Button('Email me a link to change my password', Icon::Key, "$Here?action=passwordlink"));
+    $PasswordButton->Color(Color::Secondary);
+    $PasswordButton->SkipForm();
+    $PasswordButton->Modal();
+    $PasswordButton->Format->Margin(Side::Top, PadSize::Pad3);
   }
 
   $Dialog->AddButton($Save = new Button('Save', Icon::Check2, "$Here?action=save"));

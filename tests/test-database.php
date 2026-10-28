@@ -93,25 +93,30 @@
   Same(null, $Storage->DeleteMenuItem($Child, null), 'remove the page');
   Same(null, $Storage->DeleteMenuItem($Parent, null), 'then the submenu');
 
-  // Password users
+  // Password accounts: by email address; invited ones have no password yet
   $Name = 'pw-' . bin2hex(random_bytes(3));
-  $Bob = $Storage->AddPasswordUser(" Bob-$Name ", "Bob-$Name@Example.com", 'Bob', '', 'hash one');
-  Check(is_int($Bob), 'add a password user');
-  Same("Someone already has the username bob-$Name.", $Storage->AddPasswordUser("BOB-$Name", null, null, null, 'x'),
-    'usernames are unique, any case');
-  Same($Bob, $Storage->PasswordUserID("bob-$Name"), 'found by username');
-  Same($Bob, $Storage->PasswordUserID(" BOB-$Name@example.COM"), 'or email, any case');
-  Same(null, $Storage->PasswordUserID('nobody'), 'not an unknown one');
+  $Bob = $Storage->AddPasswordUser(" Bob-$Name@Example.com ", 'Bob', '', 'hash one');
+  Check(is_int($Bob), 'add a password account');
+  Same("There is an account for bob-$Name@example.com already.", $Storage->AddPasswordUser("BOB-$Name@example.com", null, null, 'x'),
+    'one per address, any case');
+  Same($Bob, $Storage->PasswordUserID("bob-$Name@example.com"), 'found by its address');
+  Same(null, $Storage->PasswordUserID('nobody@example.com'), 'not an unknown one');
   Same(null, $Storage->PasswordUserID('ann@example.com'), 'nor someone who signs in with GitHub');
   $Row = $Storage->Password($Bob);
-  Same(["bob-$Name", 'hash one', '0', null], [$Row['subject'], $Row['hash'], $Row['failures'], $Row['last_failure']], 'the password row');
+  Same(["bob-$Name@example.com", 'hash one', '0', null], [$Row['email'], $Row['hash'], $Row['failures'], $Row['last_failure']], 'the account');
   Same(['public'], $Storage->Access($Bob), 'with public access');
   Same(null, $Storage->Password($ID), 'a GitHub user has no password');
   Same('t', $Storage->Profile($Bob)['names_from_user'], 'their names are theirs to change');
+  $Ann = $Storage->AddPasswordUser("ann-$Name@example.com", 'Ann', null, null);
+  Same([null, '0'], [$Storage->Password($Ann)['hash'], $Storage->Password($Ann)['failures']], 'an invited account, without a password');
+  $Verified = array_column($Storage->Users(), 'verified', 'user_id');
+  Same(['t', 'f', null], [$Verified[$Bob], $Verified[$Ann], $Verified[$ID]], 'Users shows who chose a password');
+  Same(null, $Storage->SetPassword($Ann, 'hash ann'), 'choosing one');
+  Same('hash ann', $Storage->Password($Ann)['hash'], 'makes the account work');
   $Address = '192.0.2.' . random_int(1, 254);
   $Storage->PasswordFailed($Bob, $Address);
   $Storage->PasswordFailed(null, $Address);
-  Same('1', $Storage->Password($Bob)['failures'], 'a wrong password counts for the user');
+  Same('1', $Storage->Password($Bob)['failures'], 'a wrong password counts for the account');
   Check(abs((int)$Storage->Password($Bob)['last_failure'] - time()) < 60, 'with when');
   Same(2, $Storage->AddressFailures($Address, 60), 'and both for the address');
   $Changed = DB::Value('select changed from access.passwords where user_id = $1', [$Bob]);
@@ -121,12 +126,13 @@
   Same(null, $Storage->SetPassword($Bob, 'hash two'), 'a new hash');
   Same('hash two', $Storage->Password($Bob)['hash'], 'is kept');
   Same('This user doesn\'t sign in with a password.', $Storage->SetPassword($ID, 'x'), 'a GitHub user\'s password can\'t be set');
-  Same(null, $Storage->SetEmail($Bob, 'new@example.com'), 'a password user sets their email');
-  Same('The sign-in provider gives this user\'s email address.', $Storage->SetEmail($ID, 'x@example.com'), 'others can\'t');
-  Same("bob-$Name", array_column($Storage->Users(), 'username', 'user_id')[$Bob], 'Users shows the username');
-  Same(null, array_column($Storage->Users(), 'username', 'user_id')[$ID], 'only for password users');
-  Same((string)$Bob, $Storage->SignIn('password', "bob-$Name", null, null, null)['user_id'], 'signing in is the same user');
+  Same("There is an account for ann-$Name@example.com already.", $Storage->SetEmail($Bob, "Ann-$Name@example.com"), 'not another account\'s address');
+  Same(null, $Storage->SetEmail($Bob, "Robert-$Name@Example.com"), 'a new address');
+  Same($Bob, $Storage->PasswordUserID("robert-$Name@example.com"), 'signs in with it');
+  Same("robert-$Name@example.com", $Storage->Password($Bob)['email'], 'and is its email');
+  Same('This user doesn\'t sign in with a password.', $Storage->SetEmail($ID, 'x@example.com'), 'others\' come from their provider');
+  Same((string)$Bob, $Storage->SignIn('password', "robert-$Name@example.com", null, null, null)['user_id'], 'signing in is the same user');
   DB::Exec('delete from access.sign_in_failures where address = $1', [$Address]);
-  DB::Exec('delete from access.users where user_id = $1', [$Bob]);
+  DB::Exec('delete from access.users where user_id in ($1, $2)', [$Bob, $Ann]);
 
   DB::Exec('delete from access.users where user_id = $1', [$ID]);

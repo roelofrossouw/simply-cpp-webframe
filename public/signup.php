@@ -2,11 +2,11 @@
   require_once 'sc-webframe/autoload.php'; // On the include_path, see the README
 
   use Auth\Password;
-  use BS\{AlertSuccess, AlertWarning, Button, Card, Icon, PadSize, ScreenSize, Side};
+  use BS\{AlertSuccess, AlertWarning, Card, PadSize, ScreenSize, Side};
 
-  // Create an account (auth.password.signup): asks for an email address and emails a link (Password::RESET_SECONDS); the
-  // link opens this page again to choose names and a password, which makes the account (the address is its username,
-  // with public access) and signs them in. Open to anyone, as a page of its own.
+  // Create an account (auth.password.signup): asks for an email address and emails a link (Password::LINK_SECONDS); the
+  // link opens this page again to choose names and a password, which makes the account for that address, with public
+  // access, and signs them in. Open to anyone, as a page of its own.
   Config::Init(true, true);
   $Here = Config::FrameworkURL('signup.php');
   $Token = (string)(Post::Get('token') ?? QueryString::Get('token') ?? '');
@@ -39,7 +39,7 @@
     {
       $New = (string)Post::Get('password');
       $Problem = $New === (string)Post::Get('repeat') ? Password::Weakness($New, $Email) : 'The two passwords aren\'t the same.';
-      $Added = $Problem ?? Storage\Store::Get()->AddPasswordUser($Email, $Email, (string)Post::Get('first_name'), (string)Post::Get('last_name'),
+      $Added = $Problem ?? Storage\Store::Get()->AddPasswordUser($Email, (string)Post::Get('first_name'), (string)Post::Get('last_name'),
         Password::Hash($New));
       if (is_int($Added))
       {
@@ -70,45 +70,31 @@
 
   // Asked for a link: counted like a wrong password, so it can't flood someone's inbox. Whether the address has an
   // account already only shows in the email it gets.
-  if (($Email = mb_strtolower(trim((string)Post::Get('email')))) !== '')
+  if (($Posted = trim((string)Post::Get('email'))) !== '')
   {
-    $Storage = Storage\Store::Get();
-    $Address = (string)($_SERVER['REMOTE_ADDR'] ?? '');
-    if (!filter_var($Email, FILTER_VALIDATE_EMAIL))
+    $AppName = Config::AppName();
+    if (($Email = Password::Address($Posted)) === null)
     {
       $Card->AddChild(new AlertWarning('Not sent', 'That email address doesn\'t look right.'));
     }
-    elseif ($Storage->AddressFailures($Address, Password::LOCK_SECONDS) >= Password::ADDRESS_LIMIT)
+    elseif (!Password::MayTry())
     {
       $Card->AddChild(new AlertWarning('Too many tries', 'Please try again in a few minutes.'));
       return;
     }
     else
     {
-      $Storage->PasswordFailed(null, $Address);
-      $AppName = Config::AppName();
-      $Mail = new \BS\Email();
-      $Mail->AddChild($Body = new Card(PadSize::Pad4));
-      $Body->AddChild(new HTML\Header(3, 'Hi,'));
       if (Password::Taken($Email))
       {
-        $Body->AddParagraph("Someone asked to make an account on $AppName with this email address, but you have one already. "
-          . 'Sign in with it; if you forgot your password, choose a new one.');
-        $Body->AddChild($Button = new Button('Forgot your password?', Icon::Key));
-        $Button->Link(Config::Origin() . Config::FrameworkURL('resetpassword.php'));
+        Password::SendLink($Email, "Your $AppName account", "Someone asked to make an account on $AppName with this email address, but you have one "
+          . 'already. Sign in with it; if you forgot your password, choose a new one.', 'Forgot your password?',
+          Config::FrameworkURL('resetpassword.php'), 'If it wasn\'t you, ignore this email.');
       }
       else
       {
-        $Body->AddParagraph("Someone asked to make an account on $AppName with this email address. If it was you, finish it here; the link works for "
-          . intdiv(Password::RESET_SECONDS, 60) . ' minutes.');
-        $Body->AddChild($Button = new Button('Create my account', Icon::PersonPlus));
-        $Button->Link(Config::Origin() . "$Here?token=" . Password::SignUpToken($Email));
-      }
-      $Body->AddParagraph('If it wasn\'t you, ignore this email.');
-      $Body->AddChild(Config::MailFooter());
-      if (!$Mail->Send($Email, "Your $AppName account"))
-      {
-        error_log('sc-webframe: the sign-up email wasn\'t sent');
+        Password::SendLink($Email, "Your $AppName account", "Someone asked to make an account on $AppName with this email address. If it was you, "
+          . 'finish it here; the link works for ' . intdiv(Password::LINK_SECONDS, 60) . ' minutes.', 'Create my account',
+          "$Here?token=" . Password::SignUpToken($Email), 'If it wasn\'t you, ignore this email.');
       }
       $Card->AddChild(new AlertSuccess('Check your email', "We sent a link to $Email. It should arrive within a minute or two; "
         . 'check your junk folder if it doesn\'t.'));

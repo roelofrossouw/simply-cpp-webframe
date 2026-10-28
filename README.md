@@ -1,7 +1,7 @@
 # simply-cpp-webframe
 
 A PHP web framework: pages built from HTML and Bootstrap 5 classes, a menu that decides who may open which page,
-access levels in PostgreSQL, and sign-in with Google, Microsoft, Apple, GitHub, Facebook, or a username and password. Pages load into the site
+access levels in PostgreSQL, and sign-in with Google, Microsoft, Apple, GitHub, Facebook, or an email address and password. Pages load into the site
 without full reloads, open in popups, side panels and toasts, and refresh themselves.
 
 It is part of [simply-cpp](https://github.com/roelofrossouw/simply-cpp), shipped through its apt repository, but it is
@@ -33,7 +33,7 @@ plain PHP: nothing to compile, and no extension.
 | `DB` | PostgreSQL with parameters: `Rows()`, `Row()`, `Value()`, `Assoc()`, `Exists()`, `Exec()`, `Transaction()`. |
 | `Storage\` | Where users, access and the menu are kept: `Postgres` (the default), or a class of your own (`Storage\Backend`). |
 | `Rest`, `Server`, `Post`, `QueryString`, `ErrorHandler` | Small helpers: an HTTP client, the request, and errors shown in the page (in full for admins). |
-| `public/` | What the site serves under `/framework`: `js/app.js`, `css/style.css`, the service worker, the sign-in and sign-out pages, Forgot your password? (`resetpassword.php`), Create an account (`signup.php`), the menu (`landing.php`), Administer → Users, Menu and Config (`admin/`), Your profile (`profile.php`), and the privacy policy, terms of use and data deletion pages, written from the settings. |
+| `public/` | What the site serves under `/framework`: `js/app.js`, `css/style.css`, the service worker, the sign-in and sign-out pages, Forgot your password? and password links (`resetpassword.php`), Create an account (`signup.php`), a new email address (`confirmemail.php`), the menu (`landing.php`), Administer → Users, Menu and Config (`admin/`), Your profile (`profile.php`), and the privacy policy, terms of use and data deletion pages, written from the settings. |
 | `sql/schema.sql` | The tables: `access.users`, `access.levels`, `access.grants`, `access.passwords`, `access.sign_in_failures`, `framework.menu`, `framework.menu_access`. |
 
 The classes keep short global names (`Config`, `Page`, `DB`, `User`) and the namespaces `HTML`, `BS`, `Auth` and `Storage`,
@@ -79,7 +79,7 @@ It needs PHP 8.3 or later, with the pgsql, curl, gd and mbstring extensions (the
    | `auth.apple` | `client_id` (the Services ID), `team_id`, `key_id`, `key_file` (the .p8 in `keys_dir`) |
    | `auth.github` | `client_id`, `client_secret` |
    | `auth.facebook` | `app_id`, `app_secret` |
-   | `auth.password` | `enabled` (`true` to offer it), `min_length` (10), `session_days` (30), `reset` (`false` to leave out Forgot your password?), `signup` (`true`: anyone may make an account); see [Signing in with a password](#signing-in-with-a-password) |
+   | `auth.password` | `enabled` (`true` to offer it), `min_length` (10), `session_days` (30), `signup` (`true`: anyone may make an account); it needs mail; see [Signing in with a password](#signing-in-with-a-password) |
    | `mail` | `from`, `redirect` (send every email there instead), `disabled` |
    | `storage` | `class`: a `Storage\Backend` of your own instead of `Storage\Postgres` |
    | `menu` | `editor`: the page that manages the menu, which admins must always keep (default: the package's `admin/menu.php`, when the menu has it; `""` for none) |
@@ -132,28 +132,30 @@ It needs PHP 8.3 or later, with the pgsql, curl, gd and mbstring extensions (the
 
 ## Signing in with a password
 
-With `"password": {"enabled": true}` in the settings' `auth` section, people can also sign in with a username (or their
-email address) and a password. An admin adds them under Administer → Users (**Add a user**: username, email, names and
-a first password), and sets a new password with the key button next to them. They change their own password, names and
-email on Your profile.
+With `"password": {"enabled": true}` in the settings' `auth` section, people can also sign in with their email address
+and a password. The address is the account, and nothing about a password happens without a link emailed to it, so an
+account only works once its address is shown to work (and the site needs mail):
 
-With `"signup": true` as well, the sign-in form offers **Create an account** (`/framework/signup.php`): anyone gives an
-email address, and the email gets a link (an hour) to choose their names and a password. That makes the account, with
-the address as its username and Public access, and signs them in. An address that has an account gets a reminder to
-sign in or reset the password instead, and the page answers the same either way. It needs mail. On a new site, sign in
-as the admin first: with `auth.first_admin` at `true`, the first account made would become the admin.
+- **Add a user** (Administer → Users, admins): email address and names. It emails an invitation to choose a password
+  (the link works for 7 days); the list shows the account as invited until then. The key button next to a password
+  account emails it a link to choose a new password (or the invitation again). Admins never see or set passwords.
+- **Create an account** (`/framework/signup.php`), with `"signup": true`: anyone gives an email address, which gets a link
+  (an hour) to choose names and a password; that makes the account, with Public access, and signs them in. An address
+  that has an account gets a reminder to sign in or reset the password instead, and the page answers the same either
+  way. On a new site, sign in as the admin first: with `auth.first_admin` at `true`, the first account would become admin.
+- **Forgot your password?**, and **Your profile**'s change of password, email a link (an hour, once) to choose a new one,
+  which signs you in. **Your profile** changes the email address by a link sent to the new address.
 
 - Passwords are kept as Argon2id hashes (bcrypt where PHP lacks Argon2), at least `min_length` characters, and not the
-  username.
+  email address.
 - A right password signs in like the other providers (the 30 minute token) and sets a session cookie that renews it for
-  `session_days`. Changing the password ends every other session.
-- Five wrong passwords in a row lock that user's sign-in for 15 minutes; twenty from one address in 15 minutes, across
-  usernames, lock that address. Unknown usernames take as long as wrong passwords.
-- **Forgot your password?** emails a link to the address the user has, which works for an hour, once. It answers the same
-  whether or not the user exists. It needs mail (`mail.disabled` not `true`); `reset: false` leaves it out.
+  `session_days`. A new password ends every session, and every link sent before it.
+- Five wrong passwords in a row lock that account's sign-in for 15 minutes; twenty wrong passwords or links asked for
+  from one address in 15 minutes lock that address. Unknown addresses take as long as wrong passwords.
 
 The schema since 1.3.0 adds `access.passwords` and `access.sign_in_failures`, and allows `password` as a provider; load
-it again after upgrading.
+it again after upgrading. Since 1.5.0 the account's email address is its `subject`; 1.3.0's usernames aren't carried
+over.
 
 ## Pages and access
 
@@ -175,12 +177,12 @@ signed out). `framework.menu_access` gives access levels the View right on an it
 too. Add your access levels to `access.levels`, and grant them in `access.grants`.
 
 The schema adds **Administer** to the main menu, for admins: **Users** (everyone who signed in, with a switch per access
-level; admins can't take away their own admin or block themselves; with passwords on, Add a user and Set a password), **Menu** (every item, a tab per section, with
+level; admins can't take away their own admin or block themselves; with passwords on, Add a user and the password links), **Menu** (every item, a tab per section, with
 its fields, Public and Shown, and View and Edit per access level; a change that would take Menu from admins is undone)
 and **Config** (the settings file by section; it saves when the web server may write the file, and never shows a secret:
 a secret's field stays empty, and saving it empty keeps it).
 **Your profile** is in the status bar for anyone signed in: what the site calls them, their photo, a test email, and for
-password users their email and password.
+password accounts links to change the email address and password.
 Change their access in the menu like any other page's. A site's own admin pages can do the same with
 `MenuLayout::Add()`, `Update()`, `SetAccess()` and `Delete()`, and `User::All()`, `User::SetAccess()` and
 `User::Levels()`.
@@ -194,7 +196,7 @@ implement `Storage\Backend` and name the class in the settings:
 "storage": {"class": "MySite\\AgentStorage"}
 ```
 
-The class loads from the site's classes like any other. Since 1.3.0 the interface includes the password users'
+The class loads from the site's classes like any other. Since 1.3.0 the interface includes the password accounts'
 methods (`PasswordUserID()`, `Password()`, `AddPasswordUser()`, `SetPassword()`, `SetEmail()`, `PasswordFailed()`,
 `AddressFailures()`). `DB` stays available for the site's own tables either way.
 

@@ -28,8 +28,8 @@
     match (true)
     {
       !\Auth\Password::Configured() => 'You sign in with your ' . PolicyPage::Services() . ' account. Please:',
-      PolicyPage::HasServices() => 'You sign in with your ' . PolicyPage::Services() . ' account, or with your username and password. Please:',
-      default => 'You sign in with your username and password. Please:',
+      PolicyPage::HasServices() => 'You sign in with your ' . PolicyPage::Services() . ' account, or with your email address and password. Please:',
+      default => 'You sign in with your email address and password. Please:',
     },
     [
       PolicyPage::HasServices() ? 'keep that account secure, ideally with two-step verification turned on'

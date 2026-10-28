@@ -70,8 +70,8 @@
 
     public function Users(): array
     {
-      $Users = DB::Rows('select u.user_id, u.provider, case when u.provider = \'password\' then u.subject end as username, u.email, u.first_name,
-          u.last_name, u.created, u.last_login,
+      $Users = DB::Rows('select u.user_id, u.provider, u.email, u.first_name, u.last_name, u.created, u.last_login,
+          case when u.provider = \'password\' then exists (select 1 from access.passwords p where p.user_id = u.user_id) end as verified,
           coalesce((select json_agg(l.code order by l.access_id) from access.grants g join access.levels l using (access_id)
                      where g.user_id = u.user_id and g.revoked is null), \'[]\') as access
         from access.users u order by u.last_login desc nulls last, u.user_id');
@@ -142,32 +142,34 @@
         [$UserID]) > 0 ? null : 'Unknown user.';
     }
 
-    public function PasswordUserID(string $Name): ?int
+    public function PasswordUserID(string $Email): ?int
     {
-      $ID = DB::Value('select user_id from access.users
-        where provider = \'password\' and (subject = lower(trim($1)) or lower(email) = lower(trim($1)))
-        order by subject = lower(trim($1)) desc, user_id limit 1', [$Name]);
+      $ID = DB::Value('select user_id from access.users where provider = \'password\' and subject = lower(trim($1))', [$Email]);
       return $ID === null ? null : (int)$ID;
     }
 
     public function Password(int $UserID): ?array
     {
-      return DB::Row('select u.user_id, u.subject, u.email, p.hash, p.failures, extract(epoch from p.last_failure)::bigint as last_failure
-        from access.users u join access.passwords p using (user_id) where u.user_id = $1 and u.provider = \'password\'', [$UserID]);
+      return DB::Row('select u.user_id, u.email, p.hash, coalesce(p.failures, 0) as failures,
+          extract(epoch from p.last_failure)::bigint as last_failure
+        from access.users u left join access.passwords p using (user_id) where u.user_id = $1 and u.provider = \'password\'', [$UserID]);
     }
 
-    public function AddPasswordUser(string $Username, ?string $Email, ?string $FirstName, ?string $LastName, string $Hash): int|string
+    public function AddPasswordUser(string $Email, ?string $FirstName, ?string $LastName, ?string $Hash): int|string
     {
-      $Username = mb_strtolower(trim($Username));
-      if (DB::Exists('select 1 from access.users where provider = \'password\' and subject = $1', [$Username]))
+      $Email = mb_strtolower(trim($Email));
+      if (DB::Exists('select 1 from access.users where provider = \'password\' and subject = $1', [$Email]))
       {
-        return "Someone already has the username $Username.";
+        return "There is an account for $Email already.";
       }
-      return DB::Transaction(function () use ($Username, $Email, $FirstName, $LastName, $Hash) {
+      return DB::Transaction(function () use ($Email, $FirstName, $LastName, $Hash) {
         $ID = (int)DB::Value('insert into access.users (provider, subject, email, first_name, last_name, names_from_user)
-          values (\'password\', $1, nullif(trim($2), \'\'), nullif(trim($3), \'\'), nullif(trim($4), \'\'), true)
-          returning user_id', [$Username, $Email, $FirstName, $LastName]);
-        DB::Exec('insert into access.passwords (user_id, hash) values ($1, $2)', [$ID, $Hash]);
+          values (\'password\', $1, $1, nullif(trim($2), \'\'), nullif(trim($3), \'\'), true)
+          returning user_id', [$Email, $FirstName, $LastName]);
+        if ($Hash !== null)
+        {
+          DB::Exec('insert into access.passwords (user_id, hash) values ($1, $2)', [$ID, $Hash]);
+        }
         DB::Exec('insert into access.grants (user_id, access_id) select $1, access_id from access.levels where code = \'public\'', [$ID]);
         return $ID;
       });
@@ -185,10 +187,15 @@
       return null;
     }
 
-    public function SetEmail(int $UserID, ?string $Email): ?string
+    public function SetEmail(int $UserID, string $Email): ?string
     {
-      return DB::Exec('update access.users set email = nullif(trim($2), \'\') where user_id = $1 and provider = \'password\'',
-        [$UserID, $Email]) > 0 ? null : 'The sign-in provider gives this user\'s email address.';
+      $Email = mb_strtolower(trim($Email));
+      if (DB::Exists('select 1 from access.users where provider = \'password\' and subject = $1 and user_id <> $2', [$Email, $UserID]))
+      {
+        return "There is an account for $Email already.";
+      }
+      return DB::Exec('update access.users set subject = $2, email = $2 where user_id = $1 and provider = \'password\'',
+        [$UserID, $Email]) > 0 ? null : 'This user doesn\'t sign in with a password.';
     }
 
     public function PasswordFailed(?int $UserID, string $Address): void

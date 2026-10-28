@@ -2,10 +2,11 @@
   require_once 'sc-webframe/autoload.php'; // On the include_path, see the README
 
   use Auth\Password;
-  use BS\{AlertSuccess, AlertWarning, Button, Card, Icon, Input, PadSize, ScreenSize, Side};
+  use BS\{AlertSuccess, AlertWarning, Card, PadSize, ScreenSize, Side};
 
-  // Forgot your password?: asks for the username or email and emails a link (Password::RESET_SECONDS) to the address the
-  // user has; the link opens this page again, to choose a new password. Open to anyone, as a page of its own.
+  // Choosing a password, always through a link emailed to the account's address: Forgot your password? asks for the
+  // address and sends one (Password::LINK_SECONDS); an admin's invitation, Your profile and the admin's key button send
+  // one too. The link opens this page again to choose the password, which signs you in. Open to anyone, as a page of its own.
   Config::Init(true, true);
   $Here = Config::FrameworkURL('resetpassword.php');
   $Token = (string)(Post::Get('token') ?? QueryString::Get('token') ?? '');
@@ -14,90 +15,72 @@
   $Card->Format->Center();
   $Card->Format->MaxWidth(ScreenSize::Small->Width());
   $Card->Format->Margin(Side::Top, PadSize::Pad4);
-  $Card->AddHeader('Forgot your password?');
 
-  if (!Password::CanReset())
+  if (!Password::CanEmail())
   {
-    $Card->AddChild(new AlertWarning('Not here', 'This site doesn\'t reset passwords by email. Please ask an administrator to set a new one.'));
+    $Card->AddHeader('Your password');
+    $Card->AddChild(new AlertWarning('Not here', 'This site can\'t email password links. Please ask an administrator.'));
     return;
   }
 
-  function SignInLink(Card $Card, string $Caption): void
-  {
-    $Card->AddChild($Link = new Button($Caption, Icon::BoxArrowInRight));
-    $Link->Link(Config::FrameworkURL('login.php') . '?provider=password');
-    $Link->Format->Margin(Side::All, PadSize::Pad2);
-  }
-
-  // The link from the email: choose a new password
+  // The link from the email: choose the password
   if ($Token !== '')
   {
-    $UserID = Password::TokenUser($Token, 'reset');
-    if ($UserID === null)
+    $Card->AddHeader('Choose a password');
+    $Account = Password::TokenAccount($Token, 'password');
+    if ($Account === null)
     {
       $Card->AddChild(new AlertWarning('This link doesn\'t work any more', 'It expired, or it was used already. Ask for a new one below.'));
       $Card->AddChild($Again = new HTML\Anchor('Send me a new link', $Here, IsLink: true));
       $Again->Format->Margin(Side::All, PadSize::Pad2);
       return;
     }
+    $UserID = (int)$Account['user_id'];
     if (Post::Get('password') !== null)
     {
       $New = (string)Post::Get('password');
       $Problem = $New === (string)Post::Get('repeat') ? Password::Set($UserID, $New) : 'The two passwords aren\'t the same.';
       if ($Problem === null)
       {
-        $Card->AddChild(new AlertSuccess('Password changed', 'Sign in with your new password. Anywhere else you were signed in, you\'re signed out.'));
-        SignInLink($Card, 'Sign in');
+        if (Password::SignInAs($UserID))
+        {
+          $Card->AddChild(new AlertSuccess('Password saved', 'You\'re signed in. Anywhere else you were signed in, you\'re signed out.'));
+          Config::LoadPage(Config::Origin(), false, 1500);
+        }
+        else
+        {
+          $Card->AddChild(new AlertWarning('Password saved', 'But your account is blocked from signing in. Please contact an administrator.'));
+        }
         return;
       }
-      $Card->AddChild(new AlertWarning('Not changed', $Problem));
+      $Card->AddChild(new AlertWarning('Not saved', $Problem));
     }
-    $Card->AddParagraph('Choose a new password for ' . Storage\Store::Get()->Password($UserID)['subject'] . ', at least ' . Password::MinLength() . ' characters.');
-    $Form = Password::PageForm($Card, $Here, ['password' => ['New password', HTML\InputType::Password, 'new-password'],
-      'repeat' => ['New password again', HTML\InputType::Password, 'new-password']], 'Change password');
+    $Card->AddParagraph("A password for {$Account['email']}, at least " . Password::MinLength() . ' characters.');
+    $Form = Password::PageForm($Card, $Here, ['password' => ['Password', HTML\InputType::Password, 'new-password'],
+      'repeat' => ['Password again', HTML\InputType::Password, 'new-password']], 'Save password');
     $Form->AddChild($Hidden = new HTML\Input('token', HTML\InputType::Hidden));
     $Hidden->Value($Token);
     return;
   }
 
-  // Asked for a link: the same answer whether or not the user exists, and counted like a wrong password, so it can't be
-  // used to find usernames or flood someone's inbox
-  if (($Name = trim((string)Post::Get('name'))) !== '')
+  // Asked for a link: the same answer whether or not there's an account, and counted like a wrong password, so it can't
+  // be used to find accounts or flood someone's inbox
+  $Card->AddHeader('Forgot your password?');
+  if (($Email = trim((string)Post::Get('email'))) !== '')
   {
-    $Storage = Storage\Store::Get();
-    $Address = (string)($_SERVER['REMOTE_ADDR'] ?? '');
-    if ($Storage->AddressFailures($Address, Password::LOCK_SECONDS) >= Password::ADDRESS_LIMIT)
+    if (!Password::MayTry())
     {
       $Card->AddChild(new AlertWarning('Too many tries', 'Please try again in a few minutes.'));
       return;
     }
-    $Storage->PasswordFailed(null, $Address);
-    $UserID = $Storage->PasswordUserID($Name);
-    $User = $UserID === null ? null : $Storage->Password($UserID);
-    if ($User !== null && filter_var($User['email'] ?? '', FILTER_VALIDATE_EMAIL) && ($Reset = Password::Token($UserID, 'reset', Password::RESET_SECONDS)) !== null)
+    if (($Address = Password::Address($Email)) !== null && ($UserID = Storage\Store::Get()->PasswordUserID($Address)) !== null)
     {
-      $Profile = User::Profile($UserID);
-      $Who = User::DisplayName($Profile);
-      $AppName = Config::AppName();
-      $Email = new \BS\Email();
-      $Email->AddChild($Mail = new Card(PadSize::Pad4));
-      $Mail->AddChild(new HTML\Header(3, "Hi $Who,"));
-      $Mail->AddParagraph("Someone asked to reset the password of {$User['subject']} on $AppName. If it was you, choose a new one here; the link works for "
-        . intdiv(Password::RESET_SECONDS, 60) . ' minutes, once.');
-      $Mail->AddChild($Button = new Button('Choose a new password', Icon::Key));
-      $Button->Link(Config::Origin() . "$Here?token=$Reset");
-      $Mail->AddParagraph('If it wasn\'t you, ignore this email: your password stays as it is.');
-      $Mail->AddChild(Config::MailFooter());
-      if (!$Email->Send("$Who <{$User['email']}>", "Your $AppName password"))
-      {
-        error_log("sc-webframe: the password reset email to user $UserID wasn't sent");
-      }
+      Password::SendPasswordLink($UserID);
     }
-    $Card->AddChild(new AlertSuccess('Check your email', 'If that user has an email address with us, we sent a link to choose a new password. '
+    $Card->AddChild(new AlertSuccess('Check your email', 'If there\'s an account for that address, we sent it a link to choose a new password. '
       . 'It should arrive within a minute or two; check your junk folder if it doesn\'t.'));
-    SignInLink($Card, 'Back to signing in');
     return;
   }
 
-  $Card->AddParagraph('Give your username or email address, and we\'ll email you a link to choose a new password.');
-  Password::PageForm($Card, $Here, ['name' => ['Username or email', HTML\InputType::Text, 'username']], 'Send me a link');
+  $Card->AddParagraph('Give your email address, and we\'ll email you a link to choose a new password.');
+  Password::PageForm($Card, $Here, ['email' => ['Email', HTML\InputType::Email, 'username']], 'Send me a link');

@@ -26,7 +26,10 @@
     /** The access levels that can be granted, code => description, in order */
     public function Levels(): array;
 
-    /** Every user: user_id, provider, username (password users'), email, first_name, last_name, created, last_login, access (codes) */
+    /**
+     * Every user: user_id, provider, email, first_name, last_name, created, last_login, access (codes), and verified ('t' or
+     * 'f': a password account chose its password through a link; null for the others)
+     */
     public function Users(): array;
 
     /** Grants an access level or revokes it (revoking keeps the grant, with when) */
@@ -51,28 +54,30 @@
     public function RemovePhoto(int $UserID): ?string;
 
     /**
-     * The password user a username or email address names (any case; a username before an email), or null
+     * The password account with the email address (lower case), or null
      */
-    public function PasswordUserID(string $Name): ?int;
+    public function PasswordUserID(string $Email): ?int;
 
     /**
-     * A password user's sign-in: user_id, subject (the username), email, hash, failures (wrong passwords since the last
-     * right one) and last_failure (a Unix time, or null); null when the user doesn't sign in with a password
+     * A password account: user_id, email, hash (null until a link chose a password: the address isn't shown to work yet),
+     * failures (wrong passwords since the last right one) and last_failure (a Unix time, or null); null when the user
+     * doesn't sign in with a password
      */
     public function Password(int $UserID): ?array;
 
     /**
-     * Makes a user who signs in with a username and password, with public access
+     * Makes an account that signs in with its email address (lower case) and a password, with public access; without a
+     * hash it can't sign in until a link chose one
      *
-     * @return int|string Their id, or why they weren't made
+     * @return int|string Its id, or why it wasn't made
      */
-    public function AddPasswordUser(string $Username, ?string $Email, ?string $FirstName, ?string $LastName, string $Hash): int|string;
+    public function AddPasswordUser(string $Email, ?string $FirstName, ?string $LastName, ?string $Hash): int|string;
 
-    /** A password user's new password hash; clears their wrong passwords */
+    /** A password account's new password hash; clears its wrong passwords */
     public function SetPassword(int $UserID, string $Hash): ?string;
 
-    /** A password user's email address, which they may change themselves (no sign-in provider gives it) */
-    public function SetEmail(int $UserID, ?string $Email): ?string;
+    /** A password account's new email address (lower case), which it signs in with from now on */
+    public function SetEmail(int $UserID, string $Email): ?string;
 
     /** Records a wrong password: the user's (when there is one), and the address's */
     public function PasswordFailed(?int $UserID, string $Address): void;

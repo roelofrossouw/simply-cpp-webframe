@@ -134,21 +134,6 @@
       return $Profile['names_from_user'] || (empty($Profile['first_name']) && empty($Profile['last_name']));
     }
 
-    /**
-     * A password user's email address (other providers give theirs)
-     *
-     * @return bool False when it isn't an email address, or the user doesn't sign in with a password
-     */
-    public static function SetEmail(int $UserID, string $Email): bool
-    {
-      $Email = trim($Email);
-      if ($Email !== '' && !filter_var($Email, FILTER_VALIDATE_EMAIL))
-      {
-        return false;
-      }
-      return Store::Get()->SetEmail($UserID, $Email === '' ? null : $Email) === null;
-    }
-
     public static function SetDisplay(int $UserID, string $DisplayAs, ?string $Nickname = null): bool
     {
       if (!array_key_exists($DisplayAs, self::DISPLAY_AS))

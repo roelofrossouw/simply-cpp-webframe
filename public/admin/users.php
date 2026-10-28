@@ -23,7 +23,7 @@
   $Result->Format->MaxWidth(\BS\ScreenSize::ExtraLarge->Width());
   $Result->Format->Center();
   // Users who sign in with a password are added here
-  $Passwords = \Auth\Password::Configured() && $CanEdit;
+  $Passwords = \Auth\Password::CanEmail() && $CanEdit;
   if ($Passwords)
   {
     $Result->AddChild($Add = new \BS\Button('Add a user', \BS\Icon::PersonPlus, Config::FrameworkURL('admin/password.php')));
@@ -55,7 +55,8 @@
     $Row = $Table->Body()->AddRow();
     $Row->AddCell(($Record['name'] ?: '-') . (User::Blocked($Access) ? ' (blocked)' : ''));
     $Row->AddCell($Record['email'] ?? '-');
-    $Provider = $Row->AddCell(User::ProviderTitle($Record['provider']) . (empty($Record['username']) ? '' : " ({$Record['username']})"));
+    // A password account works once a link chose its password
+    $Provider = $Row->AddCell(User::ProviderTitle($Record['provider']) . (($Record['verified'] ?? null) === 'f' ? ' (invited)' : ''));
     if ($Passwords && $Record['provider'] == 'password')
     {
       $Provider->AddChild($Set = new \BS\Button(null, \BS\Icon::Key, Config::FrameworkURL('admin/password.php') . '?userid=' . (int)$Record['user_id']));
@@ -63,8 +64,8 @@
       $Set->Color(\BS\Color::Secondary);
       $Set->AddClass('btn-sm');
       $Set->Format->Margin(\BS\Side::Start, \BS\PadSize::Pad2);
-      $Set->AddAttribute('title', 'Set a password');
-      $Set->AddAttribute('aria-label', 'Set a password for ' . ($Record['name'] ?: $Record['email'] ?? 'user ' . $Record['user_id']));
+      $Set->AddAttribute('title', 'Email a password link');
+      $Set->AddAttribute('aria-label', 'Email a password link to ' . ($Record['name'] ?: $Record['email'] ?? 'user ' . $Record['user_id']));
     }
     $Row->AddCell(empty($Record['last_login']) ? 'never' : date('d/m/Y H:i', strtotime($Record['last_login'])));
 

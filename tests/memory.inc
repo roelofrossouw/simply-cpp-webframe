@@ -21,8 +21,8 @@
     public function Users(): array
     {
       return [['user_id' => '7', 'provider' => 'github', 'email' => 'ann@example.com', 'first_name' => 'Ann', 'last_name' => 'Example',
-        'created' => '2026-10-28 10:00:00+02', 'last_login' => '2026-10-28 10:00:00+02', 'access' => $this->Grants[7]]]
-        + array_map(fn($ID) => ['user_id' => (string)$ID, 'provider' => 'password', 'username' => $this->Passwords[$ID]['subject'],
+        'created' => '2026-10-28 10:00:00+02', 'last_login' => '2026-10-28 10:00:00+02', 'access' => $this->Grants[7], 'verified' => null]]
+        + array_map(fn($ID) => ['user_id' => (string)$ID, 'provider' => 'password', 'verified' => $this->Passwords[$ID]['hash'] === null ? 'f' : 't',
           'email' => $this->Passwords[$ID]['email'], 'first_name' => 'Bob', 'last_name' => null, 'created' => '2026-10-28 10:00:00+02',
           'last_login' => null, 'access' => $this->Grants[$ID]], array_combine(array_keys($this->Passwords), array_keys($this->Passwords)));
     }
@@ -43,15 +43,15 @@
     public function SetName(int $UserID, ?string $FirstName, ?string $LastName): ?string { return null; }
     public function SetPhoto(int $UserID, string $Jpeg, string $Source): ?string { return null; }
     public function RemovePhoto(int $UserID): ?string { return null; }
-    // Password users by id: username, email, hash, failures, last_failure; and wrong passwords by address (times)
+    // Password accounts by id: email, hash (null until chosen), failures, last_failure; and wrong passwords by address (times)
     public array $Passwords = [];
     public array $AddressFailures = [];
-    public function PasswordUserID(string $Name): ?int
+    public function PasswordUserID(string $Email): ?int
     {
-      $Name = mb_strtolower(trim($Name));
+      $Email = mb_strtolower(trim($Email));
       foreach ($this->Passwords as $ID => $User)
       {
-        if ($User['subject'] === $Name || mb_strtolower((string)$User['email']) === $Name)
+        if ($User['email'] === $Email)
         {
           return $ID;
         }
@@ -62,14 +62,15 @@
     {
       return isset($this->Passwords[$UserID]) ? ['user_id' => (string)$UserID] + $this->Passwords[$UserID] : null;
     }
-    public function AddPasswordUser(string $Username, ?string $Email, ?string $FirstName, ?string $LastName, string $Hash): int|string
+    public function AddPasswordUser(string $Email, ?string $FirstName, ?string $LastName, ?string $Hash): int|string
     {
-      if ($this->PasswordUserID($Username) !== null)
+      $Email = mb_strtolower(trim($Email));
+      if ($this->PasswordUserID($Email) !== null)
       {
-        return "Someone already has the username $Username.";
+        return "There is an account for $Email already.";
       }
       $ID = 100 + count($this->Passwords);
-      $this->Passwords[$ID] = ['subject' => mb_strtolower(trim($Username)), 'email' => $Email ?: null, 'hash' => $Hash, 'failures' => '0', 'last_failure' => null];
+      $this->Passwords[$ID] = ['email' => $Email, 'hash' => $Hash, 'failures' => '0', 'last_failure' => null];
       $this->Grants[$ID] = ['public'];
       return $ID;
     }
@@ -82,11 +83,16 @@
       $this->Passwords[$UserID] = ['hash' => $Hash, 'failures' => '0', 'last_failure' => null] + $this->Passwords[$UserID];
       return null;
     }
-    public function SetEmail(int $UserID, ?string $Email): ?string
+    public function SetEmail(int $UserID, string $Email): ?string
     {
+      $Email = mb_strtolower(trim($Email));
+      if (($Other = $this->PasswordUserID($Email)) !== null && $Other !== $UserID)
+      {
+        return "There is an account for $Email already.";
+      }
       if (!isset($this->Passwords[$UserID]))
       {
-        return 'The sign-in provider gives this user\'s email address.';
+        return 'This user doesn\'t sign in with a password.';
       }
       $this->Passwords[$UserID]['email'] = $Email;
       return null;
