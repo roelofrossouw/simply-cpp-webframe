@@ -65,6 +65,11 @@
             };
         }
 
+        // The logical names, as Bootstrap's classes have them (ms-, me-, border-start ...): Left and Right already give
+        // the start and end classes, so pages turn for right-to-left languages either way
+        const Start = self::Left;
+        const End = self::Right;
+
         case All;
         case Left;
         case Right;

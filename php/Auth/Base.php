@@ -48,7 +48,7 @@
      */
     public static function ForRequest(): Base
     {
-      $Name = explode('.', self::Returned('state') ?? '')[0] ?: \QueryString::Get('provider');
+      $Name = (string)(explode('.', self::Returned('state') ?? '')[0] ?: \QueryString::Get('provider'));
       self::$Chosen = isset(self::PROVIDERS[$Name]) && self::PROVIDERS[$Name]::Configured();
       if (!self::$Chosen)
       {
