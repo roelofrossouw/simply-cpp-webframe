@@ -44,6 +44,10 @@
     private ?string $Problem = null;
     // The posted form is checked once per request, however often the sign-in is asked about
     private static bool $Posted = false;
+    // The password was wrong: the next step counts down to trying again
+    private bool $Wrong = false;
+    // Seconds before a wrong password may be tried again
+    const int RETRY_SECONDS = 5;
 
     public static function Configured(): bool
     {
@@ -283,6 +287,28 @@
     }
 
     /**
+     * Tells an account's owner that a wrong password was tried, with a link to choose a new one in case it was them
+     */
+    public static function SendWrongPasswordEmail(int $UserID): bool
+    {
+      $User = Store::Get()->Password($UserID);
+      $Token = self::Token($UserID, 'password', self::LINK_SECONDS);
+      if ($User === null || $Token === null)
+      {
+        return false;
+      }
+      $AppName = Config::AppName();
+      $When = date('j F Y \a\t H:i');
+      $From = (string)($_SERVER['REMOTE_ADDR'] ?? 'an unknown address');
+      return self::SendLink($User['email'], "A wrong password for your $AppName account",
+        "Someone tried to sign in to your $AppName account with a wrong password, on $When (from $From). If it was you, and you forgot "
+          . 'your password, choose a new one here; the link works for an hour.', 'Choose a new password',
+        Config::FrameworkURL('resetpassword.php') . "?token=$Token",
+        'If it wasn\'t you, nobody got in and your password still works. After ' . self::LOCK_AFTER . ' wrong passwords in a row the sign-in locks for '
+          . intdiv(self::LOCK_SECONDS, 60) . ' minutes.');
+    }
+
+    /**
      * Emails a link to the new address, which makes it the account's (confirmemail.php)
      */
     public static function SendEmailLink(int $UserID, string $NewEmail): bool
@@ -337,7 +363,18 @@
           return $this->StartSession($Result);
         }
         sleep(1);
-        $this->Problem = $Result ?? 'That email address or password isn\'t right.';
+        if ($Result === null)
+        {
+          // A wrong password: the account's owner hears of it, with a link to choose a new one
+          $this->Wrong = true;
+          $Email = self::Address((string)\Post::Get('email'));
+          $ID = $Email === null ? null : Store::Get()->PasswordUserID($Email);
+          if ($ID !== null && Store::Get()->Password($ID)['hash'] !== null && self::CanEmail())
+          {
+            self::SendWrongPasswordEmail($ID);
+          }
+        }
+        $this->Problem = $Result;
         return parent::DoAccessToken();
       }
 
@@ -393,6 +430,11 @@
       parent::DoLogout($Reload);
     }
 
+    /**
+     * Signing in, a step at a time: the email address; then the password, when there's an account for it (else an
+     * emailed link to make one, or to choose the password an invitation asked for); a wrong password counts down to
+     * trying again. A right password goes on to the site (see DoAccessToken()).
+     */
     protected function ShowLogin(): void
     {
       \Page::AddContent($Card = new Card());
@@ -400,8 +442,170 @@
       $Card->Format->MaxWidth(ScreenSize::Small->Width());
       $Card->Format->Margin(Side::Top, PadSize::Pad4);
       $Card->AddHeader('Please sign in');
-      $Card->AddChild($this->Form());
-      self::AddHome($Card);
+      $Posted = trim((string)\Post::Get('email'));
+      $Email = self::Address($Posted);
+      if (\Post::Get('password') !== null && $Email !== null)
+      {
+        $this->Wrong ? $this->AddWrongStep($Card, $Email) : $this->AddPasswordStep($Card, $Email);
+      }
+      elseif ($Email !== null)
+      {
+        $this->AddAccountStep($Card, $Email);
+      }
+      else
+      {
+        $this->Problem = $Posted === '' ? null : 'That email address doesn\'t look right.';
+        $this->AddEmailStep($Card);
+      }
+    }
+
+    /**
+     * The first step: the email address, and Next in the foot (with Home on a page of its own)
+     */
+    public function AddEmailStep(Card $Card): void
+    {
+      if ($this->Problem !== null)
+      {
+        $Card->AddChild(new \BS\AlertWarning('Not signed in', $this->Problem));
+      }
+      $Form = $this->StepForm($Card);
+      $Form->AddChild($Email = new Input('email', 'Email', \HTML\InputType::Email));
+      $Email->InputElement()->Required = true;
+      $Email->InputElement()->AutoComplete = 'username';
+      $Email->InputElement()->AutoFocus = true;
+      $Email->Value(\Post::Get('email') ?? '');
+      if (self::CanSignUp())
+      {
+        $Form->AddChild($Note = new \HTML\Paragraph('No account yet? Give your email address, and we\'ll email you how to make one.'));
+        $Note->AddClasses(['small', 'mt-2', 'mb-0']);
+        $Note->Format->Color(\BS\Color::BodySecondary);
+      }
+      self::AddHome($Card, self::Submit($Form, 'Next', \BS\Icon::ArrowRight));
+    }
+
+    // The second step: whether there's an account for the address
+    private function AddAccountStep(Card $Card, string $Email): void
+    {
+      $ID = Store::Get()->PasswordUserID($Email);
+      $Account = $ID === null ? null : Store::Get()->Password($ID);
+      if ($Account !== null && $Account['hash'] !== null)
+      {
+        $this->AddPasswordStep($Card, $Email);
+        return;
+      }
+      // No account, or no password yet: an email goes out, counted like a wrong password
+      if (!self::MayTry())
+      {
+        $Card->AddChild(new \BS\AlertWarning('Too many tries', 'Please try again in a few minutes.'));
+      }
+      elseif ($Account !== null)
+      {
+        $Sent = self::SendPasswordLink($ID, true);
+        $Card->AddChild($Sent ? new \BS\AlertSuccess('Check your email', "Your account for $Email is waiting for its password. We emailed you a link "
+          . 'to choose it; follow the instructions in the email.') : new \BS\AlertWarning('Not sent', 'Something went wrong while sending the email. Please try again later.'));
+      }
+      elseif (self::CanSignUp())
+      {
+        $AppName = Config::AppName();
+        $Sent = self::SendLink($Email, "Your $AppName account", "Someone asked to sign in to $AppName with this email address, but there's no account "
+          . 'for it yet. If it was you, make one here; the link works for ' . intdiv(self::LINK_SECONDS, 60) . ' minutes.', 'Create my account',
+          Config::FrameworkURL('signup.php') . '?token=' . self::SignUpToken($Email), 'If it wasn\'t you, ignore this email.');
+        $Card->AddChild($Sent ? new \BS\AlertSuccess('No account yet', "There's no account for $Email yet, but you can make one: we emailed you "
+          . 'a link, follow the instructions in the email.') : new \BS\AlertWarning('Not sent', 'Something went wrong while sending the email. Please try again later.'));
+      }
+      else
+      {
+        $Card->AddChild(new \BS\AlertWarning('No account', "There's no account for $Email. Please ask an administrator for one."));
+      }
+      self::AddHome($Card, self::StepButton('Use another address', \BS\Icon::ArrowLeft, Config::FrameworkURL('login.php') . '?provider=' . self::PROVIDER));
+    }
+
+    // The password step: the address (for password managers too), the password, and Sign in in the foot
+    private function AddPasswordStep(Card $Card, string $Email): void
+    {
+      if ($this->Problem !== null)
+      {
+        $Card->AddChild(new AlertError('Not signed in', $this->Problem));
+      }
+      $Form = $this->StepForm($Card);
+      $Form->AddChild($State = new \HTML\Input('state', \HTML\InputType::Hidden));
+      $State->Value($this->NewState());
+      $Form->AddChild($Address = new Input('email', 'Email', \HTML\InputType::Email));
+      $Address->Value($Email);
+      $Address->InputElement()->ReadOnly = true;
+      $Address->InputElement()->AutoComplete = 'username';
+      $Address->Format->Margin(Side::Bottom, PadSize::Pad2);
+      $Form->AddChild($Password = new Input('password', 'Password', \HTML\InputType::Password));
+      $Password->InputElement()->Required = true;
+      $Password->InputElement()->AutoComplete = 'current-password';
+      $Password->InputElement()->AutoFocus = true;
+      $Form->AddChild($Links = new \HTML\Div());
+      $Links->AddClasses(['small', 'mt-2', 'd-flex', 'gap-3']);
+      $Links->AddChild(self::PageLink('Not you?', Config::FrameworkURL('login.php') . '?provider=' . self::PROVIDER));
+      if (self::CanEmail())
+      {
+        $Links->AddChild(self::PageLink('Forgot your password?', Config::FrameworkURL('resetpassword.php')));
+      }
+      self::AddHome($Card, self::Submit($Form, 'Sign in', \BS\Icon::BoxArrowInRight));
+    }
+
+    // A wrong password: the owner was emailed; Try again counts down first
+    private function AddWrongStep(Card $Card, string $Email): void
+    {
+      $Card->AddChild(new AlertError('That password isn\'t right', "We emailed $Email about it. If it was you, the email has a link to choose a new password."));
+      // Try again posts the address, which shows the password step
+      $Form = $this->StepForm($Card);
+      $Form->AddChild($Address = new \HTML\Input('email', \HTML\InputType::Hidden));
+      $Address->Value($Email);
+      $Retry = self::Submit($Form, 'Try again in ' . self::RETRY_SECONDS . '…', \BS\Icon::ArrowClockwise);
+      $Retry->Disabled = true;
+      $Retry->Id = uniqid('retry_');
+      $Card->AddChild(new \HTML\Script('(function (button, left) {'
+        . ' const tick = setInterval(function () { left--; const label = button.find(".label");'
+        . ' if (left > 0) { label.text("Try again in " + left + "…"); return; }'
+        . ' clearInterval(tick); label.text("Try again"); button.prop("disabled", false).focus(); }, 1000);'
+        . ' })($("#' . $Retry->Id . '"), ' . self::RETRY_SECONDS . ');'));
+      self::AddHome($Card, $Retry);
+    }
+
+    // A step's form, posting to the login page
+    private function StepForm(Card $Card): \HTML\Form
+    {
+      $Card->AddChild($Form = new \HTML\Form());
+      $Form->Id = uniqid('signin_');
+      self::PostTo($Form, Config::FrameworkURL('login.php') . '?provider=' . self::PROVIDER);
+      return $Form;
+    }
+
+    // A submit button for a form, which can sit outside it (in the card's foot)
+    private static function Submit(\HTML\Form $Form, string $Caption, \BS\Icon $Icon): \HTML\Button
+    {
+      $Symbol = new \HTML\Italic();
+      $Symbol->AddClasses(['bi', $Icon->value, 'me-1']);
+      $Symbol->AddAttribute('aria-hidden', 'true');
+      $Button = new \HTML\Button($Symbol);
+      $Button->Type = 'submit';
+      $Button->Form = $Form->Id;
+      $Button->AddClasses(['btn', 'btn-primary']);
+      $Button->AddChild($Label = new \HTML\Span($Caption));
+      $Label->AddClass('label');
+      return $Button;
+    }
+
+    // A button to another step: in the page in the app, else a link
+    private static function StepButton(string $Caption, \BS\Icon $Icon, string $URL): \BS\Button
+    {
+      $Button = new \BS\Button($Caption, $Icon);
+      $Button->Color(\BS\Color::Secondary);
+      if (\Server::IsAJAX())
+      {
+        $Button->OnClick('loadPage.call(this, ' . json_encode($URL) . ');');
+      }
+      else
+      {
+        $Button->Link($URL);
+      }
+      return $Button;
     }
 
     /**
@@ -439,7 +643,7 @@
     {
       if (\Server::IsAJAX())
       {
-        $Form->Trigger(\HTML\Event::Submit, 'e.preventDefault(); loadPage.call($(this).find("[type=submit]")[0], ' . json_encode($Action) . ');');
+        $Form->Trigger(\HTML\Event::Submit, 'e.preventDefault(); loadPage.call(this, ' . json_encode($Action) . ');');
         return;
       }
       $Form->Method = 'post';
@@ -458,44 +662,5 @@
       $Link = new \HTML\Anchor($Caption, '#', IsLink: true);
       $Link->Trigger(\HTML\Event::Click, 'e.preventDefault(); loadPage.call(this, ' . json_encode($URL) . ');');
       return $Link;
-    }
-
-    /**
-     * The sign-in form: email, password, Forgot your password? and Create an account; it posts to the login page
-     */
-    public function Form(): \HTML\Form
-    {
-      $Form = new \HTML\Form();
-      self::PostTo($Form, Config::FrameworkURL('login.php'));
-      $Form->Format->Margin(Side::All, PadSize::Pad2);
-      if ($this->Problem !== null)
-      {
-        $Form->AddChild(new AlertError('Not signed in', $this->Problem));
-      }
-      $Form->AddChild($State = new \HTML\Input('state', \HTML\InputType::Hidden));
-      $State->Value($this->NewState());
-      $Form->AddChild($Email = new Input('email', 'Email', \HTML\InputType::Email));
-      $Email->InputElement()->Required = true;
-      $Email->InputElement()->AutoComplete = 'username';
-      $Email->Value(\Post::Get('email') ?? '');
-      $Email->Format->Margin(Side::Bottom, PadSize::Pad2);
-      $Form->AddChild($Password = new Input('password', 'Password', \HTML\InputType::Password));
-      $Password->InputElement()->Required = true;
-      $Password->InputElement()->AutoComplete = 'current-password';
-      $Password->Format->Margin(Side::Bottom, PadSize::Pad3);
-      $Form->AddChild($Submit = new \HTML\Button('Sign in'));
-      $Submit->Type = 'submit';
-      $Submit->AddClasses(['btn', 'btn-primary']);
-      if (self::CanEmail())
-      {
-        $Form->AddChild($Forgot = self::PageLink('Forgot your password?', Config::FrameworkURL('resetpassword.php')));
-        $Forgot->Format->Margin(Side::Start, PadSize::Pad3);
-      }
-      if (self::CanSignUp())
-      {
-        $Form->AddChild($SignUp = self::PageLink('Create an account', Config::FrameworkURL('signup.php')));
-        $SignUp->Format->Margin(Side::Start, PadSize::Pad3);
-      }
-      return $Form;
     }
   }

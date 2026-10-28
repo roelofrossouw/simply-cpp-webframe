@@ -137,39 +137,63 @@
   Same('This user doesn\'t sign in with a password.', Password::Set(7, 'a new horse battery'), 'a GitHub user\'s can\'t be set');
   Same('There is an account for bob@example.com already.', $Storage->AddPasswordUser('BOB@example.com', null, null, null), 'one account per address');
 
-  // The login page: the form, and posting it
+  // The login page, a step at a time: the email address first, with Next in the foot
+  $Step = fn(array $Post, array $Cookies = []) => Render('login.php', $Post, $Cookies, ['provider' => 'password']);
   $Form = Render('login.php', Query: ['provider' => 'password']);
-  Check(str_contains($Form, 'name="email"') && str_contains($Form, 'name="password"') && str_contains($Form, 'value="password.'), 'the sign-in form');
-  Check(!str_contains($Form, 'name="username"'), 'with no username');
-  Check(str_contains($Form, 'resetpassword.php') && str_contains($Form, 'signup.php'), 'with Forgot your password? and Create an account');
-  NoErrors($Form, 'the sign-in form');
-  Check(str_contains($Form, 'bi-house') && str_contains($Form, 'https://www.example.com"'), 'as a page of its own, with Home');
+  Check(str_contains($Form, 'name="email"') && !str_contains($Form, 'name="password"'), 'the first step asks for the email address only');
+  Check(preg_match('/<form [^>]*id="(signin_\w+)"/', $Form, $Id) === 1 && str_contains($Form, 'form="' . $Id[1] . '"') && str_contains($Form, 'Next'),
+    'with Next in the foot, posting it');
+  Check(str_contains($Form, 'card-footer') && str_contains($Form, 'bi-house') && str_contains($Form, 'https://www.example.com"'), 'beside Home, as a page of its own');
   Check(str_contains($Form, 'method="post"'), 'which the browser posts');
+  NoErrors($Form, 'the first step');
+  $Choice = Render('login.php');
+  Check(str_contains($Choice, 'name="email"') && str_contains($Choice, 'Sign in with GitHub') && substr_count($Choice, 'bi-house') == 1,
+    'without a provider: the first step, the other providers, one Home');
   $InApp = Render('login.php', Cookies: ['ajax' => '1'], Query: ['provider' => 'password']);
-  Check(!str_contains($InApp, 'bi-house'), 'but not in the app, which has the menu');
-  Check(!str_contains($InApp, 'method="post"') && str_contains($InApp, "on('submit'") && str_contains($InApp, 'loadPage.call'),
-    'where the app posts it, and shows the answer under the menu');
-  Check(str_contains($InApp, 'resetpassword.php') && !str_contains($InApp, 'href="/framework/resetpassword.php"'), 'and opens Forgot your password? there too');
-  $Ajax = Render('login.php', ['state' => 'password.0123456789abcdef', 'email' => 'bob@example.com', 'password' => 'right horse battery'],
-    ['oauth_state' => 'password.0123456789abcdef', 'ajax' => '1']);
+  Check(!str_contains($InApp, 'bi-house') && str_contains($InApp, 'Next'), 'in the app: Next, but no Home (the menu is there)');
+  Check(!str_contains($InApp, 'method="post"') && str_contains($InApp, "on('submit'") && str_contains($InApp, 'loadPage.call(this'),
+    'and the app posts it, showing the answer under the menu');
+
+  // An account: the password next
+  $Password = $Step(['email' => 'BOB@example.com']);
+  Check(str_contains($Password, 'name="password"') && str_contains($Password, 'value="bob@example.com"') && str_contains($Password, 'readonly'),
+    'an account with a password: the password step, with its address');
+  Check(str_contains($Password, 'Sign in') && str_contains($Password, 'value="password.') && str_contains($Password, 'resetpassword.php'),
+    'Sign in, and Forgot your password?');
+  NoErrors($Password, 'the password step');
+  // No account, or an invited one: an email
+  $None = $Step(['email' => 'nobody@example.com']);
+  Check(str_contains($None, 'No account yet') && MailLink('signup.php') !== '', 'no account: the address gets a link to make one');
+  Check(str_contains($None, 'Use another address') && !str_contains($None, 'name="password"'), 'and no password step');
+  NoErrors($None, 'no account');
+  $Invited = $Step(['email' => 'ann@example.com']);
+  Check(str_contains($Invited, 'waiting for its password') && MailLink('resetpassword.php') !== '' && str_contains(Emailed(), 'You have an account'),
+    'an invited account gets its invitation again');
+  Check(str_contains($Step(['email' => 'not an address']), 'look right'), 'an address that isn\'t one');
+
+  // The password
+  $State = ['state' => 'password.0123456789abcdef'];
+  $Right = $Step($State + ['email' => 'Bob@example.com', 'password' => 'right horse battery'], ['oauth_state' => $State['state']]);
+  Check(str_contains($Right, 'window.location'), 'the right password goes on to the site');
+  Check(Emailed() === '', 'without an email');
+  NoErrors($Right, 'signing in');
+  $Wrong = $Step($State + ['email' => 'bob@example.com', 'password' => 'wrong'], ['oauth_state' => $State['state']]);
+  Check(str_contains($Wrong, 'isn&#039;t right') || str_contains($Wrong, 'isn\'t right'), 'a wrong one says so');
+  Check(!str_contains($Wrong, 'window.location') && !str_contains($Wrong, 'name="password"'), 'and doesn\'t sign in');
+  Check(preg_match('/<button[^>]*disabled[^>]*>.*Try again in 5…/s', $Wrong) === 1 && str_contains($Wrong, 'setInterval'), 'Try again counts down from 5, disabled');
+  Check(str_contains(Emailed(), 'To: bob@example.com') && str_contains(Emailed(), 'wrong password') && MailLink('resetpassword.php') !== '',
+    'the owner gets an email, with a link to choose a new password');
+  NoErrors($Wrong, 'a wrong password');
+  $WrongNobody = $Step($State + ['email' => 'nobody@example.com', 'password' => 'x'], ['oauth_state' => $State['state']]);
+  Check(Emailed() === '', 'a password for no account emails nobody');
+  $Forged = $Step($State + ['email' => 'bob@example.com', 'password' => 'right horse battery'], ['oauth_state' => 'password.other']);
+  Check(str_contains($Forged, 'expired') && str_contains($Forged, 'name="password"') && !str_contains($Forged, 'window.location'),
+    'a form from elsewhere doesn\'t sign in');
+  $Ajax = $Step($State + ['email' => 'bob@example.com', 'password' => 'right horse battery'], ['oauth_state' => $State['state'], 'ajax' => '1']);
   Check(str_contains($Ajax, 'window.location'), 'signing in from the app');
   NoErrors($Ajax, 'signing in from the app');
   $AjaxReset = Render('resetpassword.php', ['email' => 'bob@example.com'], ['ajax' => '1']);
   Check(str_contains($AjaxReset, 'Check your email') && !str_contains($AjaxReset, '<html'), 'Forgot your password? in the app');
-  Check(str_contains(Render('signup.php'), 'bi-house') && str_contains(Render('resetpassword.php'), 'bi-house'), 'the other password pages too');
-  $Choice = Render('login.php');
-  Check(str_contains($Choice, 'name="email"') && str_contains($Choice, 'Sign in with GitHub'), 'without a provider: the form, and the other providers');
-
-  $State = ['state' => 'password.0123456789abcdef'];
-  $Right = Render('login.php', $State + ['email' => 'Bob@example.com', 'password' => 'right horse battery'], ['oauth_state' => $State['state']]);
-  Check(str_contains($Right, 'window.location'), 'the right password signs in');
-  NoErrors($Right, 'signing in');
-  $Wrong = Render('login.php', $State + ['email' => 'bob@example.com', 'password' => 'wrong'], ['oauth_state' => $State['state']]);
-  Check(str_contains($Wrong, 'isn&#039;t right') || str_contains($Wrong, 'isn\'t right'), 'a wrong one shows the form again, saying so');
-  Check(!str_contains($Wrong, 'window.location'), 'and doesn\'t sign in');
-  NoErrors($Wrong, 'a wrong password');
-  $Forged = Render('login.php', $State + ['email' => 'bob@example.com', 'password' => 'right horse battery'], ['oauth_state' => 'password.other']);
-  Check(str_contains($Forged, 'expired') && !str_contains($Forged, 'window.location'), 'a form from elsewhere doesn\'t sign in');
 
   // Forgot your password?: the link, then the password, signed in
   $Reset = Render('resetpassword.php');

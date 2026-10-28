@@ -410,18 +410,29 @@
     }
 
     /**
-     * A Home button at the foot of a sign-in card, for when it's a page of its own (e.g. back from a provider, or a link
-     * from an email), without the menu; in the app the menu is there already
+     * The foot of a sign-in card: Home when it's a page of its own (e.g. back from a provider, or a link from an email),
+     * without the menu (in the app the menu is there already), and the card's own button, e.g. Next, on the right
      */
-    public static function AddHome(\BS\Card $Card): void
+    public static function AddHome(\BS\Card $Card, ?\HTML\Element $Next = null): void
     {
-      if (\Server::IsAJAX())
+      $Standalone = !\Server::IsAJAX();
+      if (!$Standalone && $Next === null)
       {
         return;
       }
-      $Card->AddFooter($Home = new \BS\Button('Home', \BS\Icon::House));
-      $Home->Link(Config::Origin());
-      $Home->Color(\BS\Color::Secondary);
+      $Card->AddFooter($Row = new \HTML\Div());
+      $Row->AddClasses(['d-flex', 'justify-content-between', 'align-items-center', 'gap-2']);
+      if ($Standalone)
+      {
+        $Row->AddChild($Home = new \BS\Button('Home', \BS\Icon::House));
+        $Home->Link(Config::Origin());
+        $Home->Color(\BS\Color::Secondary);
+      }
+      if ($Next !== null)
+      {
+        $Row->AddChild($Next);
+        $Next->AddClass('ms-auto');
+      }
     }
 
     private function ShowProviders(): void
@@ -430,18 +441,23 @@
       $Card->Format->Center();
       $Card->Format->MaxWidth(\BS\ScreenSize::Small->Width());
       $Card->AddHeader('Please sign in');
+      $Footed = false;
       foreach (self::Providers() as $Name => $Class)
       {
-        // The password form itself, the others' buttons below it
+        // The password's first step itself (its Next, with Home, in the foot), the others' buttons below it
         if ($Class === Password::class)
         {
-          $Card->AddChild((new Password())->Form());
+          (new Password())->AddEmailStep($Card);
+          $Footed = true;
           continue;
         }
         $Card->AddChild($Button = new \BS\Button('Sign in with ' . $Class::TITLE, $Class::ICON, $this->LoginURI() . '?provider=' . $Name));
         $Button->Format->Margin(\BS\Side::All, \BS\PadSize::Pad2);
       }
-      self::AddHome($Card);
+      if (!$Footed)
+      {
+        self::AddHome($Card);
+      }
     }
 
     protected function ShowLogin(): void

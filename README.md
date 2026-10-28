@@ -136,6 +136,11 @@ With `"password": {"enabled": true}` in the settings' `auth` section, people can
 and a password. The address is the account, and nothing about a password happens without a link emailed to it, so an
 account only works once its address is shown to work (and the site needs mail):
 
+- **Signing in** goes a step at a time, in the page under the menu when it's opened from the menu: the email address,
+  then Next. With an account, the password, then Sign in; a right one goes on to the site. A wrong one emails the
+  address (so its owner sees someone tried, with a link to choose a new password in case it was them), and Try again
+  counts down from 5 first. Without an account, the address gets a link to make one (with `signup`), and the page says
+  so; an invited account gets its invitation again. This tells anyone which addresses have accounts.
 - **Add a user** (Administer → Users, admins): email address and names. It emails an invitation to choose a password
   (the link works for 7 days); the list shows the account as invited until then. The key button next to a password
   account emails it a link to choose a new password (or the invitation again). Admins never see or set passwords.
