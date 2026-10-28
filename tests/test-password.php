@@ -144,7 +144,18 @@
   Check(str_contains($Form, 'resetpassword.php') && str_contains($Form, 'signup.php'), 'with Forgot your password? and Create an account');
   NoErrors($Form, 'the sign-in form');
   Check(str_contains($Form, 'bi-house') && str_contains($Form, 'https://www.example.com"'), 'as a page of its own, with Home');
-  Check(!str_contains(Render('login.php', Cookies: ['ajax' => '1'], Query: ['provider' => 'password']), 'bi-house'), 'but not in the app, which has the menu');
+  Check(str_contains($Form, 'method="post"'), 'which the browser posts');
+  $InApp = Render('login.php', Cookies: ['ajax' => '1'], Query: ['provider' => 'password']);
+  Check(!str_contains($InApp, 'bi-house'), 'but not in the app, which has the menu');
+  Check(!str_contains($InApp, 'method="post"') && str_contains($InApp, "on('submit'") && str_contains($InApp, 'loadPage.call'),
+    'where the app posts it, and shows the answer under the menu');
+  Check(str_contains($InApp, 'resetpassword.php') && !str_contains($InApp, 'href="/framework/resetpassword.php"'), 'and opens Forgot your password? there too');
+  $Ajax = Render('login.php', ['state' => 'password.0123456789abcdef', 'email' => 'bob@example.com', 'password' => 'right horse battery'],
+    ['oauth_state' => 'password.0123456789abcdef', 'ajax' => '1']);
+  Check(str_contains($Ajax, 'window.location'), 'signing in from the app');
+  NoErrors($Ajax, 'signing in from the app');
+  $AjaxReset = Render('resetpassword.php', ['email' => 'bob@example.com'], ['ajax' => '1']);
+  Check(str_contains($AjaxReset, 'Check your email') && !str_contains($AjaxReset, '<html'), 'Forgot your password? in the app');
   Check(str_contains(Render('signup.php'), 'bi-house') && str_contains(Render('resetpassword.php'), 'bi-house'), 'the other password pages too');
   $Choice = Render('login.php');
   Check(str_contains($Choice, 'name="email"') && str_contains($Choice, 'Sign in with GitHub'), 'without a provider: the form, and the other providers');

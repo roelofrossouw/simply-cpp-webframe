@@ -411,8 +411,7 @@
     public static function PageForm(Card $Card, string $Action, array $Fields, string $Caption): \HTML\Form
     {
       $Card->AddChild($Form = new \HTML\Form());
-      $Form->Method = 'post';
-      $Form->Action = $Action;
+      self::PostTo($Form, $Action);
       $Form->Format->Margin(Side::All, PadSize::Pad2);
       foreach ($Fields as $Name => $Field)
       {
@@ -433,13 +432,41 @@
     }
 
     /**
+     * Where a form of these pages posts: in the app (opened from the menu), js/app.js posts it and shows the answer in
+     * the page, under the menu; on a page of its own (a link from an email), the browser posts it
+     */
+    public static function PostTo(\HTML\Form $Form, string $Action): void
+    {
+      if (\Server::IsAJAX())
+      {
+        $Form->Trigger(\HTML\Event::Submit, 'e.preventDefault(); loadPage.call($(this).find("[type=submit]")[0], ' . json_encode($Action) . ');');
+        return;
+      }
+      $Form->Method = 'post';
+      $Form->Action = $Action;
+    }
+
+    /**
+     * A link to another of these pages: in the app it opens in the page, under the menu, see PostTo()
+     */
+    public static function PageLink(string $Caption, string $URL): \HTML\Anchor
+    {
+      if (!\Server::IsAJAX())
+      {
+        return new \HTML\Anchor($Caption, $URL, IsLink: true);
+      }
+      $Link = new \HTML\Anchor($Caption, '#', IsLink: true);
+      $Link->Trigger(\HTML\Event::Click, 'e.preventDefault(); loadPage.call(this, ' . json_encode($URL) . ');');
+      return $Link;
+    }
+
+    /**
      * The sign-in form: email, password, Forgot your password? and Create an account; it posts to the login page
      */
     public function Form(): \HTML\Form
     {
       $Form = new \HTML\Form();
-      $Form->Method = 'post';
-      $Form->Action = Config::FrameworkURL('login.php');
+      self::PostTo($Form, Config::FrameworkURL('login.php'));
       $Form->Format->Margin(Side::All, PadSize::Pad2);
       if ($this->Problem !== null)
       {
@@ -461,12 +488,12 @@
       $Submit->AddClasses(['btn', 'btn-primary']);
       if (self::CanEmail())
       {
-        $Form->AddChild($Forgot = new \HTML\Anchor('Forgot your password?', Config::FrameworkURL('resetpassword.php'), IsLink: true));
+        $Form->AddChild($Forgot = self::PageLink('Forgot your password?', Config::FrameworkURL('resetpassword.php')));
         $Forgot->Format->Margin(Side::Start, PadSize::Pad3);
       }
       if (self::CanSignUp())
       {
-        $Form->AddChild($SignUp = new \HTML\Anchor('Create an account', Config::FrameworkURL('signup.php'), IsLink: true));
+        $Form->AddChild($SignUp = self::PageLink('Create an account', Config::FrameworkURL('signup.php')));
         $SignUp->Format->Margin(Side::Start, PadSize::Pad3);
       }
       return $Form;

@@ -33,7 +33,7 @@
     if ($Account === null)
     {
       $Card->AddChild(new AlertWarning('This link doesn\'t work any more', 'It expired, or it was used already. Ask for a new one below.'));
-      $Card->AddChild($Again = new HTML\Anchor('Send me a new link', $Here, IsLink: true));
+      $Card->AddChild($Again = Password::PageLink('Send me a new link', $Here));
       $Again->Format->Margin(Side::All, PadSize::Pad2);
       return;
     }

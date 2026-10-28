@@ -29,7 +29,12 @@
     $Buttons->AddClasses(['d-flex', 'flex-wrap', 'justify-content-center', 'gap-2']);
     foreach (Base::Providers() as $Name => $Class)
     {
-      $Buttons->AddChild($Button = new Button('Sign in with ' . $Class::TITLE, $Class::ICON));
-      $Button->Link(Config::FrameworkURL('login.php') . '?provider=' . $Name);
+      // A password signs in here, in the page; the other providers' sign-in pages are on their own sites
+      $URL = Config::FrameworkURL('login.php') . '?provider=' . $Name;
+      $Buttons->AddChild($Button = new Button('Sign in with ' . $Class::TITLE, $Class::ICON, $Name == 'password' ? $URL : null));
+      if ($Name != 'password')
+      {
+        $Button->Link($URL);
+      }
     }
   }
