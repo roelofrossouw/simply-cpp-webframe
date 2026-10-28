@@ -33,7 +33,7 @@ plain PHP: nothing to compile, and no extension.
 | `DB` | PostgreSQL with parameters: `Rows()`, `Row()`, `Value()`, `Assoc()`, `Exists()`, `Exec()`, `Transaction()`. |
 | `Storage\` | Where users, access and the menu are kept: `Postgres` (the default), or a class of your own (`Storage\Backend`). |
 | `Rest`, `Server`, `Post`, `QueryString`, `ErrorHandler` | Small helpers: an HTTP client, the request, and errors shown in the page (in full for admins). |
-| `public/` | What the site serves under `/framework`: `js/app.js`, `css/style.css`, the service worker, the sign-in and sign-out pages, Forgot your password? and password links (`resetpassword.php`), Create an account (`signup.php`), a new email address (`confirmemail.php`), the menu (`landing.php`), Administer → Users, Menu and Config (`admin/`), Your profile (`profile.php`), and the privacy policy, terms of use and data deletion pages, written from the settings. |
+| `public/` | What the site serves under `/framework`: `js/app.js`, `css/style.css`, the service worker, the sign-in and sign-out pages, Forgot your password? and password links (`resetpassword.php`), Create an account (`signup.php`), the menu (`landing.php`), Administer → Users, Menu and Config (`admin/`), Your profile (`profile.php`), and the privacy policy, terms of use and data deletion pages, written from the settings. |
 | `sql/schema.sql` | The tables: `access.users`, `access.levels`, `access.grants`, `access.passwords`, `access.sign_in_failures`, `framework.menu`, `framework.menu_access`. |
 
 The classes keep short global names (`Config`, `Page`, `DB`, `User`) and the namespaces `HTML`, `BS`, `Auth` and `Storage`,
@@ -150,7 +150,7 @@ account only works once its address is shown to work (and the site needs mail):
   that has an account gets a reminder to sign in or reset the password instead, and the page answers the same either
   way. On a new site, sign in as the admin first: with `auth.first_admin` at `true`, the first account would become admin.
 - **Forgot your password?**, and **Your profile**'s change of password, email a link (an hour, once) to choose a new one,
-  which signs you in. **Your profile** changes the email address by a link sent to the new address.
+  which signs you in. An account's email address never changes: to use another address, create a new account with it.
 
 - Passwords are kept as Argon2id hashes (bcrypt where PHP lacks Argon2), at least `min_length` characters, and not the
   email address.
@@ -188,7 +188,7 @@ its fields, Public and Shown, and View and Edit per access level; a change that 
 and **Config** (the settings file by section; it saves when the web server may write the file, and never shows a secret:
 a secret's field stays empty, and saving it empty keeps it).
 **Your profile** is in the status bar for anyone signed in: what the site calls them, their photo, a test email, and for
-password accounts links to change the email address and password.
+password accounts a link to change the password (the address itself never changes).
 Change their access in the menu like any other page's. A site's own admin pages can do the same with
 `MenuLayout::Add()`, `Update()`, `SetAccess()` and `Delete()`, and `User::All()`, `User::SetAccess()` and
 `User::Levels()`.
@@ -203,7 +203,7 @@ implement `Storage\Backend` and name the class in the settings:
 ```
 
 The class loads from the site's classes like any other. Since 1.3.0 the interface includes the password accounts'
-methods (`PasswordUserID()`, `Password()`, `AddPasswordUser()`, `SetPassword()`, `SetEmail()`, `PasswordFailed()`,
+methods (`PasswordUserID()`, `Password()`, `AddPasswordUser()`, `SetPassword()`, `PasswordFailed()`,
 `AddressFailures()`). `DB` stays available for the site's own tables either way.
 
 ## The Hello world example

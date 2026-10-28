@@ -126,12 +126,7 @@
   Same(null, $Storage->SetPassword($Bob, 'hash two'), 'a new hash');
   Same('hash two', $Storage->Password($Bob)['hash'], 'is kept');
   Same('This user doesn\'t sign in with a password.', $Storage->SetPassword($ID, 'x'), 'a GitHub user\'s password can\'t be set');
-  Same("There is an account for ann-$Name@example.com already.", $Storage->SetEmail($Bob, "Ann-$Name@example.com"), 'not another account\'s address');
-  Same(null, $Storage->SetEmail($Bob, "Robert-$Name@Example.com"), 'a new address');
-  Same($Bob, $Storage->PasswordUserID("robert-$Name@example.com"), 'signs in with it');
-  Same("robert-$Name@example.com", $Storage->Password($Bob)['email'], 'and is its email');
-  Same('This user doesn\'t sign in with a password.', $Storage->SetEmail($ID, 'x@example.com'), 'others\' come from their provider');
-  Same((string)$Bob, $Storage->SignIn('password', "robert-$Name@example.com", null, null, null)['user_id'], 'signing in is the same user');
+  Same((string)$Bob, $Storage->SignIn('password', "bob-$Name@example.com", null, null, null)['user_id'], 'signing in is the same user');
   DB::Exec('delete from access.sign_in_failures where address = $1', [$Address]);
   DB::Exec('delete from access.users where user_id in ($1, $2)', [$Bob, $Ann]);
 

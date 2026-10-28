@@ -83,20 +83,6 @@
       $this->Passwords[$UserID] = ['hash' => $Hash, 'failures' => '0', 'last_failure' => null] + $this->Passwords[$UserID];
       return null;
     }
-    public function SetEmail(int $UserID, string $Email): ?string
-    {
-      $Email = mb_strtolower(trim($Email));
-      if (($Other = $this->PasswordUserID($Email)) !== null && $Other !== $UserID)
-      {
-        return "There is an account for $Email already.";
-      }
-      if (!isset($this->Passwords[$UserID]))
-      {
-        return 'This user doesn\'t sign in with a password.';
-      }
-      $this->Passwords[$UserID]['email'] = $Email;
-      return null;
-    }
     public function PasswordFailed(?int $UserID, string $Address): void
     {
       if ($UserID !== null && isset($this->Passwords[$UserID]))

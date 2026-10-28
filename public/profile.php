@@ -31,23 +31,12 @@
     case 'testemail':
       $Notice = SendTestEmail(User::Profile($UserID));
       break;
-    // A password account changes its password and email address through links emailed to it
+    // A password account changes its password through a link emailed to it
     case 'passwordlink':
       $Account = Storage\Store::Get()->Password($UserID);
       $Notice = $Account !== null && \Auth\Password::SendPasswordLink($UserID)
         ? new AlertSuccess('Check your email', "We sent {$Account['email']} a link to choose a new password. Your password works until you do.", \BS\Icon::Envelope)
         : new AlertWarning('Not sent', 'Something went wrong while sending the email. Please try again later.');
-      break;
-    case 'email':
-      $New = \Auth\Password::Address((string)Post::Get('new_email'));
-      $Notice = match (true)
-      {
-        Storage\Store::Get()->Password($UserID) === null => new AlertWarning('Not changed', 'Your email address comes from your sign-in provider.'),
-        $New === null => new AlertWarning('Not changed', 'That email address doesn\'t look right.'),
-        \Auth\Password::Taken($New) => new AlertWarning('Not changed', 'There is an account for that address already.'),
-        !\Auth\Password::SendEmailLink($UserID, $New) => new AlertWarning('Not sent', 'Something went wrong while sending the email. Please try again later.'),
-        default => new AlertSuccess('Check your email', "We sent $New a link. Your email address changes once you open it; until then you sign in with the one you have.", \BS\Icon::Envelope),
-      };
       break;
     case 'removephoto':
       User::RemovePhoto($UserID);
@@ -196,26 +185,18 @@
   $Since->Format->Color(Color::BodySecondary);
   $Since->Format->Margin(Side::Top, PadSize::Pad3);
 
-  // Your sign-in: both changes go through a link emailed to you; a form of its own, so Save doesn't post it
+  // Your sign-in: the password changes through a link emailed to you; the address never changes (another address is
+  // another account)
   if ($IsPassword)
   {
-    $Dialog->AddChild($Change = new HTML\Form());
-    $Change->AddChild($Heading = new HTML\Header(5, 'Your sign-in'));
+    $Dialog->AddChild($Heading = new HTML\Header(5, 'Your sign-in'));
     $Heading->Format->Margin(Side::Top, PadSize::Pad4);
-    $Change->AddChild(new HTML\Paragraph('We email you a link to change your password, or to your new address to change your email.'));
-    $Change->AddChild($Fields = new Grid(1));
-    $Fields->Columns(2, ScreenSize::Small);
-    $Fields->Col($NewEmail = new Input('new_email', 'New email address', HTML\InputType::Email));
-    $NewEmail->InputElement()->Required = true;
-    $NewEmail->InputElement()->AutoComplete = 'email';
-    $Fields->Col($EmailButton = new Button('Change email', Icon::Envelope, "$Here?action=email"));
-    $EmailButton->Color(Color::Secondary);
-    $EmailButton->Modal();
-    $Change->AddChild($PasswordButton = new Button('Email me a link to change my password', Icon::Key, "$Here?action=passwordlink"));
+    $Dialog->AddChild(new HTML\Paragraph("You sign in with {$Profile['email']}, which stays your account's address: to use another address, "
+      . 'create a new account with it. We email you a link to change your password.'));
+    $Dialog->AddChild($PasswordButton = new Button('Email me a link to change my password', Icon::Key, "$Here?action=passwordlink"));
     $PasswordButton->Color(Color::Secondary);
     $PasswordButton->SkipForm();
     $PasswordButton->Modal();
-    $PasswordButton->Format->Margin(Side::Top, PadSize::Pad3);
   }
 
   $Dialog->AddButton($Save = new Button('Save', Icon::Check2, "$Here?action=save"));

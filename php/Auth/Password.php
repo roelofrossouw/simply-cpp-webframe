@@ -12,8 +12,8 @@
    * The email address is the account: every password is chosen through a link emailed to it, so an account only works
    * once its address is shown to work. Accounts come from an admin (Administer → Users → Add a user, which emails an
    * invitation) or, with auth.password.signup, from people themselves (signup.php). Forgot your password?
-   * (resetpassword.php) and Your profile's change of password email a link the same way; a new email address is confirmed
-   * by a link sent to it (confirmemail.php).
+   * (resetpassword.php) and Your profile's change of password email a link the same way. An account's address never
+   * changes: another address is another account.
    *
    * The sign-in form posts to the login page; a right password gives the same sign-in token as the other providers,
    * and a session cookie (auth.password.session_days) that renews it, until the password changes. Wrong passwords lock
@@ -338,23 +338,6 @@
     }
 
     /**
-     * Emails a link to the new address, which makes it the account's (confirmemail.php)
-     */
-    public static function SendEmailLink(int $UserID, string $NewEmail): bool
-    {
-      $User = Store::Get()->Password($UserID);
-      $Token = self::Token($UserID, 'email', self::LINK_SECONDS, ['email' => $NewEmail, 'old' => $User['email'] ?? null]);
-      if ($User === null || $Token === null)
-      {
-        return false;
-      }
-      $AppName = Config::AppName();
-      return self::SendLink($NewEmail, "Your new $AppName email address",
-        "Someone asked to use this email address for their $AppName account, instead of {$User['email']}. If it was you, confirm it here; the link works for an hour.",
-        'Use this address', Config::FrameworkURL('confirmemail.php') . "?token=$Token", 'If it wasn\'t you, ignore this email.');
-    }
-
-    /**
      * An email with one button: $Path is on this site
      */
     public static function SendLink(string $To, string $Subject, string $Text, string $Caption, string $Path, string $Footnote): bool
@@ -570,7 +553,6 @@
       $Password->InputElement()->AutoFocus = true;
       $Form->AddChild($Links = new \HTML\Div());
       $Links->AddClasses(['small', 'mt-2', 'd-flex', 'gap-3']);
-      $Links->AddChild(self::PageLink('Not you?', Config::FrameworkURL('login.php') . '?provider=' . self::PROVIDER));
       if (self::CanEmail())
       {
         $Links->AddChild(self::PageLink('Forgot your password?', Config::FrameworkURL('resetpassword.php')));

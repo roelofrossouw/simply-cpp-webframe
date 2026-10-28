@@ -76,9 +76,6 @@
     /** A password account's new password hash; clears its wrong passwords */
     public function SetPassword(int $UserID, string $Hash): ?string;
 
-    /** A password account's new email address (lower case), which it signs in with from now on */
-    public function SetEmail(int $UserID, string $Email): ?string;
-
     /** Records a wrong password: the user's (when there is one), and the address's */
     public function PasswordFailed(?int $UserID, string $Address): void;
 

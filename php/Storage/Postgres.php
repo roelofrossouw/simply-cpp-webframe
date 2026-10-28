@@ -187,17 +187,6 @@
       return null;
     }
 
-    public function SetEmail(int $UserID, string $Email): ?string
-    {
-      $Email = mb_strtolower(trim($Email));
-      if (DB::Exists('select 1 from access.users where provider = \'password\' and subject = $1 and user_id <> $2', [$Email, $UserID]))
-      {
-        return "There is an account for $Email already.";
-      }
-      return DB::Exec('update access.users set subject = $2, email = $2 where user_id = $1 and provider = \'password\'',
-        [$UserID, $Email]) > 0 ? null : 'This user doesn\'t sign in with a password.';
-    }
-
     public function PasswordFailed(?int $UserID, string $Address): void
     {
       if ($UserID !== null)

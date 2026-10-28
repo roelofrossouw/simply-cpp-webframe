@@ -167,6 +167,7 @@
     'an account with a password: the password step, with its address');
   Check(str_contains($Password, 'Sign in') && str_contains($Password, 'value="password.') && str_contains($Password, 'resetpassword.php'),
     'Sign in, and Forgot your password?');
+  Check(!str_contains($Password, 'Not you?'), 'and no Not you?');
   NoErrors($Password, 'the password step');
   // No account, or an invited one: an email
   $None = $Step(['email' => 'nobody@example.com']);
@@ -246,27 +247,18 @@
   Render('admin/password.php', Cookies: $Signed, Query: ['userid' => '101', 'action' => 'send']);
   Check(str_contains(Emailed(), 'You have an account'), 'an invited account gets its invitation again');
 
-  // Your profile: a password and an email address change through links
+  // Your profile: the password changes through a link; the email address never changes
   $Own = ['userid' => '100', 'ajax' => '1'];
   $Profile = Render('profile.php', Cookies: $Own);
-  Check(str_contains($Profile, 'Your sign-in') && str_contains($Profile, 'name="new_email"') && !str_contains($Profile, 'name="current_password"'),
-    'the profile changes the email and password by link');
+  Check(str_contains($Profile, 'Your sign-in') && str_contains($Profile, 'create a new account') && !str_contains($Profile, 'name="new_email"'),
+    'the profile keeps the email address: another address is another account');
+  Check(preg_match('/<input[^>]*value="bob@example.com"[^>]*readonly/', $Profile) === 1, 'the address shows read only');
   NoErrors($Profile, 'the profile');
   $PasswordLink = Render('profile.php', Cookies: $Own, Query: ['action' => 'passwordlink']);
   Check(str_contains($PasswordLink, 'Check your email') && MailLink('resetpassword.php') !== '', 'emails a password link');
-  $Move = Render('profile.php', ['new_email' => 'Robert@example.com'], $Own, ['action' => 'email']);
-  Check(str_contains($Move, 'Check your email') && ($Confirm = MailLink('confirmemail.php')) !== '', 'emails the new address a link');
-  Check(str_contains(Emailed(), 'To: robert@example.com'), 'to the new address');
-  NoErrors($Move, 'changing the email');
-  Check(str_contains(Render('profile.php', ['new_email' => 'ann@example.com'], $Own, ['action' => 'email']), 'already'), 'not to an address with an account');
-  $Confirmed = Render('confirmemail.php', Query: ['token' => $Confirm]);
-  Check(str_contains($Confirmed, 'You sign in with robert@example.com'), 'the link changes it');
-  NoErrors($Confirmed, 'confirming the email');
-  Same(null, Password::TokenAccount((string)Password::Token(100, 'email', 600, ['email' => 'x@example.com', 'old' => 'bob@example.com']), 'password'),
-    'an email link is no password link');
-  $Storage->SetEmail(100, 'robert@example.com');
-  $Stale = (string)Password::Token(100, 'email', 600, ['email' => 'x@example.com', 'old' => 'bob@example.com']);
-  Check(str_contains(Render('confirmemail.php', Query: ['token' => $Stale]), 'work any more'), 'a link from before an earlier change doesn\'t work');
+  $Move = Render('profile.php', ['new_email' => 'robert@example.com', 'email' => 'robert@example.com'], $Own, ['action' => 'save']);
+  Check(Emailed() === '' && $Storage->Password(100)['email'] === 'bob@example.com', 'posting another address changes nothing');
+  Check(!is_file(Config::FrameworkFolder() . '/confirmemail.php'), 'there\'s no page that changes it');
 
   // Create an account: the email's link, then names and a password make it, signed in
   $Ask = Render('signup.php');
