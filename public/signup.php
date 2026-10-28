@@ -99,7 +99,7 @@
           "$Here?token=" . Password::SignUpToken($Email), 'If it wasn\'t you, ignore this email.');
       }
       $Card->AddChild(new AlertSuccess('Check your email', "We sent a link to $Email. It should arrive within a minute or two; "
-        . 'check your junk folder if it doesn\'t.'));
+        . 'check your junk folder if it doesn\'t.', \BS\Icon::Envelope));
       return;
     }
   }

@@ -531,7 +531,7 @@
       {
         $Sent = self::SendPasswordLink($ID, true);
         $Card->AddChild($Sent ? new \BS\AlertSuccess('Check your email', "Your account for $Email is waiting for its password. We emailed you a link "
-          . 'to choose it; follow the instructions in the email.') : new \BS\AlertWarning('Not sent', 'Something went wrong while sending the email. Please try again later.'));
+          . 'to choose it; follow the instructions in the email.', \BS\Icon::Envelope) : new \BS\AlertWarning('Not sent', 'Something went wrong while sending the email. Please try again later.'));
       }
       elseif (self::CanSignUp())
       {
@@ -539,8 +539,8 @@
         $Sent = self::SendLink($Email, "Your $AppName account", "Someone asked to sign in to $AppName with this email address, but there's no account "
           . 'for it yet. If it was you, make one here; the link works for ' . intdiv(self::LINK_SECONDS, 60) . ' minutes.', 'Create my account',
           Config::FrameworkURL('signup.php') . '?token=' . self::SignUpToken($Email), 'If it wasn\'t you, ignore this email.');
-        $Card->AddChild($Sent ? new \BS\AlertSuccess('No account yet', "There's no account for $Email yet, but you can make one: we emailed you "
-          . 'a link, follow the instructions in the email.') : new \BS\AlertWarning('Not sent', 'Something went wrong while sending the email. Please try again later.'));
+        $Card->AddChild($Sent ? new \BS\AlertInfo('No account yet', "There's no account for $Email yet, but you can make one: we emailed you "
+          . 'a link, follow the instructions in the email.', \BS\Icon::Envelope) : new \BS\AlertWarning('Not sent', 'Something went wrong while sending the email. Please try again later.'));
       }
       else
       {

@@ -33,7 +33,7 @@
     if (QueryString::Get('action') == 'send')
     {
       $Dialog->AddChild(Password::SendPasswordLink($UserID, $Invite)
-        ? new AlertSuccess('Sent', "We emailed {$Account['email']} a link to choose " . ($Invite ? 'their password.' : 'a new password.'))
+        ? new AlertSuccess('Sent', "We emailed {$Account['email']} a link to choose " . ($Invite ? 'their password.' : 'a new password.'), \BS\Icon::Envelope)
         : new AlertWarning('Not sent', 'Something went wrong while sending the email. Please try again later.'));
       return;
     }
@@ -55,7 +55,7 @@
     {
       $Notice = Password::SendPasswordLink($Added, true)
         ? new AlertSuccess('User added', "We emailed $Email an invitation to choose their password; their account works once they have. "
-          . 'They have Public access; grant them more in the list.')
+          . 'They have Public access; grant them more in the list.', \BS\Icon::Envelope)
         : new AlertWarning('Invitation not sent', "The account for $Email is made, but the email didn't go out. Send it again with the key button in the list.");
       // Show them in the list behind the popup
       $Dialog->AddChild(new HTML\Script('$(".menu-target").each(function () { const url = $(this).data("url"); '

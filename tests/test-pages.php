@@ -46,6 +46,13 @@
   Config::Set('auth.github', $Providers);
   Config::Set('auth.password.enabled', true);
 
+  // Alerts: the icon in a column of its own beside the text (not floated, so the text doesn't wrap under it)
+  $Alert = (string)new BS\AlertSuccess('Saved', 'All done.');
+  Check(str_contains($Alert, 'bi-check-circle') && str_contains($Alert, 'alert-success') && str_contains($Alert, 'd-flex') && !str_contains($Alert, 'float-'),
+    'a success alert: a check beside its text');
+  Check(str_contains((string)new BS\AlertInfo('Sent', 'Check your email.', BS\Icon::Envelope), 'bi-envelope'), 'an alert takes another icon');
+  Check(!str_contains((string)new BS\Alert('Plain', 'No icon.'), 'd-flex'), 'a plain alert stays as it is');
+
   // A page loads the package's script and style, with a version from their contents
   $Framework = new Framework();
   $Framework->AddScript(Config::FrameworkURL('js/app.js'));

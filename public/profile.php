@@ -35,7 +35,7 @@
     case 'passwordlink':
       $Account = Storage\Store::Get()->Password($UserID);
       $Notice = $Account !== null && \Auth\Password::SendPasswordLink($UserID)
-        ? new AlertSuccess('Check your email', "We sent {$Account['email']} a link to choose a new password. Your password works until you do.")
+        ? new AlertSuccess('Check your email', "We sent {$Account['email']} a link to choose a new password. Your password works until you do.", \BS\Icon::Envelope)
         : new AlertWarning('Not sent', 'Something went wrong while sending the email. Please try again later.');
       break;
     case 'email':
@@ -46,7 +46,7 @@
         $New === null => new AlertWarning('Not changed', 'That email address doesn\'t look right.'),
         \Auth\Password::Taken($New) => new AlertWarning('Not changed', 'There is an account for that address already.'),
         !\Auth\Password::SendEmailLink($UserID, $New) => new AlertWarning('Not sent', 'Something went wrong while sending the email. Please try again later.'),
-        default => new AlertSuccess('Check your email', "We sent $New a link. Your email address changes once you open it; until then you sign in with the one you have."),
+        default => new AlertSuccess('Check your email', "We sent $New a link. Your email address changes once you open it; until then you sign in with the one you have.", \BS\Icon::Envelope),
       };
       break;
     case 'removephoto':
@@ -80,7 +80,7 @@
     }
     $Redirect = Config::Get('mail.redirect');
     return new AlertSuccess('Email sent', 'We sent a test email to ' . ($Redirect ? "$Redirect (this server sends all email there)" : $Profile['email'])
-      . '. It should arrive within a minute or two, check your junk folder if it doesn\'t.');
+      . '. It should arrive within a minute or two, check your junk folder if it doesn\'t.', \BS\Icon::Envelope);
   }
 
   $Profile = User::Profile($UserID);

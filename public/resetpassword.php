@@ -80,7 +80,7 @@
       Password::SendPasswordLink($UserID);
     }
     $Card->AddChild(new AlertSuccess('Check your email', 'If there\'s an account for that address, we sent it a link to choose a new password. '
-      . 'It should arrive within a minute or two; check your junk folder if it doesn\'t.'));
+      . 'It should arrive within a minute or two; check your junk folder if it doesn\'t.', \BS\Icon::Envelope));
     return;
   }
 

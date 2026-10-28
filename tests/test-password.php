@@ -171,6 +171,7 @@
   // No account, or an invited one: an email
   $None = $Step(['email' => 'nobody@example.com']);
   Check(str_contains($None, 'No account yet') && MailLink('signup.php') !== '', 'no account: the address gets a link to make one');
+  Check(str_contains($None, 'alert-info') && str_contains($None, 'bi-envelope'), 'said with an envelope, as news rather than a warning');
   Check(str_contains($None, 'Use another address') && !str_contains($None, 'name="password"'), 'and no password step');
   NoErrors($None, 'no account');
   $Invited = $Step(['email' => 'ann@example.com']);
