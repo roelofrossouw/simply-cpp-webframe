@@ -79,6 +79,14 @@
   Check(str_contains($Html, 'login-github') && str_contains($Html, 'login.php?provider=github') && !str_contains($Html, 'login-google'), 'Sign in offers the providers that are set up');
   Check(!Auth\Base::Allowed('/app/orders.php') && Auth\Base::Allowed('/home.php'), 'signed out: only public pages are allowed');
 
+  // No sign-in provider set up: no Sign in item at all
+  $Providers = Config::Get('auth.github');
+  Config::Set('auth.github', null);
+  $Menu = new BS\Menu(new HTML\Text('Test'));
+  MenuLayout::Build($Menu);
+  Check(!str_contains((string)$Menu, 'Sign in') && str_contains((string)$Menu, 'Home'), 'no providers: Sign in is left out');
+  Config::Set('auth.github', $Providers);
+
   // A page loads the package's script and style, with a version from their contents
   $Framework = new Framework();
   $Framework->AddScript(Config::FrameworkURL('js/app.js'));

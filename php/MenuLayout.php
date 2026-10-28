@@ -160,9 +160,13 @@
       }
     }
 
-    // Sign in: a submenu with each sign-in provider that's set up, instead of a link
-    private static function AddSignIn(\BS\Menu|\BS\BaseMenuItem $Parent, \BS\Icon $Icon, array $Item): \BS\BaseMenuItem
+    // Sign in: a submenu with each sign-in provider that's set up, instead of a link; left out when none is
+    private static function AddSignIn(\BS\Menu|\BS\BaseMenuItem $Parent, \BS\Icon $Icon, array $Item): ?\BS\BaseMenuItem
     {
+      if (empty(\Auth\Base::Providers()))
+      {
+        return null;
+      }
       $Login = $Parent->AddItem($Icon, $Item['name'], ID: $Item['code']);
       $Login->Submenu()->AlignRight();
       foreach (\Auth\Base::Providers() as $Name => $Class)
