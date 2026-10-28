@@ -11,7 +11,7 @@
 --   psql "host=db.example.com dbname=app user=app" -v ON_ERROR_STOP=1 -f /usr/share/sc-webframe/sql/schema.sql
 -- Running it again changes nothing: it only adds what isn't there yet.
 --
--- Then sign in once, and make yourself an admin:
+-- The first person to sign in becomes an admin (the settings' auth.first_admin, see the README). To make someone else one:
 --   insert into access.grants (user_id, access_id)
 --   select user_id, access_id from access.users, access.levels where email = 'you@example.com' and code = 'admin';
 
@@ -100,11 +100,29 @@ values ('main', 0, 'Home', 'bi-house', '/home.php', false, 'home', true, 'always
        ('page', 1, 'Data Deletion Instructions', 'bi-trash', '/framework/datadeletion.php', false, 'datadeletion', true, 'always')
 on conflict (code) do nothing;
 
+-- Administer (admins only): Users and Menu; Your profile in the status bar, for anyone signed in (since 1.1.0)
+insert into framework.menu (section, position, name, icon, target, popup, code, public, shown)
+values ('main', 80, 'Administer', 'bi-gear', null, false, 'administer', false, 'always'),
+       ('status', 1, 'Your profile', 'bi-person-circle', '/framework/profile.php', true, 'profile', false, 'signed_in')
+on conflict (code) do nothing;
+
+insert into framework.menu (parent_id, section, position, name, icon, target, popup, code)
+select a.id, 'main', s.position, s.name, s.icon, s.target, false, s.code
+  from (values (1, 'Users', 'bi-people', '/framework/admin/users.php', 'users'),
+               (2, 'Menu', 'bi-menu-button-wide', '/framework/admin/menu.php', 'menu')) s(position, name, icon, target, code)
+  join framework.menu a on a.code = 'administer'
+on conflict (code) do nothing;
+
+-- Admins view and edit every item the schema adds; anyone signed in sees their profile
 insert into framework.menu_access (menu_id, access_id, can_edit)
 select m.id, l.access_id, true
   from framework.menu m
   join access.levels l on l.code = 'admin'
- where m.code in ('home', 'login', 'logout', 'privacy', 'terms', 'datadeletion')
+ where m.code in ('home', 'login', 'logout', 'privacy', 'terms', 'datadeletion', 'administer', 'users', 'menu', 'profile')
+on conflict do nothing;
+
+insert into framework.menu_access (menu_id, access_id)
+select m.id, l.access_id from framework.menu m join access.levels l on l.code = 'public' where m.code = 'profile'
 on conflict do nothing;
 
 commit;

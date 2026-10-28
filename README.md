@@ -33,7 +33,7 @@ plain PHP: nothing to compile, and no extension.
 | `DB` | PostgreSQL with parameters: `Rows()`, `Row()`, `Value()`, `Assoc()`, `Exists()`, `Exec()`, `Transaction()`. |
 | `Storage\` | Where users, access and the menu are kept: `Postgres` (the default), or a class of your own (`Storage\Backend`). |
 | `Rest`, `Server`, `Post`, `QueryString`, `ErrorHandler` | Small helpers: an HTTP client, the request, and errors shown in the page (in full for admins). |
-| `public/` | What the site serves under `/framework`: `js/app.js`, `css/style.css`, the service worker, the sign-in and sign-out pages, the menu (`landing.php`), and the privacy policy, terms of use and data deletion pages, written from the settings. |
+| `public/` | What the site serves under `/framework`: `js/app.js`, `css/style.css`, the service worker, the sign-in and sign-out pages, the menu (`landing.php`), Administer → Users and Menu (`admin/`), Your profile (`profile.php`), and the privacy policy, terms of use and data deletion pages, written from the settings. |
 | `sql/schema.sql` | The tables: `access.users`, `access.levels`, `access.grants`, `framework.menu`, `framework.menu_access`. |
 
 The classes keep short global names (`Config`, `Page`, `DB`, `User`) and the namespaces `HTML`, `BS`, `Auth` and `Storage`,
@@ -73,7 +73,7 @@ It needs PHP 8.3 or later, with the pgsql, curl, gd and mbstring extensions (the
    |---|---|
    | `app` | `name`, `description`, `company`, `country`, `email` (shown in the policies), `timezone`, `home` (the page Home opens, `/home.php`), `logo`, `theme_color`, `framework_url` (`/framework`) |
    | `database` | `connection` (a libpq connection string), or `host`, `port`, `dbname`, `user`, `password`, `sslmode` |
-   | `auth` | `secret` (signs the sign-in tokens: a long random string, e.g. `openssl rand -base64 48`), `keys_dir` (key files, `/etc/sc-webframe/keys`), and a section per sign-in provider |
+   | `auth` | `secret` (signs the sign-in tokens: a long random string, e.g. `openssl rand -base64 48`), `keys_dir` (key files, `/etc/sc-webframe/keys`), `cache_dir` (the providers' public keys, `/var/cache/sc-webframe/jwks`), `first_admin` (see below), and a section per sign-in provider |
    | `auth.google` | `client_id`, `client_secret` |
    | `auth.microsoft` | `client_id`, `client_secret`, `tenant` (a tenant ID, or `organizations`) |
    | `auth.apple` | `client_id` (the Services ID), `team_id`, `key_id`, `key_file` (the .p8 in `keys_dir`) |
@@ -81,7 +81,7 @@ It needs PHP 8.3 or later, with the pgsql, curl, gd and mbstring extensions (the
    | `auth.facebook` | `app_id`, `app_secret` |
    | `mail` | `from`, `redirect` (send every email there instead), `disabled` |
    | `storage` | `class`: a `Storage\Backend` of your own instead of `Storage\Postgres` |
-   | `menu` | `editor`: the page that manages the menu, which admins must always keep |
+   | `menu` | `editor`: the page that manages the menu, which admins must always keep (default: the package's `admin/menu.php`, when the menu has it; `""` for none) |
 
    A provider is offered once its section is there. Each provider's redirect (callback) URL is
    `https://<your site>/framework/login.php`.
@@ -109,14 +109,25 @@ It needs PHP 8.3 or later, with the pgsql, curl, gd and mbstring extensions (the
      script loads the menu and Home into it.
    - `home.php`, what Home shows (the `home` menu item; `app.home` names another page).
 
-5. **Sign in, and make yourself an admin:**
+5. **Sign in.** The first person to sign in while nobody is an admin becomes one, straight away (the sign-in token
+   carries it). That's the settings' `auth.first_admin`:
+
+   | `auth.first_admin` | Who becomes the first admin |
+   |---|---|
+   | `true` (the default) | Whoever signs in first |
+   | `"you@example.com"` | Only someone signing in with that email address (any case) |
+   | `false` | Nobody: make one by hand |
+
+   **On a site anyone can reach, `true` lets whoever signs in first after installing take over the site**, so sign in
+   straight away, or set your email address, or `false`. It only applies while nobody holds admin (a revoked grant
+   doesn't count), and two first sign-ins at once can't both win. By hand:
 
    ```sql
    insert into access.grants (user_id, access_id)
    select user_id, access_id from access.users, access.levels where email = 'you@example.com' and code = 'admin';
    ```
 
-   Sign out and in again: the access you have goes into the sign-in token.
+   Then sign out and in again: the access you have goes into the sign-in token.
 
 ## Pages and access
 
@@ -137,8 +148,13 @@ target page, whether it opens in a popup, whether it is public (open to everyone
 signed out). `framework.menu_access` gives access levels the View right on an item, and with `can_edit` the Edit right
 too. Add your access levels to `access.levels`, and grant them in `access.grants`.
 
-A site's admin pages can manage it all with `MenuLayout::Add()`, `Update()`, `SetAccess()` and `Delete()`, and
-`User::All()`, `User::SetAccess()` and `User::Levels()`.
+The schema adds **Administer** to the main menu, for admins: **Users** (everyone who signed in, with a switch per access
+level; admins can't take away their own admin or block themselves) and **Menu** (every item, a tab per section, with
+its fields, Public and Shown, and View and Edit per access level; a change that would take Menu from admins is undone).
+**Your profile** is in the status bar for anyone signed in: what the site calls them, their photo, and a test email.
+Change their access in the menu like any other page's. A site's own admin pages can do the same with
+`MenuLayout::Add()`, `Update()`, `SetAccess()` and `Delete()`, and `User::All()`, `User::SetAccess()` and
+`User::Levels()`.
 
 ## Keeping users and the menu elsewhere
 

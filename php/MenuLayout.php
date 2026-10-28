@@ -21,11 +21,17 @@
     const array SHOWN = ['always' => 'Always', 'signed_in' => 'Signed in', 'signed_out' => 'Signed out'];
 
     /**
-     * The page that manages the menu, which admins must always be able to reach (the settings' menu.editor), or null
+     * The page that manages the menu, which admins must always be able to reach: the settings' menu.editor, else the
+     * package's own (admin/menu.php) when a menu item targets it, else none
      */
     public static function Editor(): ?string
     {
-      return Config::Get('menu.editor');
+      if (($Editor = Config::Get('menu.editor')) !== null)
+      {
+        return $Editor === '' ? null : (string)$Editor;
+      }
+      $Own = Config::FrameworkURL('admin/menu.php');
+      return in_array($Own, array_column(self::All(), 'target'), true) ? $Own : null;
     }
 
     /**

@@ -23,7 +23,27 @@
   Same('6', DB::Value('select count(*) from framework.menu where code in (\'home\', \'login\', \'logout\', \'privacy\', \'terms\', \'datadeletion\')'),
     'the schema\'s menu items, once');
 
+  Same('10', DB::Value('select count(*) from framework.menu where code in (\'home\', \'login\', \'logout\', \'privacy\', \'terms\', \'datadeletion\', \'administer\', \'users\', \'menu\', \'profile\')'),
+    'the schema\'s items, Administer, Users, Menu and the profile among them');
   $Storage = Store::Get();
+
+  // The first admin: nobody is one in a fresh database. With auth.first_admin an email, only that address becomes it;
+  // with false nobody; by default the first sign-in
+  $Admins = fn() => DB::Value('select count(*) from access.grants g join access.levels l using (access_id) where l.code = \'admin\' and g.revoked is null');
+  Same('0', $Admins(), 'no admin yet');
+  Config::Set('auth.first_admin', 'boss@example.com');
+  Same(['public'], $Storage->SignIn('github', 'first-a', 'someone@example.com', 'Some', 'One')['access'], 'another address doesn\'t become admin');
+  Config::Set('auth.first_admin', false);
+  Same(['public'], $Storage->SignIn('github', 'first-b', 'boss@example.com', 'The', 'Boss')['access'], 'false: nobody does');
+  Config::Set('auth.first_admin', 'Boss@Example.com');
+  Same(['public', 'admin'], $Storage->SignIn('github', 'first-b', 'boss@example.com', null, null)['access'], 'the address, any case, does, at once');
+  Config::Set('auth.first_admin', true);
+  Same(['public'], $Storage->SignIn('github', 'first-c', 'third@example.com', null, null)['access'], 'once there is an admin, nobody else');
+  DB::Exec('delete from access.users where subject in (\'first-a\', \'first-b\', \'first-c\')');
+  Same(['public', 'admin'], $Storage->SignIn('github', 'first-d', 'any@example.com', null, null)['access'], 'by default the first sign-in');
+  DB::Exec('delete from access.users where subject = \'first-d\'');
+  Config::Set('auth.first_admin', false); // The checks below start from a user with public access only
+
   $Subject = 'test-' . bin2hex(random_bytes(4));
   $User = $Storage->SignIn('github', $Subject, 'ann@example.com', 'Ann', null);
   $ID = (int)$User['user_id'];

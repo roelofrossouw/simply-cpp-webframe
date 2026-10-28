@@ -14,6 +14,10 @@
     private const array MENU_FIELDS = ['name' => '', 'icon' => '', 'target' => '', 'code' => '', 'position' => '::integer',
       'parent_id' => '::integer', 'popup' => '::boolean', 'public' => '::boolean', 'shown' => ''];
 
+    /**
+     * Also makes the user an admin when nobody is one yet, as the settings' auth.first_admin allows: true (the default),
+     * false, or the one email address that may become the first admin
+     */
     public function SignIn(string $Provider, string $Subject, ?string $Email, ?string $FirstName, ?string $LastName): array
     {
       return DB::Transaction(function () use ($Provider, $Subject, $Email, $FirstName, $LastName) {
@@ -28,8 +32,29 @@
         DB::Exec('insert into access.grants (user_id, access_id)
           select $1, access_id from access.levels where code = \'public\'
           on conflict do nothing', [$User['user_id']]);
+        if ($this->MayBeFirstAdmin($User['email']))
+        {
+          // One sign-in at a time decides, so two first sign-ins can't both become admin
+          DB::Exec('select pg_advisory_xact_lock(hashtext(\'sc-webframe first admin\'))');
+          DB::Exec('insert into access.grants (user_id, access_id)
+            select $1, l.access_id from access.levels l
+             where l.code = \'admin\'
+               and not exists (select 1 from access.grants g where g.access_id = l.access_id and g.revoked is null)
+            on conflict (user_id, access_id) do nothing', [$User['user_id']]);
+        }
         return $User + ['access' => $this->Access((int)$User['user_id'])];
       });
+    }
+
+    // Whether auth.first_admin lets this sign-in become the first admin
+    private function MayBeFirstAdmin(?string $Email): bool
+    {
+      $Setting = \Config::Get('auth.first_admin', true);
+      if (is_string($Setting) && $Setting !== '')
+      {
+        return $Email !== null && strcasecmp(trim($Email), trim($Setting)) === 0;
+      }
+      return $Setting === true;
     }
 
     public function Access(int $UserID): array
