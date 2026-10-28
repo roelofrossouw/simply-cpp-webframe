@@ -1,0 +1,238 @@
+/**********************
+ * EXTERNAL COMPONENTS
+ **********************/
+
+@import "https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css";
+/* @import "/css/bootstrap.min.css"; */
+@import url("https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css");
+/* @import "/css/bootstrap-icons.min.css"; */
+
+
+/**********************
+ * FRAMEWORK SETUP
+ **********************/
+
+/**********************
+ * Some setup for the framework used
+ * Everything goes into panels that handles scrolling
+ * Scale the body to the full screen size and disable its scrolling
+ **********************/
+html {
+  height: 100%;
+}
+
+body {
+  overflow: hidden;
+  height: 100%;
+  display: flex;
+  flex-direction: row;
+}
+
+#main {
+  flex-grow: 1;
+  /* Flex items won't shrink below their content's width otherwise: a wide table would make the whole page wider
+     than the screen, cut off by the body. Now wide content scrolls inside its own box (e.g. ResponsiveTable). */
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/**********************
+ * Some setup for PWA Standalone mode
+ * (When it is an Installed app / Added to Home screen)
+ **********************/
+@media all and (display-mode: standalone) {
+  /**
+  * Need extra padding at the bottom.
+  * This is to avoid going into the rounded corners on some phones
+  * (Inside a browser a navigation bar keeps the content away from the corners)
+  */
+  #main-modal > div > div {
+    padding-bottom: 35px;
+  }
+
+  nav.fixed-bottom > div {
+    padding-bottom: 25px;
+  }
+}
+
+body.ios-app {
+  #main-modal > div > div {
+    padding-bottom: 35px;
+  }
+
+  nav.fixed-bottom > div {
+    padding-bottom: 25px;
+  }
+}
+
+/**********************
+ * CUSTOM COMPONENTS
+ **********************/
+
+
+.menu-target {
+  overflow-x: hidden;
+  min-height: 100%;
+}
+
+/**********************
+ * Vertical inputs
+ * This is to group inputs together vertically
+ * It makes them merge over each other to share a border between them.
+ * Only the top input has rounded corners at the top and
+ * only the bottom input has rounded corners at the bottom.
+ **********************/
+div.vertical-inputs div.input {
+
+  /*  Bring highlight to the front so that is isn't hidden under the input below*/
+
+  &:focus-within {
+    z-index: 2;
+  }
+
+  /*  Inputs except for the first one*/
+
+  &:not(:first-child) div.input-group {
+    /*  Remove rounded corners at the bottom*/
+
+    input, span.input-group-text {
+      border-top-left-radius: 0;
+      border-top-right-radius: 0;
+    }
+  }
+
+  /*  Inputs except for the last one*/
+
+  &:not(:last-child) div.input-group {
+    /*  Remove rounded corners at the top*/
+
+    input, span.input-group-text {
+      border-bottom-left-radius: 0;
+      border-bottom-right-radius: 0;
+      margin-bottom: -1px;
+    }
+  }
+}
+
+/**********************
+ * CUSTOM STYLES
+ * Some variations on the standard Bootstrap Styling
+ **********************/
+
+/*  Make navbars look a but more like app menus, give a bit darker background and a gradient by default*/
+.navbar {
+  background-color: var(--bs-tertiary-bg);
+  background-image: var(--bs-gradient);
+
+  ul li {
+    &.nav-item {
+      /*  Give a little softer feel*/
+      border-radius: 4px;
+    }
+
+    &.nav-item, &.dropdown-item {
+      /*  Make a little darker when the mouse is over a menu item*/
+
+      &:hover {
+        background: #0002;
+      }
+    }
+
+    /*  Make dropdown look a bit more like the menu*/
+
+    ul.dropdown-menu {
+      background-color: var(--bs-tertiary-bg);
+      border-radius: 4px;
+      padding: 4px 0;
+
+      li.dropdown-item {
+        padding: 2px 0;
+      }
+    }
+
+  }
+
+  /*  Add option for a compact menu*/
+
+  &.small-menu {
+    --bs-navbar-padding-y: 0;
+    font-size: 80%;
+
+    .navbar-brand {
+      font-size: 1em;
+    }
+
+    /* A toggle button that fits the compact bar, rather than making it taller */
+    .navbar-toggler {
+      --bs-navbar-toggler-padding-y: 0;
+      --bs-navbar-toggler-padding-x: 0.4rem;
+      --bs-navbar-toggler-font-size: 1rem;
+    }
+  }
+
+  &.medium-menu {
+    --bs-navbar-padding-y: 4px;
+  }
+}
+
+/*  Short screens (Typically a phone in landscape mode)*/
+@media (max-height: 500px) {
+
+  /*  Make inputs a bit smaller*/
+  .form-floating > {
+
+    .form-control, .form-control-plaintext, .form-select {
+      height: calc(2.5rem + calc(var(--bs-border-width) * 2));
+      min-height: calc(2.5rem + calc(var(--bs-border-width) * 2));
+
+      ~ label {
+        /* Center vertically in smaller input padding: 0.5 rem .75 rem;*/
+      }
+
+      /* When focused or has content (Small label) &: focus, &: not(: placeholder-shown) {*/
+
+      ~ label {
+        font-size: 90%;
+
+        &::after {
+          height: 0;
+        }
+      }
+    }
+  }
+}
+
+table > tbody > tr > td > input {
+  margin-top: -6px;
+  margin-bottom: -6px;
+}
+
+.flex-row > * {
+  padding-right: calc(var(--bs-gutter-x) * .5);
+  padding-left: calc(var(--bs-gutter-x) * .5);
+  margin-top: var(--bs-gutter-y);
+}
+
+/* A heading that sorts the table when clicked (TableHeadingCell::Sort) */
+th.sortable {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+
+  &:hover {
+    color: var(--bs-link-hover-color);
+  }
+}
+
+/* A popup's refresh button turns while its page loads again (app.js refreshModal()), so a click always shows */
+.modal-refresh.busy i {
+  display: inline-block;
+  animation: modal-refresh-spin .8s linear infinite;
+}
+
+@keyframes modal-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

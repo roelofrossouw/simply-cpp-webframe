@@ -1,0 +1,6 @@
+simply-cpp-webframe
+Copyright 2026 Roelof Rossouw
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+The pages load jQuery and Bootstrap 5.3.3 (MIT) and Bootstrap Icons (MIT) from their CDNs.

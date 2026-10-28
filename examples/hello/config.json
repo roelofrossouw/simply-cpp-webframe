@@ -1,0 +1,30 @@
+{
+  "app": {
+    "name": "Hello",
+    "description": "sc-webframe's Hello world",
+    "company": "Example Ltd",
+    "country": "South Africa",
+    "email": "info@example.com",
+    "timezone": "Africa/Johannesburg"
+  },
+  "database": {
+    "host": "db.example.com",
+    "dbname": "hello",
+    "user": "hello",
+    "password": "change-me"
+  },
+  "auth": {
+    "secret": "a long random string: openssl rand -base64 48",
+    "google": {
+      "client_id": "1234567890-abc.apps.googleusercontent.com",
+      "client_secret": "change-me"
+    },
+    "github": {
+      "client_id": "Iv1.0123456789abcdef",
+      "client_secret": "change-me"
+    }
+  },
+  "mail": {
+    "from": "Hello <noreply@example.com>"
+  }
+}

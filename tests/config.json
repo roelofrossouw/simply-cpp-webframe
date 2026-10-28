@@ -1,0 +1,18 @@
+{
+  "app": {
+    "name": "Test site",
+    "company": "Example Ltd",
+    "email": "info@example.com",
+    "timezone": "Africa/Johannesburg"
+  },
+  "database": {
+    "host": "db.example.com",
+    "dbname": "test",
+    "user": "test",
+    "password": "it's \\secret"
+  },
+  "auth": {
+    "secret": "test secret, not for use anywhere",
+    "github": {"client_id": "test-id", "client_secret": "test-secret"}
+  }
+}
