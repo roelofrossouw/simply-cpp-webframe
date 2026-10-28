@@ -1,0 +1,7 @@
+#!/bin/sh
+# The sign-in providers' public keys are cached here (Auth\JWT, auth.cache_dir), by PHP's user
+set -e
+if [ "$1" = configure ]; then
+    install -d -m 0750 -o www-data -g www-data /var/cache/sc-webframe/jwks 2>/dev/null || install -d -m 0755 /var/cache/sc-webframe/jwks
+fi
+exit 0

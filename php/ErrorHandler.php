@@ -31,6 +31,8 @@
          */
         public function HandleException(Throwable $Error): void
         {
+            // Always logged, also when an admin sees it in the page
+            $this->LogError($Error->getFile(), $Error->getLine(), get_class($Error) . ': ' . $Error->getMessage(), $Error->getTraceAsString());
             if (\Auth\Base::SystemAdmin())
             {
                 $ErrorMessage = new \HTML\Div();
@@ -41,7 +43,6 @@
             }
             else
             {
-                $this->LogError($Error->getFile(), $Error->getLine(), $Error->getMessage());
                 $ErrorMessage = new \HTML\Paragraph('An unexpected error has occurred.');
                 $ErrorMessage->Lead();
                 $ErrorMessage->AddSibling($Description = new \HTML\Paragraph('Our team has been notified and is looking into the issue.'));
@@ -53,10 +54,13 @@
             \Page::AddContent($ErrorDisplay);
         }
 
-        private function LogError($File, $Line, $Message): void
+        /**
+         * Into PHP's error log (PHP-FPM's log, or the error_log setting), with the page and the trace when there is one
+         */
+        private function LogError($File, $Line, $Message, string $Trace = ''): void
         {
-            // TODO: Log error in database, and/or send notification to sysadmins
-            // e.g. 'insert into php_error (raised, file, line, message) values (now(), $1, $2, $3)', $File, $Line, $Message
+            $Page = $_SERVER['REQUEST_URI'] ?? ($_SERVER['PHP_SELF'] ?? '');
+            error_log("sc-webframe: $Message in $File($Line)" . ($Page === '' ? '' : " [$Page]") . ($Trace === '' ? '' : "\n$Trace"));
         }
 
         public function HandleError(int $ErrorNumber, string $Message = '', string $File = '', int $Line = 0, array $Context = []): bool
@@ -67,9 +71,10 @@
                 throw new Exception('Stopping excecution due to ' . $ErrorType->value);
             }
 
-            if (!$ErrorType->IsLogged())
+            // Warnings and deprecations go to the log; notices don't
+            if ($ErrorType->IsLogged())
             {
-                $this->LogError($File, $Line, $Message);
+                $this->LogError($File, $Line, $ErrorType->value . ': ' . $Message);
             }
 
             // Display applicable notices

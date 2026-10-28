@@ -8,6 +8,9 @@
     const string KEYS_DIR = '/etc/sc-webframe/keys/';
     // Our own HS256 key: the settings' auth.secret, else this file in the keys folder
     const LOCAL_KEY = 'jwt.key';
+    // The providers' public keys are kept in the settings' auth.cache_dir, else this folder (the package makes it, for
+    // www-data); without a folder PHP may write to they are fetched for every sign-in
+    const string CACHE_DIR = '/var/cache/sc-webframe/jwks';
     // Issuers whose RS256 tokens we accept, pinned to their JWKS endpoint.
     // Any other token must be HS256 signed with our own LOCAL_KEY.
     const TRUSTED_ISSUERS = [
@@ -272,19 +275,25 @@
         return false;
       }
       // Hash the cache name so the token's kid never becomes part of a path
-      $LocalPEM = self::CERTS_ROOT . 'jwt/kid/' . hash('sha256', "$JwksURI|$Kid") . '.pem';
-      if (file_exists($LocalPEM))
-      {
-        $PEM = file_get_contents($LocalPEM);
-      }
-      else
+      $Folder = rtrim((string)\Config::Get('auth.cache_dir', self::CACHE_DIR), '/');
+      $LocalPEM = $Folder . '/' . hash('sha256', "$JwksURI|$Kid") . '.pem';
+      $PEM = is_readable($LocalPEM) ? file_get_contents($LocalPEM) : false;
+      if (empty($PEM))
       {
         $PEM = self::FetchPEM($JwksURI, $Kid);
         if (empty($PEM))
         {
           return false;
         }
-        file_put_contents($LocalPEM, $PEM);
+        if (is_dir($Folder) && is_writable($Folder))
+        {
+          // Written whole, then moved into place, so a concurrent sign-in never reads half a key
+          $Temporary = $LocalPEM . '.' . bin2hex(random_bytes(4));
+          if (@file_put_contents($Temporary, $PEM) !== false)
+          {
+            @rename($Temporary, $LocalPEM);
+          }
+        }
       }
       $Signature = self::Decode($Signature, false);
       $Verified = openssl_verify("$Header.$Payload", $Signature, $PEM, OPENSSL_ALGO_SHA256);
@@ -293,7 +302,9 @@
 
     private static function FetchPEM(string $JwksURI, string $Kid): ?string
     {
-      $Info = json_decode(file_get_contents($JwksURI) ?: '', true);
+      // A provider that doesn't answer in 5 seconds: the sign-in fails rather than hangs
+      $Context = stream_context_create(['http' => ['timeout' => 5]]);
+      $Info = json_decode(@file_get_contents($JwksURI, false, $Context) ?: '', true);
       foreach ($Info['keys'] ?? [] as $Value)
       {
         if (($Value['kid'] ?? null) === $Kid && ($Value['kty'] ?? null) === 'RSA' && isset($Value['n'], $Value['e']))

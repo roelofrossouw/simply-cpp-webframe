@@ -88,6 +88,9 @@ set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "${PROJECT_HOMEPAGE_URL}")
 # photos, mbstring for names
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "php-common (>= 2:93~), php-pgsql, php-curl, php-gd, php-mbstring")
 set(CPACK_DEBIAN_PACKAGE_SUGGESTS "php-fpm, apache2, postgresql-client")
+# postinst makes the folder the sign-in providers' keys are cached in, for www-data; purging removes it
+set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${CMAKE_CURRENT_SOURCE_DIR}/packaging/postinst;${CMAKE_CURRENT_SOURCE_DIR}/packaging/postrm")
+set(CPACK_DEBIAN_PACKAGE_CONTROL_STRICT_PERMISSION ON)
 set(CPACK_SET_DESTDIR ON)
 set(CPACK_PACKAGE_DIRECTORY "${CMAKE_BINARY_DIR}")
 include(CPack)
