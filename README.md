@@ -81,6 +81,7 @@ It needs PHP 8.3 or later, with the pgsql, curl, gd and mbstring extensions (the
    | `auth.facebook` | `app_id`, `app_secret` |
    | `auth.password` | `enabled` (`true` to offer it), `min_length` (10), `session_days` (30), `signup` (`true`: anyone may make an account); it needs mail; see [Signing in with a password](#signing-in-with-a-password) |
    | `mail` | `from`, `redirect` (send every email there instead), `disabled` |
+   | `ipgeolocation` | `api_key`: an [ipgeolocation.io](https://ipgeolocation.io) key; wrong-password emails then say where the try came from (city, region, country, ISP), not only its IP address |
    | `storage` | `class`: a `Storage\Backend` of your own instead of `Storage\Postgres` |
    | `menu` | `editor`: the page that manages the menu, which admins must always keep (default: the package's `admin/menu.php`, when the menu has it; `""` for none) |
 
@@ -138,7 +139,7 @@ account only works once its address is shown to work (and the site needs mail):
 
 - **Signing in** goes a step at a time, in the page under the menu when it's opened from the menu: the email address,
   then Next. With an account, the password, then Sign in; a right one goes on to the site. A wrong one emails the
-  address (so its owner sees someone tried, with a link to choose a new password in case it was them), and Try again
+  address with the IP address it came from, and where that is with `ipgeolocation.api_key` (so its owner sees someone tried, with a link to choose a new password in case it was them), and Try again
   counts down from 5 first. Without an account, the address gets a link to make one (with `signup`), and the page says
   so; an invited account gets its invitation again. This tells anyone which addresses have accounts.
 - **Add a user** (Administer → Users, admins): email address and names. It emails an invitation to choose a password

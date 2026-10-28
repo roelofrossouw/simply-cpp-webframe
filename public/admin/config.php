@@ -70,6 +70,9 @@
       'auth.facebook.app_id' => ['App ID', false],
       'auth.facebook.app_secret' => ['App secret', true],
     ],
+    'Places of IP addresses' => [
+      'ipgeolocation.api_key' => ['An ipgeolocation.io API key: wrong-password emails then say where the try came from', true],
+    ],
     'Other' => [
       'storage.class' => ['Where users, access and the menu are kept (default Storage\Postgres)', false],
       'menu.editor' => ['The page that manages the menu (default: Administer → Menu)', false],

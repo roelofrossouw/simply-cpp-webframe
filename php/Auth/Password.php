@@ -299,13 +299,42 @@
       }
       $AppName = Config::AppName();
       $When = date('j F Y \a\t H:i');
-      $From = (string)($_SERVER['REMOTE_ADDR'] ?? 'an unknown address');
+      $From = self::Whereabouts((string)($_SERVER['REMOTE_ADDR'] ?? ''));
       return self::SendLink($User['email'], "A wrong password for your $AppName account",
         "Someone tried to sign in to your $AppName account with a wrong password, on $When (from $From). If it was you, and you forgot "
           . 'your password, choose a new one here; the link works for an hour.', 'Choose a new password',
         Config::FrameworkURL('resetpassword.php') . "?token=$Token",
         'If it wasn\'t you, nobody got in and your password still works. After ' . self::LOCK_AFTER . ' wrong passwords in a row the sign-in locks for '
           . intdiv(self::LOCK_SECONDS, 60) . ' minutes.');
+    }
+
+    /**
+     * An IP address, with where it is when the settings have an ipgeolocation.io key (ipgeolocation.api_key), e.g.
+     * "198.51.100.7, Mountain View, California, United States (Example ISP)"; just the address when there's no key, it's
+     * a private one, or the lookup fails (it waits 3 seconds at most)
+     */
+    public static function Whereabouts(string $IP): string
+    {
+      $Key = (string)Config::Get('ipgeolocation.api_key', '');
+      if ($IP === '')
+      {
+        return 'an unknown address';
+      }
+      if ($Key === '' || !filter_var($IP, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE))
+      {
+        return $IP;
+      }
+      $Curl = curl_init('https://api.ipgeolocation.io/ipgeo?' . http_build_query(['apiKey' => $Key, 'ip' => $IP]));
+      curl_setopt_array($Curl, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 3, CURLOPT_PROTOCOLS => CURLPROTO_HTTPS]);
+      $Found = json_decode((string)curl_exec($Curl), true);
+      if (curl_getinfo($Curl, CURLINFO_RESPONSE_CODE) !== 200 || !is_array($Found))
+      {
+        error_log("sc-webframe: ipgeolocation.io didn't place $IP");
+        return $IP;
+      }
+      $Place = implode(', ', array_filter([$Found['city'] ?? '', $Found['state_prov'] ?? '', $Found['country_name'] ?? ''], fn($Part) => is_string($Part) && $Part !== ''));
+      $Network = is_string($Found['isp'] ?? null) && $Found['isp'] !== '' ? " ({$Found['isp']})" : '';
+      return $IP . ($Place === '' ? '' : ", $Place") . $Network;
     }
 
     /**

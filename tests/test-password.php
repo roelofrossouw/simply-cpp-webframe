@@ -88,6 +88,13 @@
   Same('bob@example.com', Password::Address(' Bob@Example.COM '), 'addresses are kept trimmed, lower case');
   Same(null, Password::Address('bob'), 'not one that isn\'t');
 
+  // Where a try came from: the address alone without an ipgeolocation.io key, or for a private address
+  Same('198.51.100.7', Password::Whereabouts('198.51.100.7'), 'no key: the address alone');
+  Config::Set('ipgeolocation.api_key', 'not used for private addresses');
+  Same('192.168.1.2', Password::Whereabouts('192.168.1.2'), 'a private address isn\'t looked up');
+  Config::Set('ipgeolocation.api_key', null);
+  Same('an unknown address', Password::Whereabouts(''), 'none at all');
+
   // What a new password must be
   Same('A password needs at least 8 characters.', Password::Weakness('short'), 'too short');
   Same('The password can\'t be the email address.', Password::Weakness('Bob@example.com', 'bob@example.com'), 'not the email address');
