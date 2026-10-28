@@ -11,7 +11,8 @@
      *   $Email->Send('Name <name@example.com>', 'Subject');
      *
      * Mail clients ignore stylesheets, so before sending the HTML goes through bootstrap-email, which turns the
-     * Bootstrap classes into tables and inline styles (gem install bootstrap-email). The message has a plain text
+     * Bootstrap classes into tables and inline styles: sc-phplib's SC\BootstrapEmail when the sc extension has it, else
+     * the bootstrap-email program (simply-cpp-bootstrap-email's, or the gem's). The message has a plain text
      * version too, and is handed to the server's sendmail.
      *
      * Settings in the settings' mail section (see Config):
@@ -107,6 +108,18 @@
          */
         private function Format(): ?string
         {
+            // sc-phplib's port (SC\BootstrapEmail, sc-phplib 1.14.0 or later) does it in-process, with the same output
+            if (class_exists('SC\BootstrapEmail'))
+            {
+                try
+                {
+                    return \SC\BootstrapEmail::format((string)$this);
+                }
+                catch (\Throwable $Error)
+                {
+                    trigger_error('SC\BootstrapEmail failed, trying the bootstrap-email program: ' . $Error->getMessage(), E_USER_NOTICE);
+                }
+            }
             // PHP-FPM clears the environment, so bootstrap-email is looked for in the usual places too (gem installs it in
             // /usr/local/bin), and gets a PATH that finds the ruby it runs with. Quiet when it isn't installed: the email
             // goes out unformatted.

@@ -46,6 +46,16 @@
   Config::Set('auth.github', $Providers);
   Config::Set('auth.password.enabled', true);
 
+  // Emails are formatted by sc-phplib's SC\BootstrapEmail when it's loaded (a stand-in here, when it isn't)
+  if (!class_exists('SC\BootstrapEmail'))
+  {
+    eval('namespace SC; final class BootstrapEmail { public static function format(string $Html): string { return "formatted:" . strlen($Html); } }');
+  }
+  $Email = new BS\Email();
+  $Email->AddChild('Hello');
+  $Formatted = (new ReflectionMethod(BS\Email::class, 'Format'))->invoke($Email);
+  Check(is_string($Formatted) && $Formatted !== '' && $Formatted !== (string)$Email, 'emails go through SC\BootstrapEmail when it\'s there');
+
   // Alerts: the icon in a column of its own beside the text (not floated, so the text doesn't wrap under it)
   $Alert = (string)new BS\AlertSuccess('Saved', 'All done.');
   Check(str_contains($Alert, 'bi-check-circle') && str_contains($Alert, 'alert-success') && str_contains($Alert, 'd-flex') && !str_contains($Alert, 'float-'),
