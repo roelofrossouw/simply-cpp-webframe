@@ -24,10 +24,12 @@
   else
   {
     $Card->AddParagraph('This page is built with sc-webframe\'s HTML and Bootstrap classes. Sign in to see who you are.');
+    // The sign-in buttons, centred, wrapping on narrow screens
+    $Card->AddChild($Buttons = new HTML\Div());
+    $Buttons->AddClasses(['d-flex', 'flex-wrap', 'justify-content-center', 'gap-2']);
     foreach (Base::Providers() as $Name => $Class)
     {
-      $Card->AddChild($Button = new Button('Sign in with ' . $Class::TITLE, $Class::ICON));
+      $Buttons->AddChild($Button = new Button('Sign in with ' . $Class::TITLE, $Class::ICON));
       $Button->Link(Config::FrameworkURL('login.php') . '?provider=' . $Name);
-      $Button->Format->Margin(Side::End, PadSize::Pad2);
     }
   }

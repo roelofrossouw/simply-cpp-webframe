@@ -18,4 +18,6 @@
   Check(str_contains($Html, 'Hello world!'), 'Home says Hello world!');
   Check(str_contains($Html, 'Sign in with GitHub'), 'with the providers that are set up');
   Check(!str_contains($Html, 'Something Went Wrong') && !str_contains($Html, 'alert-danger'), 'and no error');
-  Check(str_contains($Html, 'me-2'), 'Side::End gives the end margin');
+  Check(str_contains($Html, 'justify-content-center'), 'the buttons are centred');
+  Same('bi-box', BS\Icon::Box->value, 'an icon');
+  Same(BS\Side::Right, BS\Side::End, 'Side::End is Right');
