@@ -114,7 +114,8 @@ function menuclick(caller) {
   loadPage.call(caller[0], caller.data("url"));
 }
 
-function loadPage(url) {
+// Loads a page into the target of the element it's called on (a link, button or form), or into `into` when given
+function loadPage(url, into) {
 
   if (typeof url == 'undefined')
   {
@@ -128,7 +129,7 @@ function loadPage(url) {
   }
 
   let caller = $(this);
-  let target = getTarget(caller);
+  let target = into ? $(into) : getTarget(caller);
   // Remember what the target shows: for a popup's refresh button, and for the tab its page last showed
   target.data('url', url);
 
@@ -331,8 +332,15 @@ function ajaxSuccess(content) {
   $(this).html(content)
   initComponents(this);
   restoreTabs(this);
-  // How a save went shows in the toast corner; a popup or side panel that held nothing else closes
-  if (showNotices(this))
+  // How a save went shows in the toast corner. A notice can name the page to show next (Toast::Then()), loaded in
+  // the same place, on the tab it was on; else a popup or side panel that held nothing else closes.
+  const notices = showNotices(this);
+  if (notices.then)
+  {
+    loadPage.call(this, notices.then, this);
+    return;
+  }
+  if (notices.empty)
   {
     getPanel($(this)) ? getPanel($(this)).hide() : null;
     return;
@@ -341,20 +349,24 @@ function ajaxSuccess(content) {
   showPanel.call($(this));
 }
 
-// Notices (BS\Toast::Notice()) in loaded content move to the toast corner, and go after their delay. Returns whether
-// they left a popup or side panel with nothing else in its body.
+// Notices (BS\Toast::Notice()) in loaded content move to the toast corner, and go after their delay. Returns the page
+// a notice names to show next (then), and whether they left a popup or side panel with nothing else in its body (empty).
 function showNotices(target) {
   const notices = $(target).find('.toast.notice');
   if (!notices.length)
   {
-    return false;
+    return {then: null, empty: false};
   }
+  const then = notices.filter('[data-then]').first().attr('data-then') || null;
   notices.each(function () {
     toastSuccess($(this).detach());
   });
   const body = $(target).find('.modal-body, .offcanvas-body');
-  return $(target).is('.modal, .offcanvas') && body.length > 0
-    && body.text().trim() === '' && body.find('input, select, textarea, button, img, table').length === 0;
+  return {
+    then: then,
+    empty: $(target).is('.modal, .offcanvas') && body.length > 0
+      && body.text().trim() === '' && body.find('input, select, textarea, button, img, table').length === 0,
+  };
 }
 
 // A page's tabs are remembered per target (the popup, the side panel or the main page) by the page they're on, its path

@@ -98,6 +98,8 @@
   Check(str_contains((string)$Failed, 'data-bs-delay="15000"') && str_contains((string)$Failed, 'text-bg-warning') && !$Failed->IsGood(),
     'and that it didn\'t: yellow, 15 seconds');
   Check(str_contains(file_get_contents(Config::FrameworkFolder() . '/js/app.js'), "find('.toast.notice')"), 'js/app.js moves notices to the toast corner');
+  Check(str_contains((string)BS\Toast::Notice('Added')->Then('/app/container.php?id=1'), 'data-then="/app/container.php?id=1"'), 'a notice can name the page to show next');
+  Check(str_contains(file_get_contents(Config::FrameworkFolder() . '/js/app.js'), 'loadPage.call(this, notices.then, this)'), 'which js/app.js loads where the notice came');
 
   // Alerts: the icon in a column of its own beside the text (not floated, so the text doesn't wrap under it)
   $Alert = (string)new BS\AlertSuccess('Saved', 'All done.');

@@ -47,7 +47,17 @@
             return $Toast;
         }
 
-        // Whether a Notice() says it worked
+        /**
+         * The page to show next, after the notice: loaded where the notice came (e.g. back in the popup the change was
+         * confirmed in, on the tab it was on), instead of closing a popup it leaves empty
+         */
+        public function Then(string $URL): static
+        {
+            $this->AddAttribute('data-then', $URL);
+            return $this;
+        }
+
+                // Whether a Notice() says it worked
         private bool $Good = true;
 
         public function IsGood(): bool
