@@ -27,7 +27,7 @@
 
         /**
          * How a save, change or removal went, shown in the page's toast corner (js/app.js moves it there, from whatever
-         * page or popup it came with) and gone after a while: 5 seconds when it went well, 10 when it didn't. A popup
+         * page or popup it came with) and gone after a while: 8 seconds when it went well, 15 when it didn't (paused while the pointer is on it). A popup
          * that held nothing else closes.
          *
          * @param bool $Good Whether it worked: green with a check; else yellow with an exclamation mark
@@ -42,7 +42,7 @@
             }
             $Toast->Color($Good ? Color::Success : Color::Warning);
             $Toast->AddClass('notice');
-            $Toast->AddAttribute('data-bs-delay', $Good ? '5000' : '10000');
+            $Toast->AddAttribute('data-bs-delay', $Good ? '8000' : '15000');
             $Toast->Good = $Good;
             return $Toast;
         }

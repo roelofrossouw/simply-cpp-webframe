@@ -138,10 +138,11 @@ function loadPage(url) {
     || caller.closest('.modal-footer').siblings('.modal-body').find('form')[0]);
   if (form)
   {
-    // Show validation
-    $(form).addClass('was-validated');
+    // Show validation only when something needs fixing: on a good form the green checks would just flash by
+    $(form).removeClass('was-validated');
     if (!form.checkValidity())
     {
+      $(form).addClass('was-validated');
       if ($(form).closest('.modal, .offcanvas').length)
       {
         // In a popup or side panel: the browser points at the first field to fix. The invalid inputs popup
