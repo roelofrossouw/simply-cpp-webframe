@@ -1,7 +1,7 @@
 <?php
   require_once 'sc-webframe/autoload.php'; // On the include_path, see the README
 
-  use BS\{AlertSuccess, AlertWarning, Button, Color, Icon, PadSize, ScreenSize, Side, SwitchInput};
+  use BS\{Button, Color, Icon, PadSize, ScreenSize, Side, SwitchInput, Toast};
 
   Config::Init();
 
@@ -15,20 +15,20 @@
   $CanEdit = \Auth\Base::CanEdit();
   if ($Action !== null && !$CanEdit)
   {
-    $Notice = new AlertWarning('Not saved', 'You may look at the menu, but not change it.');
+    $Notice = Toast::Notice('Not saved', 'You may look at the menu, but not change it.', false);
   }
   elseif ($Action == 'add')
   {
     $Parent = filter_var(Post::Get('parent_id'), FILTER_VALIDATE_INT);
     $Problem = MenuLayout::Add((string)Post::Get('name'), $Parent === false ? null : $Parent, (string)Post::Get('code'),
       (string)Post::Get('target'), (string)Post::Get('icon'), (string)QueryString::Get('section'));
-    $Notice = $Problem === null ? new AlertSuccess('Item added', 'It has its parent\'s view and edit rights; the menu shows it when you next load the page.')
-      : new AlertWarning('Not added', $Problem);
+    $Notice = $Problem === null ? Toast::Notice('Item added', 'It has its parent\'s view and edit rights; the menu shows it when you next load the page.')
+      : Toast::Notice('Not added', $Problem, false);
   }
   elseif ($Action == 'delete')
   {
     $Problem = MenuLayout::Delete((int)QueryString::Get('id'));
-    $Notice = $Problem === null ? new AlertSuccess('Item removed', '') : new AlertWarning('Not removed', $Problem);
+    $Notice = $Problem === null ? Toast::Notice('Item removed') : Toast::Notice('Not removed', $Problem, false);
   }
 
   $Items = MenuLayout::All();

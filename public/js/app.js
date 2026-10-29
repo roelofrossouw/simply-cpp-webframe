@@ -330,8 +330,30 @@ function ajaxSuccess(content) {
   $(this).html(content)
   initComponents(this);
   restoreTabs(this);
+  // How a save went shows in the toast corner; a popup or side panel that held nothing else closes
+  if (showNotices(this))
+  {
+    getPanel($(this)) ? getPanel($(this)).hide() : null;
+    return;
+  }
   // Reveal panel if needed
   showPanel.call($(this));
+}
+
+// Notices (BS\Toast::Notice()) in loaded content move to the toast corner, and go after their delay. Returns whether
+// they left a popup or side panel with nothing else in its body.
+function showNotices(target) {
+  const notices = $(target).find('.toast.notice');
+  if (!notices.length)
+  {
+    return false;
+  }
+  notices.each(function () {
+    toastSuccess($(this).detach());
+  });
+  const body = $(target).find('.modal-body, .offcanvas-body');
+  return $(target).is('.modal, .offcanvas') && body.length > 0
+    && body.text().trim() === '' && body.find('input, select, textarea, button, img, table').length === 0;
 }
 
 // A page's tabs are remembered per target (the popup, the side panel or the main page) by the page they're on, its path
@@ -607,6 +629,8 @@ function loadServiceWorker() {
 
 function init() {
   loadServiceWorker();
+  // Notices that came with the whole page
+  showNotices(document.body);
   enableThemes();
   // Mark all requests coming from the app (Server::IsAJAX()).
   // Can then check if it is loaded from Ajax or directly in browser address (from an external link), in which case the framework needs to be set up

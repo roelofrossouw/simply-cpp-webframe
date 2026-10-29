@@ -2,7 +2,7 @@
   require_once 'sc-webframe/autoload.php'; // On the include_path, see the README
 
   use Auth\Base;
-  use BS\{AlertSuccess, AlertWarning, Avatar, Button, Color, Grid, Icon, Input, ModalDialog, ScreenSize, Side, PadSize};
+  use BS\{Avatar, Button, Color, Grid, Icon, Input, ModalDialog, ScreenSize, Side, PadSize, Toast};
 
   // Your profile (the status bar's profile item): what the site calls you, your photo, a test email; any signed in user
   Config::Init(Access: Config::ANY_USER);
@@ -20,13 +20,13 @@
       {
         $Saved = User::SetName($UserID, (string)Post::Get('first_name'), (string)Post::Get('last_name'));
       }
-      $Notice = $Saved ? new AlertSuccess('Saved', 'Your profile is up to date.') : new AlertWarning('Not saved', 'Something in the form wasn\'t right, please check it and try again.');
+      $Notice = $Saved ? Toast::Notice('Saved', 'Your profile is up to date.') : Toast::Notice('Not saved', 'Something in the form wasn\'t right, please check it and try again.', false);
       break;
     case 'photo':
       $File = $_FILES['photo'] ?? null;
       $Saved = $File !== null && $File['error'] === UPLOAD_ERR_OK && is_uploaded_file($File['tmp_name'])
         && User::SetPhoto($UserID, file_get_contents($File['tmp_name']));
-      $Notice = $Saved ? new AlertSuccess('Looking good', 'Your new photo is saved.') : new AlertWarning('Photo not saved', 'That file didn\'t work as a photo. Try a JPEG or PNG image.');
+      $Notice = $Saved ? Toast::Notice('Looking good', 'Your new photo is saved.') : Toast::Notice('Photo not saved', 'That file didn\'t work as a photo. Try a JPEG or PNG image.', false);
       break;
     case 'testemail':
       $Notice = SendTestEmail(User::Profile($UserID));
@@ -35,23 +35,23 @@
     case 'passwordlink':
       $Account = Storage\Store::Get()->Password($UserID);
       $Notice = $Account !== null && \Auth\Password::SendPasswordLink($UserID)
-        ? new AlertSuccess('Check your email', "We sent {$Account['email']} a link to choose a new password. Your password works until you do.", \BS\Icon::Envelope)
-        : new AlertWarning('Not sent', 'Something went wrong while sending the email. Please try again later.');
+        ? Toast::Notice('Check your email', "We sent {$Account['email']} a link to choose a new password. Your password works until you do.", true, \BS\Icon::Envelope)
+        : Toast::Notice('Not sent', 'Something went wrong while sending the email. Please try again later.', false);
       break;
     case 'removephoto':
       User::RemovePhoto($UserID);
-      $Notice = new AlertSuccess('Photo removed', 'We\'ll show your initials instead.');
+      $Notice = Toast::Notice('Photo removed', 'We\'ll show your initials instead.');
       break;
   }
 
   /**
    * Email the user a short test message, to check that email reaches them
    */
-  function SendTestEmail(array $Profile): \BS\Alert
+  function SendTestEmail(array $Profile): Toast
   {
     if (!filter_var($Profile['email'] ?? '', FILTER_VALIDATE_EMAIL))
     {
-      return new AlertWarning('No email address', 'Your sign-in account didn\'t give us an email address we can send to.');
+      return Toast::Notice('No email address', 'Your sign-in account didn\'t give us an email address we can send to.', false);
     }
     $Name = User::DisplayName($Profile);
     $AppName = Config::AppName();
@@ -65,11 +65,11 @@
     $Card->AddChild(Config::MailFooter());
     if (!$Email->Send("$Name <{$Profile['email']}>", "Test email from $AppName"))
     {
-      return new AlertWarning('Email not sent', 'Something went wrong while sending the email. Please try again later.');
+      return Toast::Notice('Email not sent', 'Something went wrong while sending the email. Please try again later.', false);
     }
     $Redirect = Config::Get('mail.redirect');
-    return new AlertSuccess('Email sent', 'We sent a test email to ' . ($Redirect ? "$Redirect (this server sends all email there)" : $Profile['email'])
-      . '. It should arrive within a minute or two, check your junk folder if it doesn\'t.', \BS\Icon::Envelope);
+    return Toast::Notice('Email sent', 'We sent a test email to ' . ($Redirect ? "$Redirect (this server sends all email there)" : $Profile['email'])
+      . '. It should arrive within a minute or two, check your junk folder if it doesn\'t.', true, \BS\Icon::Envelope);
   }
 
   $Profile = User::Profile($UserID);
@@ -80,7 +80,6 @@
   if ($Notice !== null)
   {
     $Dialog->AddChild($Notice);
-    $Notice->Format->Padding(Side::All, PadSize::Pad3);
     // Keep the status bar in step with the new name
     $Dialog->AddChild(new HTML\Script('$("#profile span").last().text(' . json_encode($Name) . ');'));
   }

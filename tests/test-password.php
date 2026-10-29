@@ -256,6 +256,7 @@
   NoErrors($Profile, 'the profile');
   $PasswordLink = Render('profile.php', Cookies: $Own, Query: ['action' => 'passwordlink']);
   Check(str_contains($PasswordLink, 'Check your email') && MailLink('resetpassword.php') !== '', 'emails a password link');
+  Check(preg_match('/class="toast[^"]*notice/', $PasswordLink) === 1 && !str_contains($PasswordLink, 'alert-success'), 'saying so in a toast');
   $Move = Render('profile.php', ['new_email' => 'robert@example.com', 'email' => 'robert@example.com'], $Own, ['action' => 'save']);
   Check(Emailed() === '' && $Storage->Password(100)['email'] === 'bob@example.com', 'posting another address changes nothing');
   Check(!is_file(Config::FrameworkFolder() . '/confirmemail.php'), 'there\'s no page that changes it');

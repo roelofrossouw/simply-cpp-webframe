@@ -90,6 +90,15 @@
   $Words->AddChild('words');
   Same("<p>Two words</p>\n", (string)$Words, 'text children still get a space between them');
 
+  // How a save went: a toast for the toast corner, gone after 5 seconds (10 when it didn't work)
+  $Saved = (string)BS\Toast::Notice('Saved', 'All done.');
+  Check(str_contains($Saved, 'toast') && str_contains($Saved, 'notice') && str_contains($Saved, 'data-bs-delay="5000"') && str_contains($Saved, 'text-bg-success'),
+    'a notice that it worked: green, 5 seconds');
+  $Failed = BS\Toast::Notice('Not saved', 'The disk is full.', false);
+  Check(str_contains((string)$Failed, 'data-bs-delay="10000"') && str_contains((string)$Failed, 'text-bg-warning') && !$Failed->IsGood(),
+    'and that it didn\'t: yellow, 10 seconds');
+  Check(str_contains(file_get_contents(Config::FrameworkFolder() . '/js/app.js'), "find('.toast.notice')"), 'js/app.js moves notices to the toast corner');
+
   // Alerts: the icon in a column of its own beside the text (not floated, so the text doesn't wrap under it)
   $Alert = (string)new BS\AlertSuccess('Saved', 'All done.');
   Check(str_contains($Alert, 'bi-check-circle') && str_contains($Alert, 'alert-success') && str_contains($Alert, 'd-flex') && !str_contains($Alert, 'float-'),

@@ -1,7 +1,7 @@
 <?php
   require_once 'sc-webframe/autoload.php'; // On the include_path, see the README
 
-  use BS\{AlertSuccess, AlertWarning, Button, Color, Icon, PadSize, ScreenSize, Side};
+  use BS\{Button, Color, Icon, PadSize, ScreenSize, Side, Toast};
 
   // Administer → Config: the settings file (Config::File()), by section. Saving writes it back when the web server may.
   Config::Init();
@@ -159,11 +159,11 @@
   {
     if (!$CanEdit)
     {
-      $Notice = new AlertWarning('Not saved', 'You may look at the settings, but not change them.');
+      $Notice = Toast::Notice('Not saved', 'You may look at the settings, but not change them.', false);
     }
     elseif (!$Writable)
     {
-      $Notice = new AlertWarning('Not saved', "The web server can't write $File.");
+      $Notice = Toast::Notice('Not saved', "The web server can't write $File.", false);
     }
     else
     {
@@ -180,7 +180,7 @@
         SetSetting($Data, $Path, $Value === '' ? null : (in_array($Value, ['true', 'false'], true) ? $Value === 'true' : $Value));
       }
       $Saved = file_put_contents($File, json_encode($Data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n", LOCK_EX);
-      $Notice = $Saved ? new AlertSuccess('Saved', 'The settings apply from the next page that loads.') : new AlertWarning('Not saved', "Writing $File failed.");
+      $Notice = $Saved ? Toast::Notice('Saved', 'The settings apply from the next page that loads.') : Toast::Notice('Not saved', "Writing $File failed.", false);
     }
   }
 
@@ -255,8 +255,10 @@
     }
   }
 
+  // Save stays in sight at the foot of the page while the settings scroll under it
   if ($Writable && $CanEdit)
   {
-    $Result->AddChild($Save = new Button('Save', Icon::Check2, "$Here?action=save"));
-    $Save->Format->Margin(Side::Top, PadSize::Pad3);
+    $Result->AddChild($Bar = new HTML\Div());
+    $Bar->AddClasses(['sticky-bottom', 'bg-body', 'border-top', 'py-2', 'mt-3']);
+    $Bar->AddChild(new Button('Save', Icon::Check2, "$Here?action=save"));
   }

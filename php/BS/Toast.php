@@ -25,12 +25,42 @@
             }
         }
 
-        public function Heading(string $Content): void
+        /**
+         * How a save, change or removal went, shown in the page's toast corner (js/app.js moves it there, from whatever
+         * page or popup it came with) and gone after a while: 5 seconds when it went well, 10 when it didn't. A popup
+         * that held nothing else closes.
+         *
+         * @param bool $Good Whether it worked: green with a check; else yellow with an exclamation mark
+         */
+        public static function Notice(string $Heading, string $Text = '', bool $Good = true, ?Icon $Icon = null): static
+        {
+            $Toast = new static();
+            $Toast->Heading($Heading, $Icon ?? ($Good ? Icon::CheckCircleFill : Icon::ExclamationTriangleFill));
+            if ($Text !== '')
+            {
+                $Toast->AddChild($Text);
+            }
+            $Toast->Color($Good ? Color::Success : Color::Warning);
+            $Toast->AddClass('notice');
+            $Toast->AddAttribute('data-bs-delay', $Good ? '5000' : '10000');
+            $Toast->Good = $Good;
+            return $Toast;
+        }
+
+        // Whether a Notice() says it worked
+        private bool $Good = true;
+
+        public function IsGood(): bool
+        {
+            return $this->Good;
+        }
+
+        public function Heading(string $Content, Icon $Symbol = Icon::ExclamationSquareFill): void
         {
             if (empty($this->Heading))
             {
                 parent::AddChild($Header = new \HTML\ClassDiv('toast-header'));
-                $Header->AddChild($Icon = Icon::ExclamationSquareFill->Element());
+                $Header->AddChild($Icon = $Symbol->Element());
                 $Icon->Format->Margin(Side::Right, PadSize::Pad2);
                 $Header->AddChild($this->Heading = new \HTML\Strong($Content));
                 $this->Heading->Format->Margin(Side::Right, PadSize::Automatic);

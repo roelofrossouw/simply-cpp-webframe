@@ -44,6 +44,7 @@
   Check(!preg_match('/Warning|Deprecated|Fatal|Something Went Wrong/', $Menu), 'Menu without errors' . (preg_match('/(Warning|Deprecated|Fatal)[^\n]*/', $Menu, $M) ? ': ' . $M[0] : ''));
 
   $Config = Render('admin/config.php');
+  Check(preg_match('/class="sticky-bottom[^"]*"[^>]*>.*?Save/s', $Config) === 1, 'Config\'s Save stays in sight at the foot');
   Check(str_contains($Config, 'app.name') && str_contains($Config, 'Test site') && str_contains($Config, 'auth.github.client_id'), 'Config shows the settings');
   Check(!str_contains($Config, 'test secret, not for use anywhere') && !str_contains($Config, 'test-secret') && !str_contains($Config, 'secret\\'),
     'but never a secret');

@@ -2,7 +2,7 @@
   require_once 'sc-webframe/autoload.php'; // On the include_path, see the README
 
   use Auth\Password;
-  use BS\{AlertSuccess, AlertWarning, Button, Grid, Icon, Input, ModalDialog, ScreenSize};
+  use BS\{AlertWarning, Button, Grid, Icon, Input, ModalDialog, ScreenSize, Toast};
 
   // Administer → Users: add an account that signs in with its email address and a password (no userid), which emails
   // it an invitation to choose the password; or email a password account a link to choose a new one (userid). Admins
@@ -33,8 +33,8 @@
     if (QueryString::Get('action') == 'send')
     {
       $Dialog->AddChild(Password::SendPasswordLink($UserID, $Invite)
-        ? new AlertSuccess('Sent', "We emailed {$Account['email']} a link to choose " . ($Invite ? 'their password.' : 'a new password.'), \BS\Icon::Envelope)
-        : new AlertWarning('Not sent', 'Something went wrong while sending the email. Please try again later.'));
+        ? Toast::Notice('Sent', "We emailed {$Account['email']} a link to choose " . ($Invite ? 'their password.' : 'a new password.'), true, \BS\Icon::Envelope)
+        : Toast::Notice('Not sent', 'Something went wrong while sending the email. Please try again later.', false));
       return;
     }
     $Dialog->AddChild(new HTML\Paragraph($Invite
@@ -54,16 +54,16 @@
     if (is_int($Added))
     {
       $Notice = Password::SendPasswordLink($Added, true)
-        ? new AlertSuccess('User added', "We emailed $Email an invitation to choose their password; their account works once they have. "
-          . 'They have Public access; grant them more in the list.', \BS\Icon::Envelope)
-        : new AlertWarning('Invitation not sent', "The account for $Email is made, but the email didn't go out. Send it again with the key button in the list.");
+        ? Toast::Notice('User added', "We emailed $Email an invitation to choose their password; their account works once they have. "
+          . 'They have Public access; grant them more in the list.', true, \BS\Icon::Envelope)
+        : Toast::Notice('Invitation not sent', "The account for $Email is made, but the email didn't go out. Send it again with the key button in the list.", false);
       // Show them in the list behind the popup
       $Dialog->AddChild(new HTML\Script('$(".menu-target").each(function () { const url = $(this).data("url"); '
         . 'if (url && url.includes("admin/users.php")) loadPage.call(this, url); });'));
     }
     else
     {
-      $Notice = new AlertWarning('Not added', $Added);
+      $Notice = Toast::Notice('Not added', $Added, false);
     }
   }
 
@@ -76,7 +76,7 @@
   $Form->AddChild($Fields = new Grid(1));
   $Fields->Columns(2, ScreenSize::Small);
   // What was typed stays when something wasn't right
-  $Keep = !($Notice instanceof AlertSuccess);
+  $Keep = !($Notice instanceof Toast && $Notice->IsGood());
   $Fields->Col($EmailInput = new Input('email', 'Email', HTML\InputType::Email));
   $EmailInput->InputElement()->Required = true;
   $EmailInput->InputElement()->AutoComplete = 'off';
