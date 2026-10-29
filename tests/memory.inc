@@ -123,3 +123,17 @@
     public function DeleteMenuItem(int $ID, ?string $Editor): ?string { return null; }
   }
 
+  // A site's own settings on Administer → Config (admin.settings)
+  class TestSiteSettings implements Admin\SiteSettings
+  {
+    public static function Groups(): array
+    {
+      return ['Agent' => ['agent.url' => ['Where the agent answers', false], 'agent.token' => ['Its token', true]],
+        'Application' => ['app.helpdesk' => ['The helpdesk address', false]]];
+    }
+
+    public static function AfterGroup(string $Group): ?\HTML\Element
+    {
+      return $Group == 'Agent' ? new \HTML\Paragraph('Registered agents: none') : null;
+    }
+  }

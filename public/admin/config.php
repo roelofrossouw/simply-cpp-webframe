@@ -74,6 +74,7 @@
       'ipgeolocation.api_key' => ['An ipgeolocation.io API key: wrong-password emails then say where the try came from', true],
     ],
     'Other' => [
+      'admin.settings' => ['A class of the site\'s that adds its own settings to this page (an Admin\SiteSettings)', false],
       'storage.class' => ['Where users, access and the menu are kept (default Storage\Postgres)', false],
       'menu.editor' => ['The page that manages the menu (default: Administer → Menu)', false],
     ],
@@ -140,7 +141,16 @@
   // The menu's Edit right on this page (Administer → Menu), viewers only see the settings
   $CanEdit = \Auth\Base::CanEdit();
   $Data = json_decode((string)file_get_contents($File), true) ?? [];
-  $Listed = array_merge(...array_values(SETTINGS));
+  // The site's own settings (admin.settings, an Admin\SiteSettings), after the package's; a group of the same name gets
+  // them added
+  $Site = (string)Config::Get('admin.settings', '');
+  $Site = $Site !== '' && class_exists($Site) && is_subclass_of($Site, Admin\SiteSettings::class) ? $Site : null;
+  $Settings = SETTINGS;
+  foreach ($Site === null ? [] : $Site::Groups() as $Group => $Paths)
+  {
+    $Settings[$Group] = ($Settings[$Group] ?? []) + $Paths;
+  }
+  $Listed = array_merge(...array_values($Settings));
   // Settings the file has that aren't listed above, shown as they are
   $Unlisted = array_values(array_filter(Paths($Data), fn($Path) => !array_key_exists($Path, $Listed)));
 
@@ -195,15 +205,15 @@
   $About->Format->Color(Color::BodySecondary);
   $About->AddClass('small');
 
-  $Groups = SETTINGS + (empty($Unlisted) ? [] : ['Not listed here' => array_fill_keys($Unlisted, ['', false])]);
-  foreach ($Groups as $Group => $Settings)
+  $Groups = $Settings + (empty($Unlisted) ? [] : ['Not listed here' => array_fill_keys($Unlisted, ['', false])]);
+  foreach ($Groups as $Group => $GroupSettings)
   {
     $Result->AddChild($Heading = new HTML\Header(5, $Group));
     $Heading->Format->Margin(Side::Top, PadSize::Pad4);
     $Result->AddChild($Wrapper = new \BS\ResponsiveTable(ScreenSize::Medium));
     $Table = $Wrapper->Table();
     $Table->Small();
-    foreach ($Settings as $Path => [$Purpose, $Secret])
+    foreach ($GroupSettings as $Path => [$Purpose, $Secret])
     {
       $Value = Setting($Data, $Path);
       $Row = $Table->Body()->AddRow();
@@ -237,6 +247,11 @@
       $Help->AddChild($Purpose);
       $Help->AddClass('small');
       $Help->Format->Color(Color::BodySecondary);
+    }
+    // The site's own content under its group, e.g. what the settings set up
+    if ($Site !== null && ($After = $Site::AfterGroup($Group)) !== null)
+    {
+      $Result->AddChild($After);
     }
   }
 

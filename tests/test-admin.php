@@ -15,6 +15,11 @@
     $_SERVER['SCRIPT_NAME'] = $_SERVER['PHP_SELF'] = Config::FrameworkURL($Page);
     parse_str($argv[2] ?? '', $_POST);
     Config::Load();
+    if (!empty($_POST['site_settings']))
+    {
+      Config::Set('admin.settings', 'TestSiteSettings');
+      $_POST = [];
+    }
     Storage\Store::Use($Storage = new MemoryStorage());
     $Storage->Grants[7] = ['public', 'admin'];
     $_COOKIE['auth_token'] = (string)new Auth\JWT(['userid' => '7', 'access' => ['public', 'admin'], 'provider' => 'github'], 600);
@@ -43,6 +48,15 @@
   Check(!str_contains($Config, 'test secret, not for use anywhere') && !str_contains($Config, 'test-secret') && !str_contains($Config, 'secret\\'),
     'but never a secret');
   Check(!preg_match('/Warning|Deprecated|Fatal|Something Went Wrong/', $Config), 'Config without errors' . (preg_match('/(Warning|Deprecated|Fatal)[^\n]*/', $Config, $M) ? ': ' . $M[0] : ''));
+
+  // A site's own settings (admin.settings): its groups after the package's, editable, secrets hidden, its content after
+  $Site = Render('admin/config.php', ['site_settings' => '1']);
+  Check(str_contains($Site, '>Agent<') && str_contains($Site, 'setting[agent:url]'), 'a site\'s own group, editable');
+  Check(preg_match('/name="setting\[agent:token\]" type="password"/', $Site) === 1, 'its secret as a secret');
+  Check(str_contains($Site, 'setting[app:helpdesk]') && strpos($Site, 'app.helpdesk') > strpos($Site, 'app.name'), 'a path added to the package\'s group');
+  Check(str_contains($Site, 'Registered agents: none'), 'and its content under its group');
+  Check(($At = strpos($Site, 'Not listed here')) === false || !str_contains(substr($Site, $At), 'agent.url'), 'not under Not listed here');
+  Check(!preg_match('/Warning|Deprecated|Fatal|Something Went Wrong/', $Site), 'Config with a site\'s settings without errors' . (preg_match('/(Warning|Deprecated|Fatal)[^\n]*/', $Site, $M) ? ': ' . $M[0] : ''));
 
   $Profile = Render('profile.php');
   Check(str_contains($Profile, 'Your profile') && str_contains($Profile, 'Ann'), 'the profile');

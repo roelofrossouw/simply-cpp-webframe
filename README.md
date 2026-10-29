@@ -83,6 +83,7 @@ It needs PHP 8.3 or later, with the pgsql, curl, gd and mbstring extensions (the
    | `mail` | `from`, `redirect` (send every email there instead), `disabled` |
    | `ipgeolocation` | `api_key`: an [ipgeolocation.io](https://ipgeolocation.io) key; wrong-password emails then say where the try came from (city, region, country, ISP), not only its IP address |
    | `storage` | `class`: a `Storage\Backend` of your own instead of `Storage\Postgres` |
+   | `admin` | `settings`: a class of the site's (an `Admin\SiteSettings`) that adds its own settings to Administer → Config, see below |
    | `menu` | `editor`: the page that manages the menu, which admins must always keep (default: the package's `admin/menu.php`, when the menu has it; `""` for none) |
 
    A provider is offered once its section is there (passwords once `auth.password.enabled` is `true`). Each provider's
@@ -186,7 +187,10 @@ The schema adds **Administer** to the main menu, for admins: **Users** (everyone
 level; admins can't take away their own admin or block themselves; with passwords on, Add a user and the password links), **Menu** (every item, a tab per section, with
 its fields, Public and Shown, and View and Edit per access level; a change that would take Menu from admins is undone)
 and **Config** (the settings file by section; it saves when the web server may write the file, and never shows a secret:
-a secret's field stays empty, and saving it empty keeps it).
+a secret's field stays empty, and saving it empty keeps it). A site adds its own settings to Config with a class that implements
+`Admin\SiteSettings`, named in `admin.settings`: `Groups()` gives them in the same shape as the package's
+(`[group => [path => [what it is, secret]]]`), after the package's groups or added to one of the same name, and
+`AfterGroup()` can show something under a group, such as a table of what those settings set up.
 **Your profile** is in the status bar for anyone signed in: what the site calls them, their photo, a test email, and for
 password accounts a link to change the password (the address itself never changes).
 Change their access in the menu like any other page's. A site's own admin pages can do the same with
