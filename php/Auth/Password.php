@@ -571,11 +571,14 @@
       $Retry = self::Submit($Form, 'Try again in ' . self::RETRY_SECONDS . '…', \BS\Icon::ArrowClockwise);
       $Retry->Disabled = true;
       $Retry->Id = uniqid('retry_');
-      $Card->AddChild(new \HTML\Script('(function (button, left) {'
-        . ' const tick = setInterval(function () { left--; const label = button.find(".label");'
-        . ' if (left > 0) { label.text("Try again in " + left + "…"); return; }'
-        . ' clearInterval(tick); label.text("Try again"); button.prop("disabled", false).focus(); }, 1000);'
-        . ' })($("#' . $Retry->Id . '"), ' . self::RETRY_SECONDS . ');'));
+      // Plain script, run once the page has the button: a page of its own loads jQuery last, after this script
+      $Card->AddChild(new \HTML\Script('(function (id, left) {'
+        . ' const start = function () { const button = document.getElementById(id); if (!button) return;'
+        . ' const label = button.querySelector(".label"); const tick = setInterval(function () { left--;'
+        . ' if (left > 0) { label.textContent = "Try again in " + left + "…"; return; }'
+        . ' clearInterval(tick); label.textContent = "Try again"; button.disabled = false; button.focus(); }, 1000); };'
+        . ' document.readyState === "loading" ? document.addEventListener("DOMContentLoaded", start) : start();'
+        . ' })(' . json_encode($Retry->Id) . ', ' . self::RETRY_SECONDS . ');'));
       self::AddHome($Card, $Retry);
     }
 

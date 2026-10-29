@@ -190,6 +190,7 @@
   Check(str_contains($Wrong, 'isn&#039;t right') || str_contains($Wrong, 'isn\'t right'), 'a wrong one says so');
   Check(!str_contains($Wrong, 'window.location') && !str_contains($Wrong, 'name="password"'), 'and doesn\'t sign in');
   Check(preg_match('/<button[^>]*disabled[^>]*>.*Try again in 5…/s', $Wrong) === 1 && str_contains($Wrong, 'setInterval'), 'Try again counts down from 5, disabled');
+  Check(str_contains($Wrong, 'DOMContentLoaded') && strpos($Wrong, 'setInterval') < strpos($Wrong, 'jquery'), 'with a plain script that waits for the button (jQuery loads after it)');
   Check(str_contains(Emailed(), 'To: bob@example.com') && str_contains(Emailed(), 'wrong password') && MailLink('resetpassword.php') !== '',
     'the owner gets an email, with a link to choose a new password');
   NoErrors($Wrong, 'a wrong password');

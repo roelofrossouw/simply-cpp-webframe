@@ -45,6 +45,8 @@
 
   $Config = Render('admin/config.php');
   Check(preg_match('/class="sticky-bottom[^"]*"[^>]*>.*?Save/s', $Config) === 1, 'Config\'s Save stays in sight at the foot');
+  Check(preg_match('#<details[^>]*open>\s*<summary[^>]*>Application#', $Config) === 1, 'Config\'s groups are sections, open when something is set');
+  Check(preg_match('#<details class="mt-3">\s*<summary[^>]*>Sign in with Google#', $Config) === 1, 'and folded when nothing is');
   Check(str_contains($Config, 'app.name') && str_contains($Config, 'Test site') && str_contains($Config, 'auth.github.client_id'), 'Config shows the settings');
   Check(!str_contains($Config, 'test secret, not for use anywhere') && !str_contains($Config, 'test-secret') && !str_contains($Config, 'secret\\'),
     'but never a secret');

@@ -206,11 +206,15 @@
   $About->AddClass('small');
 
   $Groups = $Settings + (empty($Unlisted) ? [] : ['Not listed here' => array_fill_keys($Unlisted, ['', false])]);
+  // A section per group, to fold away; open when one of its settings is set (unused sign-in providers stay folded)
   foreach ($Groups as $Group => $GroupSettings)
   {
-    $Result->AddChild($Heading = new HTML\Header(5, $Group));
-    $Heading->Format->Margin(Side::Top, PadSize::Pad4);
-    $Result->AddChild($Wrapper = new \BS\ResponsiveTable(ScreenSize::Medium));
+    $Result->AddChild($Section = new HTML\Details());
+    $Section->AddClass('mt-3');
+    $Section->Open = !empty(array_filter(array_keys($GroupSettings), fn($Path) => Setting($Data, $Path) !== null));
+    $Section->AddChild($Heading = new HTML\Summary($Group));
+    $Heading->AddClasses(['h5', 'mb-2']);
+    $Section->AddChild($Wrapper = new \BS\ResponsiveTable(ScreenSize::Medium));
     $Table = $Wrapper->Table();
     $Table->Small();
     foreach ($GroupSettings as $Path => [$Purpose, $Secret])
@@ -251,7 +255,7 @@
     // The site's own content under its group, e.g. what the settings set up
     if ($Site !== null && ($After = $Site::AfterGroup($Group)) !== null)
     {
-      $Result->AddChild($After);
+      $Section->AddChild($After);
     }
   }
 
