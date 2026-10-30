@@ -187,14 +187,35 @@ function loadPage(url, into) {
 // Start the Bootstrap components that need a script: tooltips, popovers and auto-playing carousels.
 // Called for every piece of content the app loads, as Bootstrap only starts them by itself on a full page load.
 function initComponents(root) {
-  $(root).find('[data-bs-toggle="tooltip"]').each(function () {
-    bootstrap.Tooltip.getOrCreateInstance(this);
+  // Bootstrap reads data-bs-* attributes with JSON.parse where it can, so a text such as
+  // '{"url": ...}', '200' or 'true' would become an object, number or boolean, which a title or
+  // content refuses. Given as options, which win over the attributes, they stay text.
+  const asText = function (element, names) {
+    const options = {};
+    for (const name of names) {
+      const value = element.getAttribute('data-bs-' + name);
+      if (value !== null) options[name] = value;
+    }
+    return options;
+  };
+  // Each on its own: one that fails doesn't stop the others.
+  const start = function (selector, make) {
+    $(root).find(selector).each(function () {
+      try {
+        make(this);
+      } catch (problem) {
+        console.error('initComponents: ' + selector, this, problem);
+      }
+    });
+  };
+  start('[data-bs-toggle="tooltip"]', function (element) {
+    bootstrap.Tooltip.getOrCreateInstance(element, asText(element, ['title']));
   });
-  $(root).find('[data-bs-toggle="popover"]').each(function () {
-    bootstrap.Popover.getOrCreateInstance(this);
+  start('[data-bs-toggle="popover"]', function (element) {
+    bootstrap.Popover.getOrCreateInstance(element, asText(element, ['title', 'content']));
   });
-  $(root).find('[data-bs-ride="carousel"]').each(function () {
-    bootstrap.Carousel.getOrCreateInstance(this).cycle();
+  start('[data-bs-ride="carousel"]', function (element) {
+    bootstrap.Carousel.getOrCreateInstance(element).cycle();
   });
 }
 
