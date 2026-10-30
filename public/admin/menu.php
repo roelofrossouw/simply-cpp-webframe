@@ -115,8 +115,9 @@
     $InSection = array_filter($Items, fn($Item) => ($Item['section'] ?? 'main') === $Section);
     $Pane = $Tabs->AddTab($SectionName . ' (' . count($InSection) . ')', '', $Section === $Current);
 
-    // Scrolls sideways inside its own box on screens narrower than large, instead of running off the page
-    $Pane->AddChild($Wrapper = new \BS\ResponsiveTable(ScreenSize::Large));
+    // Scrolls sideways inside its own box on any screen: its many columns are wider than the page can be, and the page
+    // area itself doesn't scroll sideways
+    $Pane->AddChild($Wrapper = new \BS\ResponsiveTable(ScreenSize::ExtraSmall));
     $Table = $Wrapper->Table();
     $Table->Striped();
     $Table->Small();
