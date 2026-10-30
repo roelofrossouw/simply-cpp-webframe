@@ -20,8 +20,10 @@
         {
             $this->Name = $Name;
             parent::__construct('input');
+            // No has-validation: Bootstrap then expects the messages as the group's last child, but
+            // Feedback() puts them inside .form-floating, so the input kept its rounded corners
+            // against a prefix or suffix. Without it, Bootstrap squares them as in any input group.
             $this->AddChild($Group = new ClassDiv('input-group'));
-            $Group->AddClass('has-validation'); // Keeps the corners right when a message shows
 
             if (!empty($Prefix))
             {
