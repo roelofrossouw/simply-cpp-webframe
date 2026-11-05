@@ -297,13 +297,17 @@
       return $this->Parent;
     }
 
+    /**
+     * Where the element goes when $Trigger happens. Calling it again replaces that (a script's handler is its own, in the
+     * "action" namespace, so Trigger()'s stay)
+     */
     public function Action(string $Href, Event $Trigger = Event::Click): static
     {
       // Link handled by app js.
       if (\Config::AppPage())
       {
         $jHref = json_encode($Href);
-        $this->Trigger($Trigger, "loadPage.call(this, $jHref);");
+        $this->ActionScript($Trigger, "loadPage.call(this, $jHref);");
       }
       elseif (Spec::Attribute($this->Tag, 'href') !== null)
       {
@@ -313,9 +317,17 @@
       {
         // Only links can have an href, other elements navigate with a script
         $jHref = json_encode($Href);
-        $this->Trigger($Trigger, "window.location = $jHref;");
+        $this->ActionScript($Trigger, "window.location = $jHref;");
       }
       return $this;
+    }
+
+    // Action()'s handler, replacing one it set before: off() and on() with its own namespace
+    private function ActionScript(Event $Event, string $Script): void
+    {
+      $Name = json_encode($Event->value . '.action');
+      $this->ExecuteScript('off', [$Name]);
+      $this->ExecuteScript('on', [$Name, "function(e) { $Script }"]);
     }
 
     /**

@@ -146,13 +146,15 @@
     }
 
     /**
-     * Add/replaces the field to sort the query results by, for a table heading's link
+     * This page sorted on $Field, for a table heading's link: the request's own query parameters kept (?part=...), ?_order=
+     * and ?_desc= added or replaced. Clicking the column it's sorted on turns the order round.
      *
      * @see DB::Sort()
      */
     public static function SortAction(string $Field): string
     {
-      return Server::Page([
+      $Query = array_diff_key($_GET, ['_order' => true, '_desc' => true]);
+      return Server::Page($Query + [
         '_order' => $Field,
         '_desc' => empty(QueryString::Get('_desc')) || QueryString::Get('_order') != $Field
       ]);

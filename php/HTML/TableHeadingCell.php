@@ -20,14 +20,12 @@
         }
 
         /**
-         * Sort the table on $Field when the heading is clicked (?_order= and ?_desc=, see DB::Sort()),
-         * with an arrow on the column it's sorted on now
+         * Sort the table on $Field when the heading is clicked (?_order= and ?_desc=, see DB::Sort(); the page's other
+         * query parameters kept), with an arrow on the column it's sorted on now
          */
         public function Sort(string $Field): static
         {
-            // Clicking the column it's sorted on turns the order round
-            $this->Action(\Server::Page(['_order' => $Field,
-                '_desc' => empty(\QueryString::Get('_desc')) || \QueryString::Get('_order') != $Field]));
+            $this->Action(\DB::SortAction($Field));
             $this->AddClass('sortable');
             if (\QueryString::Get('_order') === $Field)
             {
