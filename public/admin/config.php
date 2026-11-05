@@ -19,6 +19,11 @@
       'app.home' => ['The page Home opens (default /home.php)', false],
       'app.logo' => ['The menu\'s logo, e.g. /img/logo.svg (default: the name)', false],
       'app.theme_color' => ['The browser\'s colour, e.g. #e9ecef', false],
+      'app.share_title' => ['The title a shared link shows (default: the name)', false],
+      'app.image' => ['The picture a shared link shows, e.g. /img/og-image.png, 1200 x 630 (default /img/logo-1200x900.png)', false],
+      'app.image_alt' => ['The shared picture\'s text (default: the title)', false],
+      'app.image_width' => ['Its width in pixels, when it isn\'t a PNG or JPEG on the site', false],
+      'app.image_height' => ['Its height in pixels, likewise', false],
       'app.framework_url' => ['Where the package\'s pages are served (default /framework)', false],
     ],
     'Database' => [

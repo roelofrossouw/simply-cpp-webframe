@@ -134,22 +134,85 @@
       $Parent->AddChild($Meta);
     }
 
+    /**
+     * What a link to the site shows when it's shared (WhatsApp, Teams, Slack, LinkedIn, X): the description, Open
+     * Graph's tags (as property, which Facebook, WhatsApp and LinkedIn read) and a Twitter/X card. The title is
+     * app.share_title, else the page's; the image app.image (default /img/logo-1200x900.png), left out when the site
+     * doesn't have it, with its size (read from a PNG or JPEG, else app.image_width and app.image_height) so the
+     * preview shows at once, and app.image_alt (else the title) as its text.
+     */
     private function OpenGraph(HTML\Element $Parent): void
     {
-      $OG = [
-        'title' => $this->Title,
-        'type' => 'website',
-        'url' => Config::Origin(),
-        'image' => Config::Origin() . Config::Get('app.image', '/img/logo-1200x900.png'),
-        'description' => $this->Description,
-        'determiner' => 'the',
-        'locale' => 'en_GB'
-      ];
-
-      foreach ($OG as $Type => $Value)
+      $Title = (string)Config::Get('app.share_title', '') ?: $this->Title;
+      $Description = (string)$this->Description;
+      $Image = self::ShareImage();
+      if ($Description !== '')
       {
-        $Parent->addChild(new HTML\Meta('og:' . $Type, $Value));
-      };
+        $Parent->AddChild(new HTML\Meta('description', $Description));
+      }
+      $OG = [
+        'og:title' => $Title,
+        'og:type' => 'website',
+        'og:url' => Config::Origin(),
+        'og:site_name' => Config::CompanyName(),
+        'og:description' => $Description,
+        'og:locale' => 'en_GB',
+      ];
+      if ($Image)
+      {
+        $OG += [
+          'og:image' => $Image['url'],
+          'og:image:width' => $Image['width'],
+          'og:image:height' => $Image['height'],
+          'og:image:alt' => (string)Config::Get('app.image_alt', '') ?: $Title,
+        ];
+      }
+      foreach ($OG as $Property => $Value)
+      {
+        if ((string)$Value !== '')
+        {
+          $Parent->AddChild(HTML\Meta::Property($Property, (string)$Value));
+        }
+      }
+      $Card = [
+        'twitter:card' => $Image ? 'summary_large_image' : 'summary',
+        'twitter:title' => $Title,
+        'twitter:description' => $Description,
+        'twitter:image' => $Image['url'] ?? '',
+        'twitter:image:alt' => $Image ? $OG['og:image:alt'] : '',
+      ];
+      foreach ($Card as $Name => $Value)
+      {
+        if ($Value !== '')
+        {
+          $Parent->AddChild(new HTML\Meta($Name, $Value));
+        }
+      }
+    }
+
+    /**
+     * The shared image: its URL and size ('' when unknown), or null when the site doesn't have it. An http(s) URL
+     * elsewhere is taken as it is, with the size from the settings.
+     */
+    private static function ShareImage(): ?array
+    {
+      $Image = (string)Config::Get('app.image', '/img/logo-1200x900.png');
+      $Width = (string)Config::Get('app.image_width', '');
+      $Height = (string)Config::Get('app.image_height', '');
+      if (preg_match('~^https?://~i', $Image))
+      {
+        return ['url' => $Image, 'width' => $Width, 'height' => $Height];
+      }
+      if ($Image === '' || !self::SiteHas($Image))
+      {
+        return null;
+      }
+      $Size = @getimagesize($_SERVER['DOCUMENT_ROOT'] . $Image);
+      if ($Size && in_array($Size[2], [IMAGETYPE_PNG, IMAGETYPE_JPEG], true))
+      {
+        [$Width, $Height] = [(string)$Size[0], (string)$Size[1]];
+      }
+      return ['url' => Config::Origin() . $Image, 'width' => $Width, 'height' => $Height];
     }
 
     // A web app manifest, when the site has one

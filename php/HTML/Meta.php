@@ -25,4 +25,13 @@
                 $this->addAttribute('content', $Content);
             }
         }
+
+        /**
+         * An Open Graph tag, <meta property="og:title" content="...">: Facebook, WhatsApp and LinkedIn read
+         * property, not name
+         */
+        public static function Property(string $Property, string $Content): static
+        {
+            return (new static())->AddAttribute('property', $Property)->AddAttribute('content', $Content);
+        }
     }

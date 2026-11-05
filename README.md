@@ -71,7 +71,7 @@ It needs PHP 8.3 or later, with the pgsql, curl, gd and mbstring extensions (the
 
    | Section | Settings |
    |---|---|
-   | `app` | `name`, `description`, `company`, `country`, `email` (shown in the policies), `timezone`, `home` (the page Home opens, `/home.php`), `logo`, `theme_color`, `framework_url` (`/framework`) |
+   | `app` | `name`, `description`, `company`, `country`, `email` (shown in the policies), `timezone`, `home` (the page Home opens, `/home.php`), `logo`, `theme_color`, `framework_url` (`/framework`); for a shared link's preview (since 1.12.0): `share_title` (else `name`), `image` (`/img/logo-1200x900.png`; left out when the site doesn't have it; 1200 x 630 suits WhatsApp, LinkedIn and X), `image_alt` (else the title), `image_width` and `image_height` (read from a PNG or JPEG on the site) |
    | `database` | `connection` (a libpq connection string), or `host`, `port`, `dbname`, `user`, `password`, `sslmode` |
    | `auth` | `secret` (signs the sign-in tokens: a long random string, e.g. `openssl rand -base64 48`), `keys_dir` (key files, `/etc/sc-webframe/keys`), `cache_dir` (the providers' public keys, `/var/cache/sc-webframe/jwks`), `first_admin` (see below), and a section per sign-in provider |
    | `auth.google` | `client_id`, `client_secret` |

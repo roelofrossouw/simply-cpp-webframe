@@ -862,7 +862,9 @@
           'charset' => 'character set',
           'content' => 'text',
           'http-equiv' => ['content-security-policy', 'content-type', 'default-style', 'refresh'],
-          'name' => ['application-name', 'author', 'description', 'viewport', '*']
+          'name' => ['application-name', 'author', 'description', 'viewport', '*'],
+          // RDFa, as Open Graph's tags use it: og:title, og:image ...
+          'property' => 'text'
         ],
         'events' => [],
         'parents' => ['head'],
