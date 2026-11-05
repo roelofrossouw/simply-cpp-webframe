@@ -13,4 +13,14 @@
                 $this->AddChild($Content);
             }
         }
+
+        /**
+         * Wrap the text onto as many lines as it takes. A table's body cells are one line otherwise, cut off with an
+         * ellipsis and the full text in a popover. On a column's heading cell (in the table's header), the whole
+         * column wraps.
+         */
+        public function Wrap(): static
+        {
+            return $this->AddClass('cell-wrap');
+        }
     }

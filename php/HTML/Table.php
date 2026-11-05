@@ -63,6 +63,27 @@
         }
 
         /**
+         * Every cell's text wraps onto as many lines as it takes, as TableCell::Wrap() does for one. Without it a body
+         * cell is one line, cut off with an ellipsis at CellWidth(), the full text in a popover.
+         */
+        public function Wrap(): static
+        {
+            return $this->AddClass('table-wrap');
+        }
+
+        /**
+         * How wide a one-line body cell may get before its text is cut off: a CSS length, '20rem' by default
+         */
+        public function CellWidth(string $Width): static
+        {
+            if (!preg_match('~^\d+(\.\d+)?(rem|em|px|ch|vw|%)$~', $Width))
+            {
+                throw new \InvalidArgumentException("A cell width is a CSS length such as 20rem or 300px, not '$Width'");
+            }
+            return $this->AddStyle('--sc-cell-max-width', $Width);
+        }
+
+        /**
          * Put the caption above the table instead of under it
          */
         public function CaptionTop(): static

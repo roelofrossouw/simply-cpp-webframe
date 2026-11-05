@@ -203,6 +203,28 @@ div.vertical-inputs div.input {
   }
 }
 
+/* A table's body cells are one line, cut off with an ellipsis at --sc-cell-max-width (Table::CellWidth()), the full
+   text in a popover when cut off (app.js cutCells()). Wrap() asks for lines instead: a cell, a heading cell's column (its
+   cells get .cell-wrap from app.js), the whole table. Cells with controls in them stay as they were: cutting them off
+   would clip their menus and focus rings. */
+.table:not(.table-wrap) > tbody > tr > :is(td, th):not(.cell-wrap):not(:has(.dropdown, .btn-group, .progress, form, input, select, textarea, button, .btn, .form-check)) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: var(--sc-cell-max-width, 20rem);
+}
+
+/* A cut-off cell shows its full text when hovered, tapped or focused */
+.table > tbody > tr > .cell-cut {
+  cursor: help;
+}
+
+.popover.cell-popover {
+  --bs-popover-max-width: min(40rem, 90vw);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 table > tbody > tr > td > input {
   margin-top: -6px;
   margin-bottom: -6px;

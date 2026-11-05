@@ -197,6 +197,22 @@ Change their access in the menu like any other page's. A site's own admin pages 
 `MenuLayout::Add()`, `Update()`, `SetAccess()` and `Delete()`, and `User::All()`, `User::SetAccess()` and
 `User::Levels()`.
 
+## Tables
+
+A table's body cells are one line (since 1.11.0): text that doesn't fit is cut off with an ellipsis at 20rem, and the
+full text shows in a popover when the cell is hovered, tapped or focused (only cells that are cut off get one; checked
+again when the table changes size). Cells with controls in them (buttons, forms, dropdowns, progress bars) stay as
+they were. Wrapping is asked for:
+
+```php
+$Headings->AddHeadingCell('Notes')->Wrap();   // the whole Notes column wraps
+$Row->AddCell($Long)->Wrap();                 // this one cell wraps
+$Table->Wrap();                               // every cell wraps
+$Table->CellWidth('30rem');                   // how wide a one-line cell gets before it's cut off
+```
+
+Sortable headings (`TableHeadingCell::Sort()`, `DB::SortAction()`) keep the page's own query parameters (since 1.10.4).
+
 ## Keeping users and the menu elsewhere
 
 `Storage\Postgres` keeps them in the settings' database. To keep them somewhere else, behind a REST service say,

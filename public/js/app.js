@@ -217,6 +217,62 @@ function initComponents(root) {
   start('[data-bs-ride="carousel"]', function (element) {
     bootstrap.Carousel.getOrCreateInstance(element).cycle();
   });
+  cutCells(root);
+}
+
+// Tables' one-line cells (style.css): a column whose heading asks to wrap (TableHeadingCell::Wrap()) has its body
+// cells wrap too, and a cell its text doesn't fit gets the full text in a popover (hover, tap or focus). Checked again
+// whenever a table changes size, which also covers one shown later (a tab, a popup).
+const cellWatch = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(function (entries) {
+  for (const entry of entries) markCutCells(entry.target);
+});
+
+function cutCells(root) {
+  $(root).find('table.table').addBack('table.table').each(function () {
+    const table = this;
+    // A wrapping column: its heading's place, counting colspans, given to the body's cells in that place
+    $(table).find('thead th.cell-wrap').each(function () {
+      const heading = this;
+      let column = 0;
+      for (const cell of heading.parentElement.cells) {
+        if (cell === heading) break;
+        column += cell.colSpan || 1;
+      }
+      for (const row of table.tBodies.length ? Array.from(table.tBodies).flatMap(body => Array.from(body.rows)) : []) {
+        let at = 0;
+        for (const cell of row.cells) {
+          if (at === column) cell.classList.add('cell-wrap');
+          at += cell.colSpan || 1;
+          if (at > column) break;
+        }
+      }
+    });
+    if (cellWatch) cellWatch.observe(table);
+    markCutCells(table);
+  });
+}
+
+function markCutCells(table) {
+  for (const body of table.tBodies) {
+    for (const row of body.rows) {
+      for (const cell of row.cells) {
+        const oneLine = getComputedStyle(cell).textOverflow === 'ellipsis';
+        const cut = oneLine && cell.clientWidth > 0 && cell.scrollWidth > cell.clientWidth + 1;
+        const popover = bootstrap.Popover.getInstance(cell);
+        if (cut && !popover) {
+          cell.classList.add('cell-cut');
+          cell.tabIndex = 0;
+          bootstrap.Popover.getOrCreateInstance(cell, {
+            content: cell.textContent.trim(), trigger: 'hover focus', placement: 'top', container: 'body', customClass: 'cell-popover',
+          });
+        } else if (!cut && popover) {
+          popover.dispose();
+          cell.classList.remove('cell-cut');
+          cell.removeAttribute('tabindex');
+        }
+      }
+    }
+  }
 }
 
 // The items of a list editor (BS\ListEditor)
@@ -349,7 +405,8 @@ function ajaxSuccess(content) {
   }
   // Prevent progress indicator from showing
   clearTimeout(longAction);
-  // Show result in target element on success
+  // Show result in target element on success; a cut cell's popover (cutCells()) doesn't outlive its cell
+  $('.popover.cell-popover').remove();
   $(this).html(content)
   initComponents(this);
   restoreTabs(this);
@@ -665,6 +722,7 @@ function init() {
   loadServiceWorker();
   // Notices that came with the whole page
   showNotices(document.body);
+  cutCells(document.body);
   enableThemes();
   // Mark all requests coming from the app (Server::IsAJAX()).
   // Can then check if it is loaded from Ajax or directly in browser address (from an external link), in which case the framework needs to be set up
