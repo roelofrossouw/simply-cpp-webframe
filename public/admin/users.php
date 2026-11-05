@@ -10,6 +10,10 @@
   // Only users with the menu's Edit right on this page may grant access, the others see the switches
   $CanEdit = \Auth\Base::CanEdit();
   $ValidFields = ['name', 'email', 'provider', 'last_login'];
+  // The site's own columns (admin.user_columns, an Admin\UserColumns), after Last sign-in
+  $Site = (string)Config::Get('admin.user_columns', '');
+  $Site = $Site !== '' && class_exists($Site) && is_subclass_of($Site, Admin\UserColumns::class) ? $Site : null;
+  $SiteColumns = $Site === null ? [] : $Site::Headings();
   $Data = array_map(fn($User) => $User + ['name' => trim(($User['first_name'] ?? '') . ' ' . ($User['last_name'] ?? ''))], User::All());
   // Sorted as the heading asks (?_order= and ?_desc=), newest sign-in first otherwise
   $Order = QueryString::Get('_order');
@@ -43,6 +47,10 @@
   $Row->AddHeadingCell('Email')->Sort('email');
   $Row->AddHeadingCell('Signs in with')->Sort('provider');
   $Row->AddHeadingCell('Last sign-in')->Sort('last_login');
+  foreach ($SiteColumns as $Heading)
+  {
+    $Row->AddHeadingCell($Heading);
+  }
   foreach ($Levels as $Code => $Description)
   {
     $Cell = $Row->AddHeadingCell(ucfirst($Code));
@@ -68,6 +76,10 @@
       $Set->AddAttribute('aria-label', 'Email a password link to ' . ($Record['name'] ?: $Record['email'] ?? 'user ' . $Record['user_id']));
     }
     $Row->AddCell(empty($Record['last_login']) ? 'never' : date('d/m/Y H:i', strtotime($Record['last_login'])));
+    foreach (array_keys($SiteColumns) as $Column)
+    {
+      $Row->AddCell($Site::Cell((string)$Column, $Record, $CanEdit));
+    }
 
     foreach ($Levels as $Code => $Description)
     {

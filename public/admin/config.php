@@ -80,6 +80,7 @@
     ],
     'Other' => [
       'admin.settings' => ['A class of the site\'s that adds its own settings to this page (an Admin\SiteSettings)', false],
+      'admin.user_columns' => ['A class of the site\'s that adds its own columns to Users (an Admin\UserColumns)', false],
       'storage.class' => ['Where users, access and the menu are kept (default Storage\Postgres)', false],
       'menu.editor' => ['The page that manages the menu (default: Administer → Menu)', false],
     ],
