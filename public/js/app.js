@@ -217,7 +217,18 @@ function initComponents(root) {
   start('[data-bs-ride="carousel"]', function (element) {
     bootstrap.Carousel.getOrCreateInstance(element).cycle();
   });
+  scrollTables(root);
   cutCells(root);
+}
+
+// A table wider than its place scrolls sideways instead of being cut off by the page's panel (.menu-target hides what
+// overflows sideways): one not already in a scrolling wrapper (BS\ResponsiveTable) gets one.
+function scrollTables(root) {
+  $(root).find('table.table').addBack('table.table').each(function () {
+    if (!$(this).parent().closest('.table-responsive').length) {
+      $(this).wrap('<div class="table-responsive"></div>');
+    }
+  });
 }
 
 // Tables' one-line cells (style.css): a column whose heading asks to wrap (TableHeadingCell::Wrap()) has its body
@@ -722,6 +733,7 @@ function init() {
   loadServiceWorker();
   // Notices that came with the whole page
   showNotices(document.body);
+  scrollTables(document.body);
   cutCells(document.body);
   enableThemes();
   // Mark all requests coming from the app (Server::IsAJAX()).
