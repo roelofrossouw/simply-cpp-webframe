@@ -277,6 +277,72 @@ $Country = (new BS\MultiSelect('country', 'Country', $Countries))->Single();   /
 Keys: up and down move through the list, Enter chooses, Escape closes, Backspace in an empty search takes off the last
 chip.
 
+Since 1.17.0 a MultiSelect can also search the server as you type and take free text. `Source($url)` sends
+`GET url?q=...`, debounced, and the latest answer wins; the server answers JSON `[{"value": ..., "text": ...}]`.
+`Creatable()` offers "Add '...'" and adds what was typed on Enter. With either, chosen or posted values that aren't
+among the options are kept.
+
+```php
+$Tags = (new BS\MultiSelect('tags', 'Tags', []))->Source('/search.php?what=tags', 2)->Creatable();
+```
+
+## More form fields (since 1.17.0)
+
+Forms now post the browser's own `FormData`, so a name posted more than once (`name[]`) keeps every value, and files
+arrive in `$_FILES`. Bootstrap is 5.3.8.
+
+`BS\FileInput` is a drop zone you click or drop files on. `Multiple()` posts `name[]`, and files dropped later are
+added to those chosen. `Accept()`, `MaxSize()` and `Preview()` (thumbnails) are there. The chosen files are listed,
+each with a button to take it off; a file too big or of the wrong kind makes the field invalid.
+
+```php
+$Scan = new BS\FileInput('scan', 'Signed agreement');
+$Scan->Accept('.pdf,image/*')->MaxSize(10 * 1024 * 1024)->Required();   // $_FILES['scan']
+$Photos = (new BS\FileInput('photos', 'Photos'))->Multiple()->Accept('image/*')->Preview();
+```
+
+`BS\Choices` is a group of checkboxes posting `name[]`, or radios with `Single: true`. `Inline()` puts them side by
+side and `Buttons(Color)` draws them as toggle buttons. For checkboxes, `Required()` means at least one is ticked.
+
+```php
+$Days = new BS\Choices('days', 'Days', ['mon' => 'Monday', 'tue' => 'Tuesday', 'wed' => 'Wednesday'], ['mon']);
+$Days->Inline()->Required();
+$Size = (new BS\Choices('size', 'Size', ['s' => 'Small', 'm' => 'Medium', 'l' => 'Large'], 'm', Single: true))->Buttons();
+```
+
+`BS\PasswordInput` has a show/hide button. `Strength($MinLength)` adds a strength meter (weak, fair, good, strong)
+with Bootstrap 6 Strength's markup and its `strengthChange.bs.strength` event. The sign-up and reset-password pages
+use it; signing in has show/hide only.
+
+```php
+$Password = (new BS\PasswordInput('password', 'Password', 'new-password'))->Strength(10)->Required();
+```
+
+`BS\DateTimePicker` puts a DatePicker and a TimePicker side by side and posts one value, `YYYY-MM-DD HH:MM` (a date
+without a time posts 00:00). `Step()`, `Seconds()`, `TwelveHour()`, `Min()`, `Max()` and `Required()` are there.
+
+```php
+$Meeting = (new BS\DateTimePicker('meeting', 'Meeting', '2026-11-30 09:30'))->Step(15)->Required();
+```
+
+`BS\NumberInput` is − number unit +. It shows the number in the page's number format and posts it plain
+(`1234.5`). Either decimal mark is taken when typing, and up and down step it.
+
+```php
+$Quantity = (new BS\NumberInput('quantity', 'Quantity', 1))->Min(1)->Max(99);
+$Mass = (new BS\NumberInput('mass', 'Mass', 12.5, 'kg'))->Decimals(1)->Step(0.5)->Min(0);
+```
+
+`BS\OtpInput` is a one-time-code field with Bootstrap 6's OTP markup: one real input drawn as boxes, with
+`autocomplete="one-time-code"` and the digit keyboard. `Groups()`, `Connected()`, `Mask()` and `Alphanumeric()` are
+there; it fires `complete.bs.otpInput` when full.
+
+```php
+$Code = (new BS\OtpInput('code', 'Code from the email', 6))->Groups([3, 3])->Required();
+```
+
+The forms demo (Administer → Demos → Forms) shows each of them.
+
 ## Demos
 
 Administer → Demos (admins only, `/framework/demos/index.php`) shows what the classes look like and do, a page per

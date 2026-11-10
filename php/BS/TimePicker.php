@@ -43,6 +43,14 @@
             parent::Value((string)$Value); // written out by the script
         }
 
+        /**
+         * The hidden field the form posts (BS\DateTimePicker combines two of them into one)
+         */
+        public function ValueElement(): \HTML\Input
+        {
+            return $this->ValueInput;
+        }
+
         public function ShowPostedValue(): void
         {
             $this->Value(\Post::Get($this->ValueInput->GetAttribute('name')));

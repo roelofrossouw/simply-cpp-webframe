@@ -47,6 +47,10 @@
     Check(!preg_match('/(Warning|Deprecated|Notice|Fatal error): .* on line \d+|Uncaught|Something Went Wrong/', $Html) && strlen($Html) > 50,
       "$Demo renders" . (preg_match('/(Warning|Deprecated|Notice|Fatal error): [^\n]*/', $Html, $M) ? ': ' . $M[0] : ''));
   }
+  // The forms demo's server search answers JSON [{value, text}]
+  // (the page's process prints its "-1 checks" line after it)
+  $Found = json_decode(preg_replace('~-1 checks, \d+ failed\s*$~', '', Render('demos/search.php')), true);
+  Check(is_array($Found) && isset($Found[0]['value'], $Found[0]['text']), 'demos/search.php answers [{value, text}]');
   $Demos = Render('demos/index.php');
   Check(str_contains($Demos, 'nav-overflow') && str_contains($Demos, 'demos\\/icons.php') && str_contains($Demos, 'nav-overflow-keep'),
     'the demos\' menu: every page, overflowing, Text kept');

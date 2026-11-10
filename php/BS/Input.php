@@ -14,6 +14,7 @@
 
         private \HTML\Input $InputElement;
         private \HTML\Div $Floater;
+        private ClassDiv $Group;
         private $Name;
 
         public function __construct(string $Name, string $Label, \HTML\InputType $Type = \HTML\InputType::Text, \HTML\Element|string|null $Prefix = null, \HTML\Element|string|null $Suffix = null)
@@ -23,7 +24,7 @@
             // No has-validation: Bootstrap then expects the messages as the group's last child, but
             // Feedback() puts them inside .form-floating, so the input kept its rounded corners
             // against a prefix or suffix. Without it, Bootstrap squares them as in any input group.
-            $this->AddChild($Group = new ClassDiv('input-group'));
+            $this->AddChild($Group = $this->Group = new ClassDiv('input-group'));
 
             if (!empty($Prefix))
             {
@@ -53,6 +54,14 @@
         protected function Field(): \HTML\Element
         {
             return $this->InputElement;
+        }
+
+        /**
+         * The .input-group around the field, for subclasses that add buttons to it (PasswordInput, NumberInput)
+         */
+        protected function Group(): ClassDiv
+        {
+            return $this->Group;
         }
 
         protected function MessageParent(): \HTML\Element

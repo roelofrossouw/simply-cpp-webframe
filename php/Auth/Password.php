@@ -2,7 +2,7 @@
 
   namespace Auth;
 
-  use BS\{AlertError, Button, Card, Icon, Input, PadSize, ScreenSize, Side};
+  use BS\{AlertError, Button, Card, Icon, Input, PadSize, PasswordInput, ScreenSize, Side};
   use Config;
   use Storage\Store;
 
@@ -547,9 +547,8 @@
       $Address->InputElement()->ReadOnly = true;
       $Address->InputElement()->AutoComplete = 'username';
       $Address->Format->Margin(Side::Bottom, PadSize::Pad2);
-      $Form->AddChild($Password = new Input('password', 'Password', \HTML\InputType::Password));
+      $Form->AddChild($Password = new PasswordInput('password', 'Password', 'current-password'));
       $Password->InputElement()->Required = true;
-      $Password->InputElement()->AutoComplete = 'current-password';
       $Password->InputElement()->AutoFocus = true;
       $Form->AddChild($Links = new \HTML\Div());
       $Links->AddClasses(['small', 'mt-2', 'd-flex', 'gap-3']);
@@ -631,16 +630,26 @@
       $Card->AddChild($Form = new \HTML\Form());
       self::PostTo($Form, $Action);
       $Form->Format->Margin(Side::All, PadSize::Pad2);
+      $Meter = true; // the first new password gets the strength meter, its repeat only show/hide
       foreach ($Fields as $Name => $Field)
       {
         [$Label, $Type, $AutoComplete] = $Field;
-        $Form->AddChild($Input = new Input($Name, $Label, $Type));
-        $Input->InputElement()->Required = $Field[3] ?? true;
-        $Input->InputElement()->AutoComplete = $AutoComplete;
         if ($Type == \HTML\InputType::Password)
         {
+          $Form->AddChild($Input = new PasswordInput($Name, $Label, $AutoComplete));
+          if ($Meter && $AutoComplete == 'new-password')
+          {
+            $Input->Strength(self::MinLength());
+            $Meter = false;
+          }
           $Input->InputElement()->MinLength = self::MinLength();
         }
+        else
+        {
+          $Form->AddChild($Input = new Input($Name, $Label, $Type));
+          $Input->InputElement()->AutoComplete = $AutoComplete;
+        }
+        $Input->InputElement()->Required = $Field[3] ?? true;
         $Input->Format->Margin(Side::Bottom, PadSize::Pad2);
       }
       $Form->AddChild($Submit = new \HTML\Button($Caption));

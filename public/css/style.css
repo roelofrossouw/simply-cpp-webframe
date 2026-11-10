@@ -2,7 +2,7 @@
  * EXTERNAL COMPONENTS
  **********************/
 
-@import "https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css";
+@import "https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css";
 /* @import "/css/bootstrap.min.css"; */
 @import url("https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css");
 /* @import "/css/bootstrap-icons.min.css"; */
@@ -541,3 +541,280 @@ th.sortable {
   }
 }
 
+
+/* MultiSelect's "Add ..." entry (data-bs-creatable) */
+.multi-select-create {
+  font-style: italic;
+}
+
+/* File fields (BS\FileInput, js/app.js fileInput()): the file input lies over its drop zone, invisible, so a click
+   anywhere on the zone chooses files; without the script it shows as an ordinary file field */
+.file-drop {
+  position: relative;
+  border: var(--bs-border-width) dashed var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+  background: var(--bs-tertiary-bg);
+  padding: 1.25rem 1rem;
+  text-align: center;
+  color: var(--bs-secondary-color);
+  transition: border-color .15s, background-color .15s;
+
+  > input[type="file"] {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .file-drop-text .bi {
+    display: block;
+    font-size: 1.75rem;
+    margin-bottom: .25rem;
+  }
+
+  &.dragging, &:hover, &:focus-within {
+    border-color: var(--bs-primary);
+    background: var(--bs-primary-bg-subtle);
+  }
+
+  &:focus-within {
+    box-shadow: 0 0 0 .25rem rgba(var(--bs-primary-rgb), .25);
+  }
+
+  > .invalid-feedback {
+    text-align: start;
+  }
+}
+
+.was-validated .file-drop:has(:invalid) {
+  border-color: var(--bs-form-invalid-border-color);
+
+  > .invalid-feedback {
+    display: block;
+  }
+}
+
+.file-list {
+  margin: .5rem 0 0;
+
+  .file-item {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .25rem 0;
+    border-bottom: var(--bs-border-width) solid var(--bs-border-color-translucent);
+  }
+
+  .file-thumb {
+    width: 2.5rem;
+    height: 2.5rem;
+    object-fit: cover;
+    border-radius: var(--bs-border-radius-sm);
+  }
+
+  .file-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .file-remove {
+    flex: none;
+  }
+}
+
+/* Groups of choices (BS\Choices): a fieldset like the other fields, its message under the choices once the form is
+   checked; toggle buttons (Buttons()) side by side */
+.choices {
+  > legend {
+    margin-bottom: .25rem;
+  }
+
+  .choices-button {
+    display: inline-block;
+    margin: 0 .25rem .25rem 0;
+  }
+}
+
+.was-validated .choices:has(:invalid) {
+  > .invalid-feedback {
+    display: block;
+  }
+
+  .form-check-label {
+    color: var(--bs-form-invalid-color);
+  }
+}
+
+/* Password fields (BS\PasswordInput): the show/hide button joins the field; the strength meter under it, as Bootstrap
+   6's Strength (four segments coloured up to the level in data-bs-strength) */
+.password-field .password-toggle {
+  border-color: var(--bs-border-color);
+}
+
+.strength {
+  --strength-height: .25rem;
+  --strength-gap: .25rem;
+  --strength-margin-top: .375rem;
+  --strength-border-radius: 50rem;
+  --strength-bg: var(--bs-secondary-bg);
+  --strength-color: var(--bs-secondary-bg);
+  --strength-weak-color: var(--bs-danger);
+  --strength-fair-color: var(--bs-warning);
+  --strength-good-color: var(--bs-info);
+  --strength-strong-color: var(--bs-success);
+  display: flex;
+  gap: var(--strength-gap);
+  margin-top: var(--strength-margin-top);
+
+  &[data-bs-strength="weak"] { --strength-color: var(--strength-weak-color); }
+  &[data-bs-strength="fair"] { --strength-color: var(--strength-fair-color); }
+  &[data-bs-strength="good"] { --strength-color: var(--strength-good-color); }
+  &[data-bs-strength="strong"] { --strength-color: var(--strength-strong-color); }
+
+  .strength-segment {
+    flex: 1 1 0;
+    height: var(--strength-height);
+    border-radius: var(--strength-border-radius);
+    background: var(--strength-bg);
+    transition: background-color .15s;
+
+    &.active {
+      background: var(--strength-color);
+    }
+  }
+}
+
+.strength-text {
+  display: block;
+  min-height: 1.25em;
+}
+
+/* A date and a time in one (BS\DateTimePicker): the two fields side by side, the time narrower */
+.date-time-picker-fields {
+  display: flex;
+  gap: .5rem;
+
+  > .date-time-picker-date {
+    flex: 3 1 0;
+    min-width: 0;
+  }
+
+  > .date-time-picker-time {
+    flex: 2 1 0;
+    min-width: 0;
+  }
+}
+
+/* Number fields (BS\NumberInput): the number at the end, as numbers line up */
+.number-field {
+  input[data-bs-toggle="number"] {
+    text-align: end;
+  }
+
+  .number-step {
+    border-color: var(--bs-border-color);
+  }
+}
+
+/* One-time codes (BS\OtpInput, js/app.js otpInput()), as Bootstrap 6's OTP input: the real input lies over a box for
+   each character, invisible; without the script it is an ordinary field */
+.otp {
+  position: relative;
+  display: inline-flex;
+  max-width: 100%;
+
+  &:not(.otp-ready) .otp-input {
+    display: block;
+    width: 12rem;
+    padding: .375rem .75rem;
+    border: var(--bs-border-width) solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    background: var(--bs-body-bg);
+    color: var(--bs-body-color);
+    font-size: 1.25rem;
+    letter-spacing: .5em;
+  }
+
+  &.otp-ready .otp-input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    z-index: 1;
+    font-size: 16px; /* no zoom on phones */
+    caret-color: transparent;
+    cursor: text;
+  }
+
+  .otp-slots {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+  }
+
+  .otp-slot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 3.25rem;
+    border: var(--bs-border-width) solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    background: var(--bs-body-bg);
+    font-size: 1.5rem;
+    font-variant-numeric: tabular-nums;
+    transition: border-color .15s, box-shadow .15s;
+
+    &.active {
+      border-color: var(--bs-primary);
+      box-shadow: 0 0 0 .25rem rgba(var(--bs-primary-rgb), .25);
+    }
+  }
+
+  .otp-separator {
+    color: var(--bs-secondary-color);
+    font-size: 1.25rem;
+  }
+
+  &.otp-connected .otp-slots {
+    gap: 0;
+
+    .otp-slot:not(:first-child) {
+      margin-left: calc(-1 * var(--bs-border-width));
+    }
+
+    .otp-slot {
+      border-radius: 0;
+    }
+
+    .otp-slot:first-child {
+      border-radius: var(--bs-border-radius) 0 0 var(--bs-border-radius);
+    }
+
+    .otp-slot:last-child {
+      border-radius: 0 var(--bs-border-radius) var(--bs-border-radius) 0;
+    }
+  }
+
+  &.is-invalid .otp-slot {
+    border-color: var(--bs-form-invalid-border-color);
+  }
+}
+
+.was-validated .otp:has(.otp-input:invalid) .otp-slot {
+  border-color: var(--bs-form-invalid-border-color);
+}
+
+.otp-field > .form-label {
+  display: block;
+}
+
+.was-validated .otp-field:has(:invalid) > .invalid-feedback {
+  display: block;
+}

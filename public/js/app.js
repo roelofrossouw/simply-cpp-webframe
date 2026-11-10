@@ -191,7 +191,11 @@ function loadPage(url, into) {
     url: url,
     method: "POST",
     context: target,
-    data: Object.fromEntries(new FormData(form).entries()),
+    // The form as it is: a name posted more than once (name[]: a MultiSelect, BS\Choices) keeps every value,
+    // and files go too ($_FILES). jQuery mustn't turn it into a query string or set a content type of its own.
+    data: new FormData(form),
+    processData: false,
+    contentType: false,
     success: ajaxSuccess,
     error: ajaxFailure,
   });
@@ -234,6 +238,13 @@ function initComponents(root) {
   start('input[data-bs-toggle="datepicker"]', datePicker);
   start('select[data-bs-toggle="multi-select"]', multiSelect);
   start('input[data-bs-toggle="timepicker"]', timePicker);
+  start('.date-time-picker[data-bs-toggle="datetimepicker"]', dateTimePicker);
+  start('input[type="file"][data-bs-toggle="file-input"]', fileInput);
+  start('fieldset[data-bs-toggle="choices"]', choices);
+  start('button[data-bs-toggle="password"]', passwordToggle);
+  start('[data-bs-strength]', passwordStrength);
+  start('input[data-bs-toggle="number"]', numberInput);
+  start('.otp[data-bs-otp]', otpInput);
   scrollTables(root);
   cutCells(root);
 }
@@ -544,7 +555,9 @@ function datePicker(field) {
 // list opens under it with Select all and Clear, its groups as headings. Keys: up and down move through the list,
 // Enter chooses, Escape closes, Backspace in an empty search takes off the last chip. data-bs-max limits how many,
 // data-bs-single="true" makes it a one-choice search (a combobox), data-bs-search="false" leaves the search out,
-// data-bs-select-all="false" Select all. The select's change event fires on every change.
+// data-bs-select-all="false" Select all. The select's change event fires on every change. data-bs-source="url": the
+// list comes from the server as you type (GET url&q=..., JSON [{value, text}]); data-bs-creatable="true": what's typed
+// can be added as a value of its own (Enter when nothing matches, or "Add ..." in the list).
 function multiSelect(select) {
   if (select.multiSelect) return;
   const single = select.getAttribute('data-bs-single') === 'true';
@@ -553,6 +566,9 @@ function multiSelect(select) {
   const selectAll = !single && select.getAttribute('data-bs-select-all') !== 'false';
   const max = parseInt(select.getAttribute('data-bs-max') || '0', 10);
   const placeholder = select.getAttribute('data-bs-placeholder') || (searchable ? 'Search…' : '');
+  const source = select.getAttribute('data-bs-source');
+  const sourceMin = parseInt(select.getAttribute('data-bs-source-min-length') || '1', 10);
+  const creatable = select.getAttribute('data-bs-creatable') === 'true';
   const fold = text => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   const element = (tag, className, text) => {
     const made = document.createElement(tag);
@@ -599,7 +615,11 @@ function multiSelect(select) {
   if (tools.children.length) menu.appendChild(tools);
   const list = element('div', 'multi-select-options');
   const empty = element('div', 'dropdown-item-text text-body-secondary multi-select-empty', 'No results');
-  menu.append(list, empty);
+  const create = element('button', 'dropdown-item multi-select-create');
+  create.type = 'button';
+  create.tabIndex = -1;
+  create.hidden = true;
+  menu.append(create, list, empty);
   select.after(box, menu);
 
   // The list: a heading for each group, an entry for each option
@@ -622,6 +642,17 @@ function multiSelect(select) {
     entries.push(entry);
     item.addEventListener('mousedown', event => event.preventDefault()); // the search keeps the focus
     item.addEventListener('click', () => choose(entry));
+    return entry;
+  };
+  // A value not among the options yet (from the server, or typed): an option of the select, an entry of the list
+  const addOption = function (value, text) {
+    const known = entries.find(entry => entry.option.value === value);
+    if (known) return known;
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = text;
+    select.appendChild(option);
+    return add(option, null);
   };
   for (const child of select.children) {
     if (child.tagName === 'OPTGROUP') {
@@ -655,6 +686,51 @@ function multiSelect(select) {
     changed();
     search.value = '';
     filter();
+  };
+  const createTyped = function () {
+    const text = search.value.trim();
+    if (!creatable || text === '') return;
+    const entry = entries.find(each => each.text === fold(text)) || addOption(text, text);
+    if (!entry.option.selected) choose(entry);
+    search.value = '';
+    filter();
+  };
+  create.addEventListener('mousedown', event => event.preventDefault());
+  create.addEventListener('click', createTyped);
+  // The server's options for what's typed, a moment after the typing stops (the last answer wins)
+  let asking = null, asked = 0;
+  const ask = function () {
+    clearTimeout(asking);
+    const typed = search.value.trim();
+    if (!source || typed.length < sourceMin) {
+      found = null;
+      empty.textContent = 'No results';
+      return;
+    }
+    empty.textContent = 'Searching…';
+    asking = setTimeout(function () {
+      const number = ++asked;
+      fetch(source + (source.includes('?') ? '&' : '?') + 'q=' + encodeURIComponent(typed), {
+        credentials: 'same-origin',
+        headers: {'Accept': 'application/json', 'X-Requested-by': 'sc-webframe'},
+      }).then(response => response.ok ? response.json() : Promise.reject(response.status)).then(function (rows) {
+        if (number !== asked) return;
+        found = new Set();
+        for (const row of Array.isArray(rows) ? rows : []) {
+          const value = String(row.value ?? '');
+          if (value === '') continue;
+          const entry = addOption(value, String(row.text ?? value));
+          found.add(entry.option.value);
+        }
+        empty.textContent = 'No results';
+        render();
+        filter();
+      }).catch(function (problem) {
+        if (number !== asked) return;
+        empty.textContent = 'The search failed';
+        console.error('multiSelect: ' + source, problem);
+      });
+    }, 250);
   };
   const render = function () {
     const picked = chosen();
@@ -698,13 +774,19 @@ function multiSelect(select) {
     box.classList.toggle('disabled', select.disabled);
     search.disabled = select.disabled;
   };
+  let found = null; // the values the server gave for what's typed (data-bs-source)
   const filter = function () {
-    const typed = fold(single && search.value === (chosen()[0] || {option: {}}).option.textContent ? '' : search.value.trim());
-    for (const entry of entries) entry.item.hidden = typed !== '' && !entry.text.includes(typed);
+    const raw = single && search.value === (chosen()[0] || {option: {}}).option.textContent ? '' : search.value.trim();
+    const typed = fold(raw);
+    for (const entry of entries) {
+      entry.item.hidden = typed !== '' && (source && found ? !found.has(entry.option.value) && !entry.option.selected : !entry.text.includes(typed));
+    }
+    create.hidden = !creatable || raw === '' || entries.some(entry => entry.text === typed);
+    create.textContent = 'Add “' + raw + '”';
     for (const heading of list.querySelectorAll('.dropdown-header')) {
       heading.hidden = !entries.some(entry => entry.group === heading && !entry.item.hidden);
     }
-    empty.hidden = visible().length > 0;
+    empty.hidden = visible().length > 0 || !create.hidden;
     highlight(visible().length ? 0 : -1);
   };
   const highlight = function (index) {
@@ -743,6 +825,10 @@ function multiSelect(select) {
   search.addEventListener('blur', close);
   search.addEventListener('input', function () {
     open();
+    if (source) {
+      found = null;
+      ask();
+    }
     filter();
   });
   search.addEventListener('keydown', function (event) {
@@ -753,7 +839,9 @@ function multiSelect(select) {
     } else if (event.key === 'ArrowUp') {
       highlight(Math.max(active - 1, 0));
     } else if (event.key === 'Enter') {
-      if (menu.classList.contains('show') && shown[active]) choose(shown[active]);
+      // Typed text that matches nothing exactly is added (creatable); else the entry highlighted is chosen
+      if (creatable && !create.hidden && !shown.some(entry => entry.text === fold(search.value.trim()))) createTyped();
+      else if (menu.classList.contains('show') && shown[active]) choose(shown[active]);
     } else if (event.key === 'Escape') {
       if (!menu.classList.contains('show')) return;
       close();
@@ -1012,6 +1100,359 @@ function timePicker(field) {
   if (first) show();
   render();
   field.timePicker = {open: open, close: close, set: value => set(value ? parse(value) : null)};
+}
+
+// File fields (BS\FileInput): the <input type="file"> lies over its drop zone, so a click on the zone chooses files and a
+// drop puts them in (with multiple, added to those chosen already). The files chosen are listed under it, each with
+// its size and a button to take it off, a thumbnail for pictures with data-bs-preview="true". A file over
+// data-bs-max-size bytes, or not of the types accept names, makes the field invalid. Posts as any file field.
+function fileInput(input) {
+  if (input.fileInput) return;
+  const zone = input.closest('.file-drop') || input.parentElement;
+  const list = input.closest('.file-input')?.querySelector('.file-list');
+  const maxSize = parseInt(input.getAttribute('data-bs-max-size') || '0', 10);
+  const preview = input.getAttribute('data-bs-preview') === 'true';
+  const accept = (input.getAttribute('accept') || '').split(',').map(type => type.trim().toLowerCase()).filter(type => type !== '');
+  const size = function (bytes) {
+    const units = ['bytes', 'kB', 'MB', 'GB'];
+    let at = 0;
+    while (bytes >= 1024 && at < units.length - 1) {
+      bytes /= 1024;
+      at++;
+    }
+    return (at ? bytes.toFixed(bytes < 10 ? 1 : 0) : bytes) + ' ' + units[at];
+  };
+  const accepted = file => !accept.length || accept.some(type =>
+    type.startsWith('.') ? file.name.toLowerCase().endsWith(type)
+      : type.endsWith('/*') ? file.type.toLowerCase().startsWith(type.slice(0, -1)) : file.type.toLowerCase() === type);
+  let urls = [];
+  const setFiles = function (files) {
+    const transfer = new DataTransfer();
+    for (const file of files) transfer.items.add(file);
+    input.files = transfer.files;
+    input.dispatchEvent(new Event('change', {bubbles: true}));
+  };
+  const render = function () {
+    for (const url of urls) URL.revokeObjectURL(url);
+    urls = [];
+    const files = Array.from(input.files || []);
+    const problems = [];
+    if (list) list.replaceChildren();
+    files.forEach(function (file, index) {
+      const tooBig = maxSize > 0 && file.size > maxSize;
+      const wrongType = !accepted(file);
+      if (tooBig) problems.push(file.name + ' is bigger than ' + size(maxSize) + '.');
+      if (wrongType) problems.push(file.name + ' isn\'t a kind of file this takes.');
+      if (!list) return;
+      const item = document.createElement('li');
+      item.className = 'file-item' + (tooBig || wrongType ? ' text-danger' : '');
+      if (preview && file.type.startsWith('image/')) {
+        const thumb = document.createElement('img');
+        thumb.className = 'file-thumb';
+        thumb.alt = '';
+        thumb.src = urls[urls.push(URL.createObjectURL(file)) - 1];
+        item.appendChild(thumb);
+      }
+      const name = document.createElement('span');
+      name.className = 'file-name';
+      name.textContent = file.name;
+      const note = document.createElement('small');
+      note.className = 'file-size text-body-secondary';
+      note.textContent = size(file.size);
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'btn-close file-remove';
+      remove.setAttribute('aria-label', 'Remove ' + file.name);
+      remove.addEventListener('click', () => setFiles(files.filter((other, at) => at !== index)));
+      item.append(name, note, remove);
+      list.appendChild(item);
+    });
+    input.setCustomValidity(problems.join(' '));
+    zone.classList.toggle('has-files', files.length > 0);
+  };
+  input.addEventListener('change', render);
+  for (const name of ['dragenter', 'dragover']) {
+    zone.addEventListener(name, function (event) {
+      event.preventDefault();
+      zone.classList.add('dragging');
+    });
+  }
+  for (const name of ['dragleave', 'dragend']) zone.addEventListener(name, () => zone.classList.remove('dragging'));
+  zone.addEventListener('drop', function (event) {
+    event.preventDefault();
+    zone.classList.remove('dragging');
+    const dropped = Array.from(event.dataTransfer?.files || []);
+    if (!dropped.length || input.disabled) return;
+    setFiles(input.multiple ? Array.from(input.files || []).concat(dropped) : dropped.slice(0, 1));
+  });
+  input.fileInput = {render: render, setFiles: setFiles};
+  render();
+}
+
+// Groups of checkboxes (BS\Choices) with data-bs-required="true": at least one ticked, else the first box says so,
+// which keeps the form from being posted (radios: their own required does it).
+function choices(group) {
+  if (group.choices) return;
+  const boxes = Array.from(group.querySelectorAll('input[type="checkbox"]'));
+  const check = function () {
+    if (group.getAttribute('data-bs-required') !== 'true' || !boxes.length) return;
+    boxes[0].setCustomValidity(boxes.some(box => box.checked) ? '' : 'Choose at least one.');
+  };
+  for (const box of boxes) box.addEventListener('change', check);
+  group.choices = {check: check};
+  check();
+}
+
+// The show/hide button of a password field (BS\PasswordInput)
+function passwordToggle(button) {
+  if (button.passwordToggle) return;
+  const field = document.querySelector(button.getAttribute('data-bs-target'));
+  if (!field) return;
+  button.addEventListener('click', function () {
+    const show = field.type === 'password';
+    field.type = show ? 'text' : 'password';
+    button.setAttribute('aria-pressed', show ? 'true' : 'false');
+    button.setAttribute('aria-label', show ? 'Hide the password' : 'Show the password');
+    const icon = button.querySelector('.bi');
+    if (icon) {
+      icon.classList.toggle('bi-eye', !show);
+      icon.classList.toggle('bi-eye-slash', show);
+    }
+    field.focus();
+  });
+  button.passwordToggle = true;
+}
+
+// Password strength meters (BS\PasswordInput::Strength), as Bootstrap 6's Strength: .strength[data-bs-strength] with
+// its .strength-segments, the field in data-bs-input, scored 0 to 8 as Bootstrap does (the minimum length, 4 more,
+// lower case, upper case, digits, a special character, several, 16 or more) into weak (1-2), fair (3-4), good (5-6)
+// and strong (7-8). The level goes in data-bs-strength, the segments up to it get .active, a .strength-text after the
+// meter says it in words (data-bs-messages, JSON). Fires strengthChange.bs.strength (strength, score) on a change.
+function passwordStrength(meter) {
+  if (meter.strength) return;
+  const field = document.querySelector(meter.getAttribute('data-bs-input')) || meter.parentElement.querySelector('input[type="password"]');
+  if (!field) return;
+  const minLength = parseInt(meter.getAttribute('data-bs-min-length') || '8', 10);
+  let messages = {weak: 'Weak', fair: 'Could be better', good: 'Good', strong: 'Strong'};
+  try {
+    messages = Object.assign(messages, JSON.parse(meter.getAttribute('data-bs-messages') || '{}'));
+  } catch (problem) {
+    console.error('passwordStrength: data-bs-messages', problem);
+  }
+  const levels = ['weak', 'fair', 'good', 'strong'];
+  const segments = meter.querySelectorAll('.strength-segment');
+  const words = meter.nextElementSibling && meter.nextElementSibling.classList.contains('strength-text') ? meter.nextElementSibling : null;
+  const score = function (password) {
+    const special = (password.match(/[^A-Za-z0-9]/g) || []).length;
+    return [password.length >= minLength, password.length >= minLength + 4, /[a-z]/.test(password), /[A-Z]/.test(password),
+      /[0-9]/.test(password), special > 0, special > 1, password.length >= 16].filter(Boolean).length;
+  };
+  let last = null;
+  const evaluate = function () {
+    const points = score(field.value);
+    const level = field.value === '' ? null : points <= 2 ? 'weak' : points <= 4 ? 'fair' : points <= 6 ? 'good' : 'strong';
+    meter.setAttribute('data-bs-strength', level || '');
+    segments.forEach((segment, index) => segment.classList.toggle('active', level !== null && index <= levels.indexOf(level)));
+    if (words) words.textContent = level ? messages[level] : '';
+    if (level !== last) {
+      last = level;
+      const event = new CustomEvent('strengthChange.bs.strength', {bubbles: true});
+      event.strength = level;
+      event.score = points;
+      meter.dispatchEvent(event);
+    }
+  };
+  field.addEventListener('input', evaluate);
+  meter.strength = {evaluate: evaluate, getStrength: () => last};
+  evaluate();
+}
+
+// A date and a time in one (BS\DateTimePicker): its DatePicker's and TimePicker's hidden fields stop posting, and
+// .date-time-picker-value posts the two joined, YYYY-MM-DD HH:MM (a date without a time at 00:00; no date: nothing).
+// Fires change.bs.datetimepicker with value.
+function dateTimePicker(wrapper) {
+  if (wrapper.dateTimePicker) return;
+  const store = wrapper.querySelector('.date-time-picker-value');
+  const date = wrapper.querySelector('input[data-bs-toggle="datepicker"]');
+  const time = wrapper.querySelector('input[data-bs-toggle="timepicker"]');
+  if (!store || !date || !time) return;
+  const dateStore = document.querySelector(date.getAttribute('data-bs-value-input')) || date;
+  const timeStore = document.querySelector(time.getAttribute('data-bs-value-input')) || time;
+  dateStore.removeAttribute('name');
+  timeStore.removeAttribute('name');
+  const join = function () {
+    const day = dateStore.value.split(',')[0].trim();
+    const value = day ? day + ' ' + (timeStore.value || '00:00') : '';
+    if (store.value === value) return;
+    store.value = value;
+    const event = new CustomEvent('change.bs.datetimepicker', {bubbles: true});
+    event.value = value;
+    wrapper.dispatchEvent(event);
+  };
+  wrapper.addEventListener('change', join);
+  wrapper.addEventListener('input', join);
+  wrapper.dateTimePicker = {join: join};
+  join();
+}
+
+// Number fields (BS\NumberInput): shown as the page's language writes numbers, posted plain in the hidden field
+// data-bs-value-input names. Typing takes either decimal mark (and group separators); − and + (.number-step, or
+// the up and down keys) take off or add data-bs-step, within data-bs-min and data-bs-max; data-bs-decimals rounds.
+function numberInput(field) {
+  if (field.numberInput) return;
+  const store = document.querySelector(field.getAttribute('data-bs-value-input')) || field;
+  const attribute = name => field.getAttribute('data-bs-' + name);
+  const locale = document.documentElement.lang || navigator.language || 'default';
+  const decimals = attribute('decimals') !== null ? parseInt(attribute('decimals'), 10) : null;
+  const step = parseFloat(attribute('step') || '1');
+  const min = attribute('min') !== null ? parseFloat(attribute('min')) : null;
+  const max = attribute('max') !== null ? parseFloat(attribute('max')) : null;
+  const localDecimal = (new Intl.NumberFormat(locale).formatToParts(1.5).find(part => part.type === 'decimal') || {value: '.'}).value;
+  const places = number => (String(number).split('.')[1] || '').length;
+  const format = number => new Intl.NumberFormat(locale, decimals !== null
+    ? {minimumFractionDigits: decimals, maximumFractionDigits: decimals} : {maximumFractionDigits: 10}).format(number);
+  // A typed number: with both marks the last is the decimal one; one mark is decimal unless it is followed by exactly
+  // three digits and isn't this language's decimal mark (1,234 in English); several of one kind group the thousands
+  const parse = function (text) {
+    let typed = text.replace(/[\s  ']/g, '');
+    if (typed === '') return null;
+    const commas = (typed.match(/,/g) || []).length, dots = (typed.match(/\./g) || []).length;
+    let mark = null;
+    if (commas && dots) {
+      mark = typed.lastIndexOf(',') > typed.lastIndexOf('.') ? ',' : '.';
+    } else if (commas + dots === 1) {
+      const one = commas ? ',' : '.';
+      mark = one === localDecimal || typed.split(one)[1].length !== 3 ? one : null;
+    }
+    for (const separator of [',', '.']) if (separator !== mark) typed = typed.split(separator).join('');
+    if (mark) typed = typed.replace(mark, '.');
+    return /^[-+]?(\d+\.?\d*|\.\d+)$/.test(typed) ? parseFloat(typed) : NaN;
+  };
+  const check = function (number) {
+    let problem = '';
+    if (Number.isNaN(number)) problem = 'Type a number.';
+    else if (number !== null && (min !== null && number < min || max !== null && number > max)) {
+      problem = min !== null && max !== null ? 'Between ' + format(min) + ' and ' + format(max) + '.'
+        : min !== null ? 'At least ' + format(min) + '.' : 'At most ' + format(max) + '.';
+    }
+    field.setCustomValidity(problem);
+  };
+  const set = function (number, show = true) {
+    if (number !== null && !Number.isNaN(number) && decimals !== null) number = Math.round(number * 10 ** decimals) / 10 ** decimals;
+    store.value = number === null || Number.isNaN(number) ? '' : decimals !== null ? number.toFixed(decimals) : String(number);
+    if (show && !Number.isNaN(number)) field.value = number === null ? '' : format(number);
+    check(number);
+  };
+  const stepBy = function (direction) {
+    if (field.disabled || field.readOnly) return;
+    const current = parse(field.value);
+    let next = current === null || Number.isNaN(current) ? (min ?? 0) : current + direction * step;
+    next = parseFloat(next.toFixed(Math.max(places(step), current === null || Number.isNaN(current) ? 0 : places(current))));
+    if (min !== null && next < min) next = min;
+    if (max !== null && next > max) next = max;
+    set(next);
+    field.dispatchEvent(new Event('change', {bubbles: true}));
+  };
+  field.addEventListener('input', () => set(parse(field.value), false));
+  field.addEventListener('blur', function () {
+    const number = parse(field.value);
+    if (!Number.isNaN(number)) set(number);
+  });
+  field.addEventListener('keydown', function (event) {
+    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+    event.preventDefault();
+    stepBy(event.key === 'ArrowUp' ? 1 : -1);
+  });
+  for (const button of field.closest('.input-group')?.querySelectorAll('.number-step') || []) {
+    button.addEventListener('click', () => stepBy(button.getAttribute('data-bs-step-direction') === '-' ? -1 : 1));
+  }
+  field.numberInput = {set: set, step: stepBy};
+  set(store.value === '' ? null : parseFloat(store.value));
+}
+
+// One-time codes (BS\OtpInput), as Bootstrap 6's OTP input: .otp[data-bs-otp] around one .otp-input, which stays the
+// real field (typing, pasting, a phone's suggested code) over a box drawn for each character (data-bs-length, else
+// its maxlength), in groups (data-bs-groups, data-bs-separator), dots with data-bs-mask="true". data-bs-type: numeric
+// (the default), alphanumeric or alpha; anything else typed is dropped. Fires input.bs.otpInput and, once every box
+// is filled, complete.bs.otpInput, each with value.
+function otpInput(box) {
+  if (box.otpInput) return;
+  const input = box.querySelector('.otp-input');
+  if (!input) return;
+  const length = parseInt(box.getAttribute('data-bs-length') || input.getAttribute('maxlength') || '6', 10);
+  const type = box.getAttribute('data-bs-type') || 'numeric';
+  const mask = box.getAttribute('data-bs-mask') === 'true';
+  const separator = box.getAttribute('data-bs-separator') || '·';
+  let groups = [];
+  try {
+    groups = JSON.parse(box.getAttribute('data-bs-groups') || '[]');
+  } catch (problem) {
+    console.error('otpInput: data-bs-groups', problem);
+  }
+  const unwanted = type === 'alpha' ? /[^A-Za-z]/g : type === 'alphanumeric' ? /[^A-Za-z0-9]/g : /[^0-9]/g;
+  input.maxLength = length;
+  input.autocomplete = 'one-time-code';
+  input.inputMode = type === 'numeric' ? 'numeric' : 'text';
+  const slots = document.createElement('div');
+  slots.className = 'otp-slots';
+  slots.setAttribute('aria-hidden', 'true');
+  const cells = [];
+  let group = 0, inGroup = 0;
+  for (let index = 0; index < length; index++) {
+    if (group < groups.length && inGroup === groups[group]) {
+      const gap = document.createElement('span');
+      gap.className = 'otp-separator';
+      gap.textContent = separator;
+      slots.appendChild(gap);
+      group++;
+      inGroup = 0;
+    }
+    const cell = document.createElement('div');
+    cell.className = 'otp-slot';
+    slots.appendChild(cell);
+    cells.push(cell);
+    inGroup++;
+  }
+  box.appendChild(slots);
+  box.classList.add('otp-ready');
+  const fire = function (name) {
+    const event = new CustomEvent(name, {bubbles: true});
+    event.value = input.value;
+    box.dispatchEvent(event);
+  };
+  const render = function () {
+    const value = input.value;
+    const focused = document.activeElement === input;
+    cells.forEach(function (cell, index) {
+      cell.textContent = index < value.length ? (mask ? '•' : value[index]) : '';
+      cell.classList.toggle('filled', index < value.length);
+      cell.classList.toggle('active', focused && index === Math.min(value.length, length - 1));
+    });
+  };
+  input.addEventListener('input', function () {
+    const clean = input.value.replace(unwanted, '').slice(0, length);
+    if (clean !== input.value) input.value = clean;
+    box.classList.remove('is-invalid');
+    render();
+    fire('input.bs.otpInput');
+    if (clean.length === length) fire('complete.bs.otpInput');
+  });
+  for (const name of ['focus', 'blur', 'keyup', 'click']) input.addEventListener(name, render);
+  input.addEventListener('invalid', () => box.classList.add('is-invalid'));
+  box.otpInput = {
+    getValue: () => input.value,
+    setValue: function (value) {
+      input.value = value;
+      input.dispatchEvent(new Event('input', {bubbles: true}));
+    },
+    clear: function () {
+      input.value = '';
+      render();
+      input.focus();
+    },
+    focus: () => input.focus(),
+  };
+  render();
 }
 
 // The items of a list editor (BS\ListEditor)

@@ -7,11 +7,17 @@
      * selected"), the list opens under it with Select all and Clear, groups of options, and a search that narrows it as
      * you type. Like CoreUI's multi-select, done by js/app.js on a plain <select multiple>, which is what the form
      * posts: name[] (Post::Get('name') is an array). Single(): one choice, still with the search (a combobox).
+     * Source(url): the options come from the server as you type, for a long list (users, servers ...). Creatable():
+     * what's typed may be added as a value of its own, as tags (Bootstrap 6's chip input).
      *
      *   $Tags = new BS\MultiSelect('tags', 'Tags', ['a' => 'Alpha', 'b' => 'Beta'], ['a']);
      *   $Cities = new BS\MultiSelect('cities', 'Cities', ['Gauteng' => ['jhb' => 'Johannesburg', 'pta' => 'Pretoria'],
      *                                                    'Western Cape' => ['cpt' => 'Cape Town']]);
      *   $Cities->Max(2)->Required();
+     *   $Owner = new BS\MultiSelect('owner', 'Owner', [], [42]);
+     *   $Owner->Source('/users.php?action=search')->Single();  // GET ...&q=jo answers [{"value": 42, "text": "Jo"}]
+     *   $Labels = new BS\MultiSelect('labels', 'Labels', ['urgent' => 'Urgent']);
+     *   $Labels->Creatable();                                   // "invoice" typed and Enter: posted as labels[]=invoice
      *
      * @see https://coreui.io/bootstrap/docs/forms/multi-select/
      */
@@ -21,6 +27,8 @@
 
         private \HTML\Select $SelectElement;
         private string $Name;
+        private bool $Open = false; // values not among the options are kept (Source, Creatable)
+        private array $Values = [];  // the values chosen, as last given
 
         /**
          * @param array $Options Value => caption; a caption => [value => caption] is a group of options
@@ -40,7 +48,7 @@
             {
                 $this->SelectElement->AddAttribute('data-bs-placeholder', $Placeholder);
             }
-            $Chosen = array_map('strval', $Values);
+            $Chosen = $this->Values = array_map('strval', $Values);
             foreach ($Options as $Key => $Caption)
             {
                 if (is_array($Caption))
@@ -75,6 +83,31 @@
         {
             $this->SelectElement->RemoveAttribute('multiple');
             $this->SelectElement->AddAttribute('data-bs-single', 'true');
+            return $this;
+        }
+
+        /**
+         * Search the server as you type: GET url with q=the text typed (and &, or ?, as the URL needs), answered with
+         * JSON [{"value": ..., "text": ...}], at most a page's worth. The options given here, and those chosen, show
+         * before anything is typed; give the chosen ones' captions as options so they don't show as their values.
+         */
+        public function Source(string $URL, int $MinLength = 1): static
+        {
+            $this->Open = true;
+            $this->Value($this->Values); // those chosen already that aren't among the options
+            $this->SelectElement->AddAttribute('data-bs-source', $URL);
+            $this->SelectElement->AddAttribute('data-bs-source-min-length', $MinLength);
+            return $this;
+        }
+
+        /**
+         * What's typed may be added as a value of its own (Enter, or "Add ..." in the list): free-text tags
+         */
+        public function Creatable(): static
+        {
+            $this->Open = true;
+            $this->Value($this->Values);
+            $this->SelectElement->AddAttribute('data-bs-creatable', 'true');
             return $this;
         }
 
@@ -140,10 +173,23 @@
          */
         public function Value(array $Values): void
         {
-            $Values = array_map('strval', $Values);
+            $Values = $this->Values = array_map('strval', $Values);
+            $Known = [];
             foreach ($this->Options() as $Option)
             {
                 $Option->Selected = in_array($Option->Value, $Values, true);
+                $Known[] = $Option->Value;
+            }
+            // With Source() or Creatable() a value may not be among the options: it's kept, captioned as itself
+            if ($this->Open)
+            {
+                foreach (array_diff($Values, $Known) as $Value)
+                {
+                    if ($Value !== '')
+                    {
+                        $this->SelectElement->AddChild($this->Option($Value, $Value, [$Value]));
+                    }
+                }
             }
         }
 
