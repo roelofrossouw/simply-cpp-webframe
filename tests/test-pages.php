@@ -86,6 +86,25 @@
   $Tabs = new BS\Tabs();
   $Tabs->AddTab('Settings', 'Content', true, BS\Icon::Gear);
   Check(preg_match('#</i> Settings#', (string)$Tabs) === 1, 'a tab: a space between its icon and caption');
+  // Nav overflow: off, the wrapper is a plain nav-wrap; Overflow() turns it on with its options, kept items marked
+  Check(str_contains((string)$Tabs, '<div class="nav-wrap"><ul class="nav nav-tabs"') && !str_contains((string)$Tabs, 'nav-overflow'),
+    'tabs without Overflow(): a plain wrapper around the nav');
+  $Many = (new BS\Tabs())->Overflow(false, 2, BS\ScreenSize::Medium);
+  $Many->AddTab('First', 'One', Keep: true);
+  $Many->AddTab('Second', 'Two');
+  $Html = (string)$Many;
+  Check(str_contains($Html, 'class="nav-wrap nav-overflow" data-bs-toggle="nav-overflow" data-bs-more-text data-bs-threshold="2" data-bs-collapse-below="768"'),
+    'Tabs::Overflow(): the wrapper with its options');
+  Check(substr_count($Html, 'nav-overflow-keep') === 1 && preg_match('#<li class="nav-item nav-overflow-keep"[^>]*><button[^>]*>First#', $Html) === 1,
+    'a tab added with Keep stays out of More');
+  $Bar = new BS\Menu(new HTML\Text('Test'));
+  $Bar->RightAlign();
+  $Bar->Overflow();
+  $Bar->AddItem(BS\Icon::House, 'Home', '/home.php', 'home2')->Keep();
+  $Html = (string)$Bar;
+  Check(str_contains($Html, '<div class="nav-wrap nav-overflow" data-bs-toggle="nav-overflow"><ul class="navbar-nav justify-content-end"><li class="nav-item nav-overflow-keep"'),
+    'Menu::Overflow(): the navbar in the wrapper, right aligned in it, a kept item');
+  Check(!str_contains($Html, 'flex-grow-0'), 'an overflowing menu\'s item bar takes the room there is, right aligned or not');
   $Words = new HTML\Paragraph('Two');
   $Words->AddChild('words');
   Same("<p>Two words</p>\n", (string)$Words, 'text children still get a space between them');

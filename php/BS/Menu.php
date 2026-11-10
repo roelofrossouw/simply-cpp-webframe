@@ -9,6 +9,8 @@
         private $URLS = [];
 
         private \HTML\Div $ItemBar;
+        private NavOverflow $Wrapper;
+        private bool $Overflowing = false;
         private NavbarToggler $Toggler;
         private ?Navbar $Pinned = null;
         private array $Items = [];
@@ -28,7 +30,8 @@
             $Fluid->AddChild($this->Toggler = new NavbarToggler($CollapseID = uniqid('collapse')));
             $Fluid->AddChild($this->ItemBar = new \HTML\Div($CollapseID));
             $this->ItemBar->AddClasses(['collapse', 'navbar-collapse']);
-            $this->ItemBar->AddChild($this->Navbar = new Navbar());
+            $this->ItemBar->AddChild($this->Wrapper = new NavOverflow());
+            $this->Wrapper->AddChild($this->Navbar = new Navbar());
         }
 
         public function __toString(): string
@@ -178,7 +181,29 @@
 
         public function RightAlign(): void
         {
-            $this->ItemBar->AddClass('flex-grow-0');
+            if (!$this->Overflowing)
+            {
+                $this->ItemBar->AddClass('flex-grow-0');
+            }
+            $this->Navbar->AddClass('justify-content-end');
+        }
+
+        /**
+         * Items that don't fit go into a More menu at the end of the bar, last first (Bootstrap 6's nav overflow, see
+         * BS\NavOverflow); the bar folds away behind its toggle button only when even the kept items and More don't
+         * fit. Items marked Keep() stay; a pinned item (AddPinnedItem()) is outside the bar and always shows.
+         *
+         * @param string|false $More The More button's caption; false: only its icon
+         * @param int $Threshold At least this many items stay visible
+         * @param ScreenSize|int|null $CollapseBelow Narrower than this, every item but those kept goes into More
+         */
+        public function Overflow(string|false $More = 'More', int $Threshold = 0, ScreenSize|int|null $CollapseBelow = null): static
+        {
+            $this->Overflowing = true;
+            $this->Wrapper->Enable($More, $Threshold, $CollapseBelow);
+            // The wrapper takes the room the bar has (right-aligned items move to its end), so the item bar grows
+            $this->ItemBar->RemoveClass('flex-grow-0');
+            return $this;
         }
 
     }

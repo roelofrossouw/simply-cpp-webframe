@@ -16,6 +16,7 @@
     class Tabs extends \HTML\Div
     {
         private \HTML\UnorderedList $Nav;
+        private NavOverflow $Wrapper;
         private \HTML\Div $Panes;
         private string $Toggle;
         private int $Count = 0;
@@ -24,7 +25,8 @@
         {
             parent::__construct();
             $this->Toggle = $Pills ? 'pill' : 'tab';
-            parent::AddChild($this->Nav = new \HTML\UnorderedList());
+            parent::AddChild($this->Wrapper = new NavOverflow());
+            $this->Wrapper->AddChild($this->Nav = new \HTML\UnorderedList());
             $this->Nav->AddClasses(['nav', $Pills ? 'nav-pills' : 'nav-tabs']);
             $this->Nav->AddAttribute('role', 'tablist');
             parent::AddChild($this->Panes = new \HTML\ClassDiv('tab-content'));
@@ -41,10 +43,25 @@
         }
 
         /**
+         * Tabs that don't fit go into a More menu at the end of the row, last first, instead of wrapping onto
+         * another line (Bootstrap 6's nav overflow, see BS\NavOverflow). Tabs added with $Keep stay.
+         *
+         * @param string|false $More The More button's caption; false: only its icon
+         * @param int $Threshold At least this many tabs stay visible
+         * @param ScreenSize|int|null $CollapseBelow Narrower than this, every tab but those kept goes into More
+         */
+        public function Overflow(string|false $More = 'More', int $Threshold = 0, ScreenSize|int|null $CollapseBelow = null): static
+        {
+            $this->Wrapper->Enable($More, $Threshold, $CollapseBelow);
+            return $this;
+        }
+
+        /**
          * @param bool $Active Show this tab first (the first tab is shown when none is chosen)
+         * @param bool $Keep With Overflow(): the tab never goes into the More menu
          * @return \HTML\Div The tab's pane
          */
-        public function AddTab(string $Caption, Element|string $Content, bool $Active = false, ?Icon $Icon = null): \HTML\Div
+        public function AddTab(string $Caption, Element|string $Content, bool $Active = false, ?Icon $Icon = null, bool $Keep = false): \HTML\Div
         {
             // The first tab is active unless another one asks to be. Count separately: in "$Active || $this->Count++"
             // the count would be skipped for an active tab, and the next tab would take over.
@@ -78,6 +95,10 @@
             $this->Nav->AddChild($Item = new \HTML\ListItem($Button));
             $Item->AddClass('nav-item');
             $Item->AddAttribute('role', 'presentation');
+            if ($Keep)
+            {
+                $Item->AddClass('nav-overflow-keep');
+            }
 
             $this->Panes->AddChild($Pane = new \HTML\Div($ID));
             $Pane->AddClasses(['tab-pane', 'fade']);

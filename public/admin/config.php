@@ -83,6 +83,7 @@
       'admin.user_columns' => ['A class of the site\'s that adds its own columns to Users (an Admin\UserColumns)', false],
       'storage.class' => ['Where users, access and the menu are kept (default Storage\Postgres)', false],
       'menu.editor' => ['The page that manages the menu (default: Administer → Menu)', false],
+      'menu.overflow' => ['The main menu\'s items that don\'t fit go into a More menu (default true; false: the menu folds away behind its button instead)', false],
     ],
   ];
 

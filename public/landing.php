@@ -21,6 +21,11 @@
   $Menu = new Menu($Brand);
   $Menu->FixedTop();
   $Menu->Medium();
+  // Items that don't fit go into a More menu (menu.overflow, default on); false: the menu folds away instead
+  if (filter_var(Config::Get('menu.overflow', true), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? true)
+  {
+    $Menu->Overflow();
+  }
   $Menu->AddTarget();
   // Everything is in the menu setup (framework.menu, see sql/schema.sql): Home, the pages, and signing in or out
   MenuLayout::Build($Menu, 'main');

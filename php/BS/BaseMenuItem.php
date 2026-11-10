@@ -39,6 +39,14 @@
             return $this;
         }
 
+        /**
+         * With the menu's Overflow(): this item never goes into the More menu
+         */
+        public function Keep(): static
+        {
+            return $this->AddClass('nav-overflow-keep');
+        }
+
         public function Active(): static
         {
             $this->Anchor->AddClass('active');

@@ -216,6 +216,27 @@ $Table->CellWidth('30rem');                   // how wide a one-line cell gets b
 
 Sortable headings (`TableHeadingCell::Sort()`, `DB::SortAction()`) keep the page's own query parameters (since 1.10.4).
 
+## Navs that overflow
+
+A row of tabs or the menu bar can keep to one line: what doesn't fit goes into a **More** menu at its end, last
+first, and comes back as room comes (Bootstrap 6's [nav overflow](https://getbootstrap.com/docs/6.0/components/nav-overflow/),
+done by `js/app.js` on Bootstrap 5.3 with the same markup). It follows the width of its own place, not the window's,
+so it works in a popup or a side panel too.
+
+```php
+$Tabs = (new BS\Tabs())->Overflow();
+$Tabs->AddTab('Overview', $Overview, Keep: true);   // never goes into More
+$Menu->Overflow(More: false, Threshold: 2);          // the button as an icon only; at least 2 items stay
+$Menu->AddItem(BS\Icon::House, 'Home', '/home.php')->Keep();
+```
+
+`Overflow()` takes the button's caption (`false`: the icon only), how many items stay at least, and `CollapseBelow`
+(a `BS\ScreenSize` or pixels: narrower, everything but the kept items goes into More). Choosing an entry in More
+clicks the item itself, so tabs, menu items and links work as before; an item with a dropdown shows its caption as a
+heading over its items. The main menu has it on (setting `menu.overflow`, `false` to fold the menu away behind its
+button instead); it still folds away when even the kept items and More don't fit. For a nav of your own, put it in a
+`BS\NavOverflow` and call `Enable()`.
+
 ## Keeping users and the menu elsewhere
 
 `Storage\Postgres` keeps them in the settings' database. To keep them somewhere else, behind a REST service say,

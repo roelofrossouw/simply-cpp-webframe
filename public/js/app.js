@@ -67,9 +67,22 @@ function setupMenu(menuID, urlMap) {
     chkSize[entries[0].target.id] = setTimeout(function (target) {
       let menu = $(target);
       menu.addClass('navbar-expand');
-      if (menu[0].scrollWidth > menu.outerWidth())
+      // A menu with nav overflow first moves what doesn't fit into its More menu; it folds away only when even that
+      // doesn't fit
+      let overflowing = false;
+      menu.find('[data-bs-toggle="nav-overflow"]').each(function () {
+        navOverflow(this);
+        navOverflowUpdate(this);
+        const nav = this.navOverflow && this.navOverflow.nav;
+        if (nav && nav.scrollWidth > this.clientWidth + 1) overflowing = true;
+      });
+      if (overflowing || menu[0].scrollWidth > menu.outerWidth())
       {
         menu.removeClass('navbar-expand');
+        // Folded away, the menu lists every item again, with no More
+        menu.find('[data-bs-toggle="nav-overflow"]').each(function () {
+          navOverflowUpdate(this);
+        });
       }
     }, 100, entries[0].target);
   });
@@ -217,6 +230,7 @@ function initComponents(root) {
   start('[data-bs-ride="carousel"]', function (element) {
     bootstrap.Carousel.getOrCreateInstance(element).cycle();
   });
+  start('[data-bs-toggle="nav-overflow"]', navOverflow);
   scrollTables(root);
   cutCells(root);
 }
@@ -284,6 +298,150 @@ function markCutCells(table) {
       }
     }
   }
+}
+
+// Nav overflow, Bootstrap 6's NavOverflow ("Priority+") on Bootstrap 5.3 (BS\Tabs::Overflow(), BS\Menu::Overflow()):
+// a .nav-overflow[data-bs-toggle="nav-overflow"] wrapper around a .nav moves the items that don't fit into a More
+// dropdown at its end, last first, and back as room comes. It watches the wrapper, not the window, so it works in a
+// popup or a side panel too. Items with .nav-overflow-keep stay; data-bs-threshold keeps that many visible at least;
+// below data-bs-collapse-below pixels everything but the kept items goes into More; data-bs-more-text names the
+// button ("" or "false": the icon only). A nav laid out as a column (a menu folded away on a narrow screen) shows
+// everything. The More menu's entries stand in for the hidden items: choosing one clicks the item itself, so a tab,
+// a menu item (menuclick()) or a link does what it always does. Fires update.bs.navoverflow and, when items moved
+// into More, overflow.bs.navoverflow (overflowCount, visibleCount) on the wrapper.
+const navOverflowWatch = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(function (entries) {
+  for (const entry of entries) navOverflowUpdate(entry.target);
+});
+
+function navOverflow(wrapper) {
+  if (wrapper.navOverflow) return;
+  const nav = wrapper.querySelector(':scope > .nav, :scope > .navbar-nav');
+  if (!nav) return;
+  const more = document.createElement('li');
+  more.className = 'nav-item dropdown nav-overflow-item d-none';
+  more.setAttribute('role', 'presentation');
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'nav-link dropdown-toggle nav-overflow-toggle text-nowrap';
+  toggle.setAttribute('data-bs-toggle', 'dropdown');
+  toggle.setAttribute('aria-expanded', 'false');
+  const icon = document.createElement('i');
+  icon.className = 'bi bi-three-dots nav-overflow-icon';
+  icon.setAttribute('aria-hidden', 'true');
+  toggle.appendChild(icon);
+  const text = wrapper.getAttribute('data-bs-more-text') ?? 'More';
+  if (text === '' || text === 'false') {
+    toggle.setAttribute('aria-label', 'More');
+  } else {
+    const label = document.createElement('span');
+    label.className = 'nav-overflow-text ms-1';
+    label.textContent = text;
+    toggle.appendChild(label);
+  }
+  const menu = document.createElement('ul');
+  menu.className = 'dropdown-menu dropdown-menu-end nav-overflow-menu';
+  more.append(toggle, menu);
+  nav.appendChild(more);
+  wrapper.navOverflow = {nav: nav, more: more, toggle: toggle, menu: menu};
+  // What the More menu marks as active follows the nav
+  nav.addEventListener('shown.bs.tab', function () {
+    navOverflowUpdate(wrapper);
+  });
+  nav.addEventListener('click', function () {
+    setTimeout(navOverflowUpdate, 0, wrapper);
+  });
+  if (navOverflowWatch) navOverflowWatch.observe(wrapper);
+  navOverflowUpdate(wrapper);
+}
+
+function navOverflowUpdate(wrapper) {
+  const state = wrapper.navOverflow;
+  if (!state) return;
+  const {nav, more, toggle, menu} = state;
+  const items = Array.from(nav.children).filter(item => item !== more);
+  for (const item of items) item.classList.remove('nav-overflow-hidden');
+  more.classList.add('d-none');
+  menu.replaceChildren();
+  toggle.classList.remove('active');
+
+  const room = wrapper.clientWidth;
+  const column = getComputedStyle(nav).flexDirection.startsWith('column');
+  const hidden = [];
+  if (room > 0 && !column) {
+    const fits = () => nav.scrollWidth <= room + 1;
+    const below = parseInt(wrapper.getAttribute('data-bs-collapse-below') || '0', 10);
+    const threshold = parseInt(wrapper.getAttribute('data-bs-threshold') || '0', 10);
+    const movable = items.filter(item => !item.classList.contains('nav-overflow-keep'));
+    if (below > 0 && room < below) {
+      hidden.push(...movable);
+    } else if (!fits()) {
+      more.classList.remove('d-none');
+      let visible = items.length;
+      for (const item of movable.reverse()) {
+        if (visible <= threshold) break;
+        item.classList.add('nav-overflow-hidden');
+        hidden.unshift(item);
+        visible--;
+        if (fits()) break;
+      }
+    }
+    for (const item of hidden) item.classList.add('nav-overflow-hidden');
+    if (hidden.length) more.classList.remove('d-none');
+  }
+  for (const item of hidden) navOverflowEntries(item, menu, toggle);
+
+  wrapper.dispatchEvent(new CustomEvent('update.bs.navoverflow', {bubbles: true}));
+  if (hidden.length) {
+    const event = new CustomEvent('overflow.bs.navoverflow', {bubbles: true});
+    event.overflowCount = hidden.length;
+    event.visibleCount = items.length - hidden.length;
+    wrapper.dispatchEvent(event);
+  }
+}
+
+// The More menu's entries for a hidden nav item: one that stands in for its link, or, for an item with a dropdown,
+// its caption as a heading and an entry for each of the dropdown's items (Bootstrap 5 has no submenus)
+function navOverflowEntries(item, menu, toggle) {
+  const link = item.querySelector(':scope > .nav-link, :scope > .dropdown-item, :scope > a, :scope > button');
+  if (!link) return;
+  const dropdown = item.querySelector(':scope > .dropdown-menu');
+  if (dropdown) {
+    const heading = document.createElement('li');
+    heading.innerHTML = '<h6 class="dropdown-header"></h6>';
+    heading.firstChild.append(...navOverflowCaption(link));
+    menu.appendChild(heading);
+    for (const sub of dropdown.children) navOverflowEntries(sub, menu, toggle);
+    return;
+  }
+  const entry = document.createElement('li');
+  const stand = document.createElement(link.tagName === 'A' && link.getAttribute('href') ? 'a' : 'button');
+  if (stand.tagName === 'A') stand.href = link.getAttribute('href');
+  else stand.type = 'button';
+  stand.className = 'dropdown-item text-nowrap';
+  stand.append(...navOverflowCaption(link));
+  if (link.classList.contains('active')) {
+    stand.classList.add('active');
+    stand.setAttribute('aria-current', 'true');
+    toggle.classList.add('active');
+  }
+  if (link.classList.contains('disabled') || link.disabled) {
+    stand.classList.add('disabled');
+    stand.setAttribute('aria-disabled', 'true');
+  }
+  stand.addEventListener('click', function (event) {
+    event.preventDefault();
+    link.click();
+  });
+  entry.appendChild(stand);
+  menu.appendChild(entry);
+}
+
+// A link's icon and caption, copied for the More menu, the caption shown even where the nav shows only the icon
+function navOverflowCaption(link) {
+  const copy = link.cloneNode(true);
+  copy.querySelectorAll('[id]').forEach(element => element.removeAttribute('id'));
+  copy.querySelectorAll('.visually-hidden').forEach(element => element.classList.remove('visually-hidden'));
+  return Array.from(copy.childNodes);
 }
 
 // The items of a list editor (BS\ListEditor)

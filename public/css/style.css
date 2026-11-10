@@ -258,3 +258,28 @@ th.sortable {
     transform: rotate(360deg);
   }
 }
+
+/* Nav overflow (js/app.js navOverflow()): the wrapper takes the room there is, not what its items would like, so
+   moving items into More doesn't change what it measures; the nav stays one line. Without Overflow() the wrapper
+   (BS\Tabs, BS\Menu) takes no part in the layout. */
+.nav-wrap:not(.nav-overflow) {
+  display: contents;
+}
+
+/* Its container may shrink below the nav's full width too (a flex item, such as a navbar's item bar, won't by itself) */
+:has(> .nav-overflow) {
+  min-width: 0;
+}
+
+.nav-overflow {
+  flex: 1 1 0;
+  min-width: 0;
+
+  > .nav, > .navbar-nav {
+    flex-wrap: nowrap;
+  }
+
+  .nav-overflow-hidden {
+    display: none !important;
+  }
+}
