@@ -16,7 +16,7 @@
         private \HTML\Div $Floater;
         private $Name;
 
-        public function __construct(string $Name, string $Label, \HTML\InputType $Type = \HTML\InputType::Text, ?string $Prefix = null, ?string $Suffix = null)
+        public function __construct(string $Name, string $Label, \HTML\InputType $Type = \HTML\InputType::Text, \HTML\Element|string|null $Prefix = null, \HTML\Element|string|null $Suffix = null)
         {
             $this->Name = $Name;
             parent::__construct('input');
@@ -27,7 +27,8 @@
 
             if (!empty($Prefix))
             {
-                $Tag = $Group->AddChild(new \HTML\Span($Prefix));
+                $Tag = $Group->AddChild(new \HTML\Span());
+                $Tag->AddChild($Prefix);
                 $Tag->AddClass('input-group-text');
             }
 
@@ -38,7 +39,8 @@
 
             if (!empty($Suffix))
             {
-                $Tag = $Group->AddChild(new \HTML\Span($Suffix));
+                $Tag = $Group->AddChild(new \HTML\Span());
+                $Tag->AddChild($Suffix);
                 $Tag->AddClass('input-group-text');
             }
         }

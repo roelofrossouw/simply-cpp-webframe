@@ -24,11 +24,15 @@
         $this->Title = Config::AppName();
         $this->Description(Config::AppDescription());
         $this->ThemeColour = (string)Config::Get('app.theme_color', $this->ThemeColour);
+        // Before the package's own, which adjusts it: the calendar of date fields (BS\DatePicker)
+        $this->AddStylesheet('https://cdn.jsdelivr.net/npm/vanilla-calendar-pro@3.4.0/styles/index.css', false);
         $this->AddStylesheet(Config::FrameworkURL('css/style.css'));
 
         // Add dependencies...
         $this->AddScript('https://ajax.aspnetcdn.com/ajax/jQuery/jquery-3.7.1.js', false);
         $this->AddScript('https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js', false);
+        // The calendar of date fields (BS\DatePicker), the library Bootstrap 6's Datepicker uses
+        $this->AddScript('https://cdn.jsdelivr.net/npm/vanilla-calendar-pro@3.4.0/index.js', false);
 
         // Create main containers
         $this->Body = new HTML\Main('main');

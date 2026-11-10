@@ -231,6 +231,8 @@ function initComponents(root) {
     bootstrap.Carousel.getOrCreateInstance(element).cycle();
   });
   start('[data-bs-toggle="nav-overflow"]', navOverflow);
+  start('input[data-bs-toggle="datepicker"]', datePicker);
+  start('select[data-bs-toggle="multi-select"]', multiSelect);
   scrollTables(root);
   cutCells(root);
 }
@@ -442,6 +444,349 @@ function navOverflowCaption(link) {
   copy.querySelectorAll('[id]').forEach(element => element.removeAttribute('id'));
   copy.querySelectorAll('.visually-hidden').forEach(element => element.classList.remove('visually-hidden'));
   return Array.from(copy.childNodes);
+}
+
+// Date fields with a calendar (BS\DatePicker): Bootstrap 6's Datepicker on Bootstrap 5.3, with the same library
+// (Vanilla Calendar Pro) and data-bs-* attributes: selection-mode (single, multiple, multiple-ranged), date-min,
+// date-max, display-months-count, first-weekday (default Monday), placement (left, center, right, auto) and
+// vcp-options (JSON, any Vanilla Calendar Pro setting). The field shows the dates written out in the page's language;
+// the form posts them as YYYY-MM-DD in the hidden field data-bs-value-input names: several separated by commas, a
+// range as its first and last day. A date typed as YYYY-MM-DD counts too; anything else makes the field invalid.
+// Fires change on the field, and change.bs.datepicker with dates.
+function datePicker(field) {
+  if (field.datePicker || typeof VanillaCalendarPro === 'undefined') return;
+  const store = document.querySelector(field.getAttribute('data-bs-value-input')) || field;
+  const attribute = name => field.getAttribute('data-bs-' + name);
+  const mode = attribute('selection-mode') || 'single';
+  const locale = document.documentElement.lang || navigator.language || 'default';
+  const isoDate = /^\d{4}-\d{2}-\d{2}$/;
+  const written = new Intl.DateTimeFormat(locale, {year: 'numeric', month: 'short', day: 'numeric'});
+  const show = dates => dates.map(date => written.format(new Date(date + 'T00:00:00'))).join(mode === 'multiple-ranged' ? ' – ' : ', ');
+  // A range is kept as its first and last day; the calendar lists every day in it
+  const kept = dates => {
+    const sorted = [...dates].sort();
+    return mode === 'multiple-ranged' && sorted.length > 1 ? [sorted[0], sorted[sorted.length - 1]] : sorted;
+  };
+  const save = function (dates) {
+    store.value = dates.join(',');
+    field.value = show(dates);
+    field.setCustomValidity('');
+    field.dispatchEvent(new Event('change', {bubbles: true}));
+    const event = new CustomEvent('change.bs.datepicker', {bubbles: true});
+    event.dates = dates;
+    field.dispatchEvent(event);
+  };
+
+  const selected = store.value ? store.value.split(',').map(date => date.trim()).filter(date => isoDate.test(date)) : [];
+  const months = parseInt(attribute('display-months-count') || '1', 10);
+  let extra = {};
+  try {
+    extra = JSON.parse(attribute('vcp-options') || '{}');
+  } catch (problem) {
+    console.error('datePicker: data-bs-vcp-options', problem);
+  }
+  const calendar = new VanillaCalendarPro.Calendar(field, Object.assign({
+    inputMode: true,
+    positionToInput: attribute('placement') || 'auto',
+    type: months > 1 ? 'multiple' : 'default',
+    displayMonthsCount: months,
+    firstWeekday: parseInt(attribute('first-weekday') ?? '1', 10),
+    locale: locale,
+    selectionDatesMode: mode === 'single' ? 'single' : mode,
+    selectedDates: mode === 'multiple-ranged' && selected.length === 2 ? [selected[0] + ':' + selected[1]] : selected,
+    selectedMonth: selected.length ? parseInt(selected[0].slice(5, 7), 10) - 1 : undefined,
+    selectedYear: selected.length ? parseInt(selected[0].slice(0, 4), 10) : undefined,
+    dateMin: attribute('date-min') || undefined,
+    dateMax: attribute('date-max') || undefined,
+    enableJumpToSelectedDate: true,
+    themeAttrDetect: 'html[data-bs-theme]',
+    onChangeToInput: function (self) {
+      const dates = kept(self.context.selectedDates);
+      save(dates);
+      // One date, or both ends of a range: done
+      if (mode === 'single' && dates.length || mode === 'multiple-ranged' && self.context.selectedDates.length > 1) self.hide();
+    },
+  }, extra));
+  calendar.init();
+  field.datePicker = calendar;
+  if (selected.length) field.value = show(kept(selected));
+
+  // Typed: YYYY-MM-DD (several separated by commas) is taken; nothing clears it
+  field.addEventListener('input', function () {
+    const typed = field.value.split(/\s*[,–]\s*/).map(part => part.trim()).filter(part => part !== '');
+    if (!typed.length) {
+      store.value = '';
+      field.setCustomValidity('');
+    } else if (typed.every(part => isoDate.test(part) && !isNaN(new Date(part + 'T00:00:00')))) {
+      store.value = kept(typed).join(',');
+      field.setCustomValidity('');
+      calendar.set({selectedDates: mode === 'multiple-ranged' && typed.length === 2 ? [typed[0] + ':' + typed[1]] : typed}, {dates: true, month: true, year: true});
+    } else {
+      field.setCustomValidity('Choose a date in the calendar, or type it as YYYY-MM-DD');
+    }
+  });
+  // The calendar icon beside the field opens it too
+  const group = field.closest('.input-group');
+  if (group) {
+    for (const icon of group.querySelectorAll('.input-group-text')) {
+      icon.style.cursor = 'pointer';
+      icon.addEventListener('click', function () {
+        field.focus();
+        calendar.show();
+      });
+    }
+  }
+}
+
+// Multi-selects (BS\MultiSelect), like CoreUI's: the <select> stays as what the form posts (hidden), and a field in
+// its place shows what's chosen as chips (data-bs-selection="counter": "3 selected") with a search to type in; the
+// list opens under it with Select all and Clear, its groups as headings. Keys: up and down move through the list,
+// Enter chooses, Escape closes, Backspace in an empty search takes off the last chip. data-bs-max limits how many,
+// data-bs-single="true" makes it a one-choice search (a combobox), data-bs-search="false" leaves the search out,
+// data-bs-select-all="false" Select all. The select's change event fires on every change.
+function multiSelect(select) {
+  if (select.multiSelect) return;
+  const single = select.getAttribute('data-bs-single') === 'true';
+  const counter = select.getAttribute('data-bs-selection') === 'counter';
+  const searchable = select.getAttribute('data-bs-search') !== 'false';
+  const selectAll = !single && select.getAttribute('data-bs-select-all') !== 'false';
+  const max = parseInt(select.getAttribute('data-bs-max') || '0', 10);
+  const placeholder = select.getAttribute('data-bs-placeholder') || (searchable ? 'Search…' : '');
+  const fold = text => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const element = (tag, className, text) => {
+    const made = document.createElement(tag);
+    if (className) made.className = className;
+    if (text !== undefined) made.textContent = text;
+    return made;
+  };
+
+  select.classList.add('visually-hidden');
+  select.tabIndex = -1;
+  const box = element('div', 'form-control multi-select');
+  const chips = element('div', 'multi-select-chips');
+  const search = element('input', 'multi-select-search');
+  search.type = 'text';
+  search.autocomplete = 'off';
+  search.setAttribute('role', 'combobox');
+  search.setAttribute('aria-expanded', 'false');
+  search.setAttribute('aria-autocomplete', 'list');
+  if (select.id) search.setAttribute('aria-labelledby', select.id + '_label');
+  const label = select.id ? select.parentElement.querySelector('label[for="' + select.id + '"]') : null;
+  if (label) {
+    label.id = select.id + '_label';
+    label.htmlFor = '';
+    label.addEventListener('click', () => search.focus());
+  }
+  if (!searchable) search.readOnly = true;
+  const clear = element('button', 'btn-close multi-select-clear');
+  clear.type = 'button';
+  clear.setAttribute('aria-label', 'Clear');
+  chips.appendChild(search);
+  box.append(chips, clear);
+
+  const menu = element('div', 'dropdown-menu multi-select-menu');
+  menu.id = (select.id || 'ms' + Math.random().toString(36).slice(2)) + '_list';
+  menu.setAttribute('role', 'listbox');
+  if (!single) menu.setAttribute('aria-multiselectable', 'true');
+  search.setAttribute('aria-controls', menu.id);
+  const tools = element('div', 'multi-select-tools');
+  const all = element('button', 'btn btn-link btn-sm', 'Select all');
+  const none = element('button', 'btn btn-link btn-sm', 'Clear');
+  all.type = none.type = 'button';
+  if (selectAll) tools.appendChild(all);
+  if (!single) tools.appendChild(none);
+  if (tools.children.length) menu.appendChild(tools);
+  const list = element('div', 'multi-select-options');
+  const empty = element('div', 'dropdown-item-text text-body-secondary multi-select-empty', 'No results');
+  menu.append(list, empty);
+  select.after(box, menu);
+
+  // The list: a heading for each group, an entry for each option
+  const entries = [];
+  const add = function (option, group) {
+    const item = element('button', 'dropdown-item multi-select-option');
+    item.type = 'button';
+    item.tabIndex = -1;
+    item.setAttribute('role', 'option');
+    if (!single) {
+      const check = element('input', 'form-check-input me-2');
+      check.type = 'checkbox';
+      check.tabIndex = -1;
+      check.setAttribute('aria-hidden', 'true');
+      item.appendChild(check);
+    }
+    item.appendChild(element('span', '', option.textContent));
+    list.appendChild(item);
+    const entry = {option: option, item: item, group: group, text: fold(option.textContent)};
+    entries.push(entry);
+    item.addEventListener('mousedown', event => event.preventDefault()); // the search keeps the focus
+    item.addEventListener('click', () => choose(entry));
+  };
+  for (const child of select.children) {
+    if (child.tagName === 'OPTGROUP') {
+      const heading = element('h6', 'dropdown-header', child.label);
+      list.appendChild(heading);
+      for (const option of child.children) add(option, heading);
+    } else if (child.tagName === 'OPTION' && child.value !== '') {
+      // After a group, a line, so it doesn't look like that group's
+      if (entries.length && entries[entries.length - 1].group) list.appendChild(element('hr', 'dropdown-divider'));
+      add(child, null);
+    }
+  }
+
+  let active = -1;
+  const visible = () => entries.filter(entry => !entry.item.hidden);
+  const chosen = () => entries.filter(entry => entry.option.selected);
+  const changed = function () {
+    select.dispatchEvent(new Event('change', {bubbles: true}));
+    box.classList.remove('is-invalid');
+    render();
+  };
+  const choose = function (entry) {
+    if (entry.option.disabled || entry.item.disabled) return;
+    if (single) {
+      for (const other of entries) other.option.selected = other === entry;
+      changed();
+      close();
+      return;
+    }
+    entry.option.selected = !entry.option.selected;
+    changed();
+    search.value = '';
+    filter();
+  };
+  const render = function () {
+    const picked = chosen();
+    const full = max > 0 && picked.length >= max;
+    for (const entry of entries) {
+      entry.item.classList.toggle('active', single && entry.option.selected);
+      entry.item.setAttribute('aria-selected', entry.option.selected ? 'true' : 'false');
+      entry.item.disabled = entry.option.disabled || (full && !entry.option.selected);
+      const check = entry.item.querySelector('input');
+      if (check) check.checked = entry.option.selected;
+    }
+    for (const chip of chips.querySelectorAll('.multi-select-chip, .multi-select-count')) chip.remove();
+    if (single) {
+      search.placeholder = picked.length ? '' : placeholder;
+      if (document.activeElement !== search) search.value = picked.length ? picked[0].option.textContent : '';
+    } else if (counter) {
+      if (picked.length) chips.insertBefore(element('span', 'multi-select-count', picked.length + ' selected'), search);
+      search.placeholder = picked.length ? '' : placeholder;
+    } else {
+      for (const entry of picked) {
+        const chip = element('span', 'badge rounded-pill text-bg-secondary multi-select-chip', entry.option.textContent);
+        if (!entry.option.disabled && !select.disabled) {
+          const remove = element('button', 'btn-close btn-close-white ms-1');
+          remove.type = 'button';
+          remove.tabIndex = -1;
+          remove.setAttribute('aria-label', 'Remove ' + entry.option.textContent);
+          remove.addEventListener('mousedown', event => event.preventDefault());
+          remove.addEventListener('click', function (event) {
+            event.stopPropagation();
+            entry.option.selected = false;
+            changed();
+          });
+          chip.appendChild(remove);
+        }
+        chips.insertBefore(chip, search);
+      }
+      search.placeholder = picked.length ? '' : placeholder;
+    }
+    clear.hidden = !picked.length || select.disabled || select.required && single;
+    all.disabled = max > 0;
+    box.classList.toggle('disabled', select.disabled);
+    search.disabled = select.disabled;
+  };
+  const filter = function () {
+    const typed = fold(single && search.value === (chosen()[0] || {option: {}}).option.textContent ? '' : search.value.trim());
+    for (const entry of entries) entry.item.hidden = typed !== '' && !entry.text.includes(typed);
+    for (const heading of list.querySelectorAll('.dropdown-header')) {
+      heading.hidden = !entries.some(entry => entry.group === heading && !entry.item.hidden);
+    }
+    empty.hidden = visible().length > 0;
+    highlight(visible().length ? 0 : -1);
+  };
+  const highlight = function (index) {
+    const shown = visible();
+    for (const entry of entries) entry.item.classList.remove('focus');
+    active = index;
+    if (index >= 0 && index < shown.length) {
+      shown[index].item.classList.add('focus');
+      shown[index].item.scrollIntoView({block: 'nearest'});
+      search.setAttribute('aria-activedescendant', shown[index].item.id || (shown[index].item.id = menu.id + '_' + entries.indexOf(shown[index])));
+    } else {
+      search.removeAttribute('aria-activedescendant');
+    }
+  };
+  const open = function () {
+    if (select.disabled || menu.classList.contains('show')) return;
+    menu.classList.add('show');
+    box.classList.add('focus');
+    search.setAttribute('aria-expanded', 'true');
+    filter();
+  };
+  const close = function () {
+    menu.classList.remove('show');
+    box.classList.remove('focus');
+    search.setAttribute('aria-expanded', 'false');
+    search.value = '';
+    render();
+  };
+
+  box.addEventListener('mousedown', function (event) {
+    if (event.target !== search) event.preventDefault();
+    search.focus();
+    open();
+  });
+  search.addEventListener('focus', open);
+  search.addEventListener('blur', close);
+  search.addEventListener('input', function () {
+    open();
+    filter();
+  });
+  search.addEventListener('keydown', function (event) {
+    const shown = visible();
+    if (event.key === 'ArrowDown') {
+      open();
+      highlight(Math.min(active + 1, shown.length - 1));
+    } else if (event.key === 'ArrowUp') {
+      highlight(Math.max(active - 1, 0));
+    } else if (event.key === 'Enter') {
+      if (menu.classList.contains('show') && shown[active]) choose(shown[active]);
+    } else if (event.key === 'Escape') {
+      if (!menu.classList.contains('show')) return;
+      close();
+    } else if (event.key === 'Backspace' && search.value === '' && !single) {
+      const last = chosen().filter(entry => !entry.option.disabled).pop();
+      if (last) {
+        last.option.selected = false;
+        changed();
+      }
+      return;
+    } else {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+  });
+  clear.addEventListener('mousedown', event => event.preventDefault());
+  clear.addEventListener('click', function (event) {
+    event.stopPropagation();
+    for (const entry of entries) if (!entry.option.disabled) entry.option.selected = false;
+    changed();
+  });
+  for (const [button, value] of [[all, true], [none, false]]) {
+    button.addEventListener('mousedown', event => event.preventDefault());
+    button.addEventListener('click', function () {
+      for (const entry of visible()) if (!entry.option.disabled) entry.option.selected = value;
+      changed();
+    });
+  }
+  // A form check (required) marks the field; the next choice clears it
+  select.addEventListener('invalid', () => box.classList.add('is-invalid'));
+
+  select.multiSelect = {refresh: render, open: open, close: close};
+  render();
 }
 
 // The items of a list editor (BS\ListEditor)

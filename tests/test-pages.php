@@ -105,6 +105,35 @@
   Check(str_contains($Html, '<div class="nav-wrap nav-overflow" data-bs-toggle="nav-overflow"><ul class="navbar-nav justify-content-end"><li class="nav-item nav-overflow-keep"'),
     'Menu::Overflow(): the navbar in the wrapper, right aligned in it, a kept item');
   Check(!str_contains($Html, 'flex-grow-0'), 'an overflowing menu\'s item bar takes the room there is, right aligned or not');
+  // A date field: what's shown has no name, the hidden field posts YYYY-MM-DD; its options as data-bs-* attributes
+  $Due = new BS\DatePicker('due', 'Due date', '2026-11-30');
+  $Due->Min('2026-11-01')->Months(2)->NoWeekends()->Required();
+  $Html = (string)$Due;
+  Check(preg_match('#<input id="(date_|input_)[^"]+" placeholder="Due date" class="form-control" data-bs-toggle="datepicker" autocomplete="off" data-bs-value-input="\#[^"]+_value" value="2026-11-30"#', $Html) === 1,
+    'a date field shows the date and has no name');
+  Check(preg_match('#<input id="[^"]+_value" name="due" type="hidden" value="2026-11-30">#', $Html) === 1, 'the hidden field posts it');
+  Check(str_contains($Html, 'data-bs-date-min="2026-11-01"') && str_contains($Html, 'data-bs-display-months-count="2"')
+    && str_contains($Html, 'data-bs-vcp-options="{&quot;disableWeekdays&quot;:[0,6]}"') && str_contains($Html, ' required'),
+    'its limits, months and calendar options');
+  Check(str_contains($Html, '<span class="input-group-text"><i class="bi bi-calendar3"'), 'a calendar icon beside it');
+  $Range = new BS\DatePicker('period', 'Period', '2026-06-10,2026-06-18', BS\DateSelection::Range);
+  Check(str_contains((string)$Range, 'data-bs-selection-mode="multiple-ranged"') && str_contains((string)$Range, 'value="2026-06-10, 2026-06-18"'),
+    'a range: its mode, both ends');
+
+  // A multi-select: a select multiple posting name[], groups, chosen and disabled options, its options
+  $Cities = new BS\MultiSelect('cities', 'Cities', ['Gauteng' => ['jhb' => 'Johannesburg', 'pta' => 'Pretoria'], 'dbn' => 'Durban'], ['pta']);
+  $Cities->Max(2)->Counter()->Disable(['jhb']);
+  $Html = (string)$Cities;
+  Check(str_contains($Html, 'name="cities[]" multiple class="form-select multi-select-source" data-bs-toggle="multi-select" data-bs-max="2" data-bs-selection="counter"'),
+    'a multi-select posts name[] and carries its options');
+  Check(str_contains($Html, '<optgroup label="Gauteng"><option value="jhb" disabled>Johannesburg</option>') && str_contains($Html, '<option value="pta" selected>Pretoria</option>'),
+    'its groups, chosen and disabled options');
+  $_POST['cities'] = ['dbn'];
+  $Cities->ShowPostedValue();
+  Check(str_contains((string)$Cities, '<option value="dbn" selected>') && !str_contains((string)$Cities, 'value="pta" selected'), 'the posted values chosen again');
+  $One = (new BS\MultiSelect('country', 'Country', ['za' => 'South Africa']))->Single();
+  Check(!str_contains((string)$One, ' multiple') && str_contains((string)$One, 'data-bs-single="true"'), 'Single(): one choice, still searchable');
+
   $Words = new HTML\Paragraph('Two');
   $Words->AddChild('words');
   Same("<p>Two words</p>\n", (string)$Words, 'text children still get a space between them');

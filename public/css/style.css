@@ -283,3 +283,144 @@ th.sortable {
     display: none !important;
   }
 }
+
+/* The calendar of date fields (BS\DatePicker, Vanilla Calendar Pro) in Bootstrap's colours, light and dark */
+.vc {
+  --vc-bg: var(--bs-body-bg);
+  --vc-color: var(--bs-body-color);
+  --vc-header-color: var(--bs-body-color);
+  --vc-title-color: var(--bs-body-color);
+  --vc-date-color: var(--bs-body-color);
+  --vc-date-outside-color: var(--bs-secondary-color);
+  --vc-date-disabled-color: var(--bs-tertiary-color);
+  --vc-date-bg-hover: var(--bs-secondary-bg);
+  --vc-date-hover-bg: var(--bs-secondary-bg);
+  --vc-date-today-color: var(--bs-primary);
+  --vc-date-selected-bg: var(--bs-primary);
+  --vc-date-selected-color: #fff;
+  --vc-date-weekend-selected-bg: var(--bs-primary);
+  --vc-date-weekend-selected-color: #fff;
+  --vc-date-range-middle-bg: var(--bs-primary-bg-subtle);
+  --vc-date-range-middle-color: var(--bs-primary-text-emphasis);
+  --vc-date-hover-edge-bg: var(--bs-primary-border-subtle);
+  --vc-months-years-bg-selected: var(--bs-primary);
+  --vc-months-years-color-selected: #fff;
+  --vc-focus-outline-color: var(--bs-primary);
+  font-family: var(--bs-body-font-family);
+  border: var(--bs-border-width) solid var(--bs-border-color-translucent);
+  box-shadow: var(--bs-box-shadow);
+  /* Above popups and side panels, which a date field may be in */
+  z-index: 1090;
+}
+
+/* Multi-selects (BS\MultiSelect, js/app.js multiSelect()): a field like a floating-label input, with chips and the
+   search inside, its label always up; the list under it */
+.multi-select-field {
+  position: relative;
+
+  > .multi-select {
+    display: flex;
+    align-items: flex-start;
+    gap: .25rem;
+    height: auto;
+    min-height: calc(3.5rem + calc(var(--bs-border-width) * 2));
+    padding-top: 1.625rem;
+    padding-bottom: .375rem;
+    cursor: text;
+
+    &.focus {
+      color: var(--bs-body-color);
+      background-color: var(--bs-body-bg);
+      border-color: #86b7fe;
+      outline: 0;
+      box-shadow: 0 0 0 .25rem rgba(13, 110, 253, .25);
+    }
+
+    &.is-invalid {
+      border-color: var(--bs-form-invalid-border-color);
+    }
+
+    &.disabled {
+      background-color: var(--bs-secondary-bg);
+      cursor: default;
+    }
+  }
+
+  > .multi-select ~ label {
+    color: rgba(var(--bs-body-color-rgb), .65);
+    transform: scale(.85) translateY(-.5rem) translateX(.15rem);
+    pointer-events: auto;
+  }
+
+  .multi-select-chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .25rem;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .multi-select-chip {
+    display: inline-flex;
+    align-items: center;
+    font-weight: normal;
+    font-size: .875em;
+
+    .btn-close {
+      --bs-btn-close-opacity: .75;
+      width: .5em;
+      height: .5em;
+      background-size: .5em;
+    }
+  }
+
+  .multi-select-search {
+    flex: 1 1 4rem;
+    min-width: 4rem;
+    border: 0;
+    outline: 0;
+    padding: 0;
+    background: transparent;
+    color: inherit;
+  }
+
+  .multi-select-clear {
+    flex: none;
+    margin-top: .25rem;
+    width: .6em;
+    height: .6em;
+    background-size: .6em;
+  }
+
+  .multi-select-menu {
+    width: 100%;
+    max-height: 18rem;
+    overflow-y: auto;
+    top: 100%;
+    left: 0;
+    margin-top: .125rem;
+  }
+
+  .multi-select-tools {
+    display: flex;
+    justify-content: space-between;
+    padding: 0 .5rem .25rem;
+    border-bottom: var(--bs-border-width) solid var(--bs-border-color-translucent);
+    margin-bottom: .25rem;
+  }
+
+  .multi-select-option {
+    display: flex;
+    align-items: center;
+
+    &.focus {
+      background-color: var(--bs-tertiary-bg);
+    }
+
+    &:disabled {
+      opacity: .5;
+    }
+  }
+}
+
