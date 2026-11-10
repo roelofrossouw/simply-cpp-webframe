@@ -233,6 +233,7 @@ function initComponents(root) {
   start('[data-bs-toggle="nav-overflow"]', navOverflow);
   start('input[data-bs-toggle="datepicker"]', datePicker);
   start('select[data-bs-toggle="multi-select"]', multiSelect);
+  start('input[data-bs-toggle="timepicker"]', timePicker);
   scrollTables(root);
   cutCells(root);
 }
@@ -787,6 +788,230 @@ function multiSelect(select) {
 
   select.multiSelect = {refresh: render, open: open, close: close};
   render();
+}
+
+// Time fields (BS\TimePicker), like CoreUI's time picker: under the field a column of hours, one of minutes (in steps
+// of data-bs-minute-step), of seconds (data-bs-seconds="true") and AM/PM for a 12-hour clock (data-bs-hour12, else
+// the page's language decides), with Now, Clear and Done. data-bs-time-min and -max (HH:MM) grey out what's outside.
+// The field shows the time written out; the form posts it 24-hour (HH:MM or HH:MM:SS) in the hidden field
+// data-bs-value-input names. A typed time counts too (14:30, 2:30 pm); up and down change the minutes by the step.
+// Fires change on the field, and change.bs.timepicker with time.
+function timePicker(field) {
+  if (field.timePicker) return;
+  const store = document.querySelector(field.getAttribute('data-bs-value-input')) || field;
+  const attribute = name => field.getAttribute('data-bs-' + name);
+  const locale = document.documentElement.lang || navigator.language || 'default';
+  const seconds = attribute('seconds') === 'true';
+  const step = Math.max(1, parseInt(attribute('minute-step') || '1', 10));
+  const hour12 = attribute('hour12') !== null ? attribute('hour12') === 'true'
+    : !!new Intl.DateTimeFormat(locale, {hour: 'numeric'}).resolvedOptions().hour12;
+  const toSeconds = text => {
+    const parts = (text || '').split(':').map(Number);
+    return parts.length >= 2 && parts.every(n => !isNaN(n)) ? parts[0] * 3600 + parts[1] * 60 + (parts[2] || 0) : null;
+  };
+  const min = toSeconds(attribute('time-min')) ?? 0;
+  const max = toSeconds(attribute('time-max')) ?? 86399;
+  const two = n => String(n).padStart(2, '0');
+  const written = new Intl.DateTimeFormat(locale, Object.assign({hour: '2-digit', minute: '2-digit'}, seconds ? {second: '2-digit'} : {},
+    hour12 ? {hour12: true} : {hourCycle: 'h23'}));
+  let time = null; // {h, m, s}
+
+  const posted = t => two(t.h) + ':' + two(t.m) + (seconds ? ':' + two(t.s) : '');
+  const allowed = t => {
+    const at = t.h * 3600 + t.m * 60 + (seconds ? t.s : 0);
+    return at >= min && at <= max;
+  };
+  const parse = function (text) {
+    const found = text.trim().toLowerCase().match(/^(\d{1,2})(?:[:h.](\d{2}))?(?::(\d{2}))?\s*([ap])?\.?\s*m?\.?$/);
+    if (!found) return null;
+    let h = parseInt(found[1], 10);
+    const m = parseInt(found[2] || '0', 10), sec = parseInt(found[3] || '0', 10);
+    if (found[4]) {
+      if (h < 1 || h > 12) return null;
+      h = h % 12 + (found[4] === 'p' ? 12 : 0);
+    }
+    return h < 24 && m < 60 && sec < 60 ? {h: h, m: m, s: seconds ? sec : 0} : null;
+  };
+
+  const menu = document.createElement('div');
+  menu.className = 'dropdown-menu time-picker-menu';
+  const columns = document.createElement('div');
+  columns.className = 'time-picker-columns';
+  const column = function (name, values, label) {
+    const list = document.createElement('div');
+    list.className = 'time-picker-column';
+    list.setAttribute('role', 'listbox');
+    list.setAttribute('aria-label', name);
+    for (const value of values) {
+      const cell = document.createElement('button');
+      cell.type = 'button';
+      cell.className = 'time-picker-cell';
+      cell.tabIndex = -1;
+      cell.dataset.value = value;
+      cell.textContent = label(value);
+      cell.setAttribute('role', 'option');
+      cell.addEventListener('mousedown', event => event.preventDefault());
+      cell.addEventListener('click', () => pick(name, value));
+      list.appendChild(cell);
+    }
+    columns.appendChild(list);
+    return list;
+  };
+  const hours = hour12 ? [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] : Array.from({length: 24}, (_, i) => i);
+  const hourList = column('Hours', hours, two);
+  const minuteList = column('Minutes', Array.from({length: Math.ceil(60 / step)}, (_, i) => i * step), two);
+  const secondList = seconds ? column('Seconds', Array.from({length: 60}, (_, i) => i), two) : null;
+  const dayParts = new Intl.DateTimeFormat(locale, {hour: 'numeric', hour12: true}).formatToParts(new Date(2000, 0, 1, 15))
+    .find(part => part.type === 'dayPeriod');
+  const ampm = hour12 ? column('AM or PM', ['am', 'pm'], v => v === 'am' ? 'AM' : (dayParts ? dayParts.value : 'PM')) : null;
+  const footer = document.createElement('div');
+  footer.className = 'time-picker-footer';
+  const button = (text, className, action) => {
+    const made = document.createElement('button');
+    made.type = 'button';
+    made.className = className;
+    made.textContent = text;
+    made.addEventListener('mousedown', event => event.preventDefault());
+    made.addEventListener('click', action);
+    footer.appendChild(made);
+  };
+  button('Now', 'btn btn-link btn-sm', function () {
+    const now = new Date();
+    set({h: now.getHours(), m: seconds ? now.getMinutes() : Math.floor(now.getMinutes() / step) * step, s: seconds ? now.getSeconds() : 0});
+  });
+  button('Clear', 'btn btn-link btn-sm', () => set(null));
+  button('Done', 'btn btn-primary btn-sm ms-auto', () => close());
+  menu.append(columns, footer);
+  (field.closest('.input') || field.parentElement).appendChild(menu);
+
+  const render = function () {
+    const mark = (list, selected, disabled) => {
+      if (!list) return;
+      for (const cell of list.children) {
+        const value = isNaN(cell.dataset.value) ? cell.dataset.value : Number(cell.dataset.value);
+        cell.classList.toggle('active', selected === value);
+        cell.setAttribute('aria-selected', selected === value ? 'true' : 'false');
+        cell.disabled = disabled(value);
+      }
+    };
+    const base = time || {h: 0, m: 0, s: 0};
+    const hourOf = value => hour12 ? value % 12 + (base.h >= 12 ? 12 : 0) : value;
+    // An hour is out when none of it is allowed, a minute when none of that minute is
+    mark(hourList, time ? (hour12 ? (time.h % 12 || 12) : time.h) : null,
+      value => hourOf(value) * 3600 + 3599 < min || hourOf(value) * 3600 > max);
+    mark(minuteList, time ? time.m : null,
+      value => !!time && (time.h * 3600 + value * 60 + 59 < min || time.h * 3600 + value * 60 > max));
+    mark(secondList, time ? time.s : null, value => !!time && !allowed({h: time.h, m: time.m, s: value}));
+    mark(ampm, time ? (time.h >= 12 ? 'pm' : 'am') : null, value => {
+      const h = (time ? time.h % 12 : 0) + (value === 'pm' ? 12 : 0);
+      return h * 3600 + 3599 < min || h * 3600 > max;
+    });
+  };
+  const show = function () {
+    field.value = time ? written.format(new Date(2000, 0, 1, time.h, time.m, time.s)) : '';
+    field.setCustomValidity('');
+  };
+  const set = function (value, keepText) {
+    time = value;
+    store.value = time ? posted(time) : '';
+    if (!keepText) show();
+    render();
+    field.dispatchEvent(new Event('change', {bubbles: true}));
+    const event = new CustomEvent('change.bs.timepicker', {bubbles: true});
+    event.time = store.value;
+    field.dispatchEvent(event);
+  };
+  const pick = function (part, value) {
+    const next = Object.assign({h: Math.floor(min / 3600), m: 0, s: 0}, time || {});
+    if (part === 'Hours') next.h = hour12 ? value % 12 + (next.h >= 12 ? 12 : 0) : value;
+    else if (part === 'Minutes') next.m = value;
+    else if (part === 'Seconds') next.s = value;
+    else next.h = next.h % 12 + (value === 'pm' ? 12 : 0);
+    // Outside the limits: to the nearest allowed time
+    const at = next.h * 3600 + next.m * 60 + next.s;
+    if (at < min || at > max) {
+      const clamped = Math.min(max, Math.max(min, at));
+      next.h = Math.floor(clamped / 3600);
+      next.m = Math.floor(clamped % 3600 / 60);
+      next.s = seconds ? clamped % 60 : 0;
+    }
+    set(next);
+  };
+  const scroll = function () {
+    for (const list of [hourList, minuteList, secondList, ampm]) {
+      const active = list && list.querySelector('.active');
+      if (active) list.scrollTop = active.offsetTop - list.clientHeight / 2 + active.offsetHeight / 2;
+    }
+  };
+  const open = function () {
+    if (menu.classList.contains('show') || field.disabled || field.readOnly) return;
+    menu.classList.add('show');
+    render();
+    scroll();
+  };
+  const close = () => menu.classList.remove('show');
+
+  field.addEventListener('focus', open);
+  field.addEventListener('click', open);
+  field.addEventListener('blur', function () {
+    // Typed and left: written out as the picker writes it
+    if (time && !field.validationMessage) show();
+    setTimeout(function () {
+      if (!menu.contains(document.activeElement) && document.activeElement !== field) close();
+    }, 0);
+  });
+  field.addEventListener('input', function () {
+    if (field.value.trim() === '') {
+      field.setCustomValidity('');
+      set(null, true);
+      return;
+    }
+    const typed = parse(field.value);
+    if (typed && allowed(typed)) {
+      field.setCustomValidity('');
+      set(typed, true);
+      scroll();
+    } else {
+      store.value = '';
+      field.setCustomValidity(typed ? 'Choose a time between ' + (attribute('time-min') || '00:00') + ' and ' + (attribute('time-max') || '23:59')
+        : 'Choose a time in the list, or type it as 14:30');
+    }
+  });
+  field.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' || event.key === 'Enter') {
+      if (!menu.classList.contains('show')) return;
+      close();
+    } else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+      open();
+      const now = time ? time.h * 3600 + time.m * 60 : min;
+      const next = Math.min(max, Math.max(min, now + (event.key === 'ArrowUp' ? 1 : -1) * step * 60));
+      set({h: Math.floor(next / 3600), m: Math.floor(next % 3600 / 60), s: 0});
+      scroll();
+    } else {
+      return;
+    }
+    event.preventDefault();
+  });
+  document.addEventListener('mousedown', function (event) {
+    if (!menu.contains(event.target) && !field.closest('.input').contains(event.target)) close();
+  });
+  const group = field.closest('.input-group');
+  if (group) {
+    for (const icon of group.querySelectorAll('.input-group-text')) {
+      icon.style.cursor = 'pointer';
+      icon.addEventListener('mousedown', event => event.preventDefault());
+      icon.addEventListener('click', function () {
+        field.focus();
+        open();
+      });
+    }
+  }
+
+  const first = parse(store.value);
+  time = first;
+  if (first) show();
+  render();
+  field.timePicker = {open: open, close: close, set: value => set(value ? parse(value) : null)};
 }
 
 // The items of a list editor (BS\ListEditor)

@@ -237,7 +237,7 @@ heading over its items. The main menu has it on (setting `menu.overflow`, `false
 button instead); it still folds away when even the kept items and More don't fit. For a nav of your own, put it in a
 `BS\NavOverflow` and call `Enable()`.
 
-## Dates and multi-selects
+## Dates, times and multi-selects
 
 `BS\DatePicker` is a date field with a calendar that opens under it: Bootstrap 6's
 [Datepicker](https://getbootstrap.com/docs/6.0/forms/datepicker/), done on Bootstrap 5.3 with the same library
@@ -250,6 +250,16 @@ $Due = new BS\DatePicker('due', 'Due date', '2026-11-30');
 $Due->Min('2026-11-01')->Max('2026-12-31')->Required();
 $Period = new BS\DatePicker('period', 'Period', Selection: BS\DateSelection::Range);
 $Period->Months(2)->NoWeekends();       // also FirstWeekday(), NoPast(), Disable([...]), Calendar([...]) for any other option
+```
+
+`BS\TimePicker` is a time field with columns of hours and minutes to click under it (seconds and AM/PM too if asked),
+with Now, Clear and Done, like CoreUI's time picker. It shows the time as the page's language writes it (or a 12-hour
+clock) and posts it 24-hour, `HH:MM` (`HH:MM:SS` with `Seconds()`); a typed time (14:30, 2:30 pm) counts, and up and
+down change the minutes by the step.
+
+```php
+$Start = new BS\TimePicker('start', 'Starts at', '08:00');
+$Start->Step(15)->Min('07:00')->Max('18:00')->Required();   // also TwelveHour(), Seconds()
 ```
 
 `BS\MultiSelect` chooses several things from a list, like CoreUI's multi-select: what's chosen shows as chips in the
@@ -270,7 +280,7 @@ chip.
 ## Demos
 
 Administer → Demos (admins only, `/framework/demos/index.php`) shows what the classes look like and do, a page per
-subject: text, layout, forms (dates and multi-selects too), buttons, cards, alerts, components, tables, menus (nav
+subject: text, layout, forms (dates, times and multi-selects too), buttons, cards, alerts, components, tables, menus (nav
 overflow), popups, errors, and every icon in the Bootstrap Icons site's groups, with a search and 16, 24 or 32 px
 previews (click one to copy `Icon::Name`). Sites made before 1.15.0 get the menu item by loading `sql/schema.sql`
 again. `scripts/update-icon-categories.py` refreshes the icons' groups and search words (`public/demos/icons.json`)

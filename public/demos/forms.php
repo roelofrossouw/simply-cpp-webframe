@@ -2,7 +2,7 @@
   require_once __DIR__ . '/_demo.php';
 
   use BS\
-  {Button, Card, Color, Container, DataInput, DatePicker, DateSelection, Grid, Icon, Input, MultiSelect, ScreenSize, Side, PadSize, SwitchInput, VerticalInputs};
+  {Button, Card, Color, Container, DataInput, DatePicker, DateSelection, Grid, Icon, Input, MultiSelect, ScreenSize, TimePicker, Side, PadSize, SwitchInput, VerticalInputs};
   use HTML\
   {Form, InputType, Table, Text};
 
@@ -51,8 +51,8 @@
   $Input->PostOnEnter();
 
   // Dates with a calendar, and lists to choose several things from
-  $Card->AddChild(new HTML\Header(3, 'Dates and choices'))->Format->Margin(Side::Top, PadSize::Pad3);
-  $Card->AddParagraph('DatePicker opens a calendar (Bootstrap 6\'s Datepicker): it shows the date written out and posts it as YYYY-MM-DD. MultiSelect shows what\'s chosen as chips, with a search, Select all and groups; it posts name[]. Single() makes it a one-choice search.');
+  $Card->AddChild(new HTML\Header(3, 'Dates, times and choices'))->Format->Margin(Side::Top, PadSize::Pad3);
+  $Card->AddParagraph('DatePicker opens a calendar (Bootstrap 6\'s Datepicker): it shows the date written out and posts it as YYYY-MM-DD. TimePicker has columns of hours and minutes to click (a 12-hour clock, seconds, steps and limits if asked) and posts HH:MM. MultiSelect shows what\'s chosen as chips, with a search, Select all and groups; it posts name[]. Single() makes it a one-choice search.');
   $Card->AddChild($Grid = new Grid(1));
   $Grid->Columns(2, ScreenSize::Medium);
   $Grid->Col($Date = new DatePicker('due', 'Due date (required, this year)', date('Y-m-d')));
@@ -64,6 +64,12 @@
   $Grid->Col($Date = new DatePicker('workdays', 'Work days (several, no weekends)', Selection: DateSelection::Multiple));
   $Date->NoWeekends();
   $Date->ShowPostedValue();
+  $Grid->Col($Time = new TimePicker('start', 'Starts at (15 minutes, 07:00 to 18:00)', '08:00'));
+  $Time->Step(15)->Min('07:00')->Max('18:00');
+  $Time->ShowPostedValue();
+  $Grid->Col($Time = new TimePicker('alarm', 'Alarm (12-hour, seconds)'));
+  $Time->TwelveHour()->Seconds();
+  $Time->ShowPostedValue();
   $Grid->Col($Choice = new MultiSelect('cities', 'Cities (groups)', [
     'Gauteng' => ['jhb' => 'Johannesburg', 'pta' => 'Pretoria', 'sow' => 'Soweto'],
     'Western Cape' => ['cpt' => 'Cape Town', 'stb' => 'Stellenbosch', 'grg' => 'George'],

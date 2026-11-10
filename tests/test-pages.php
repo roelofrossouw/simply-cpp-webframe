@@ -120,6 +120,16 @@
   Check(str_contains((string)$Range, 'data-bs-selection-mode="multiple-ranged"') && str_contains((string)$Range, 'value="2026-06-10, 2026-06-18"'),
     'a range: its mode, both ends');
 
+  // A time field: shown without a name, posted 24-hour in the hidden field; its options as data-bs-* attributes
+  $Start = new BS\TimePicker('start', 'Starts at', '08:00');
+  $Start->Step(15)->Min('07:00')->Max('18:00')->TwelveHour()->Seconds()->Required();
+  $Html = (string)$Start;
+  Check(str_contains($Html, 'data-bs-toggle="timepicker"') && preg_match('#<input id="[^"]+_value" name="start" type="hidden" value="08:00">#', $Html) === 1,
+    'a time field posts its time in the hidden field');
+  Check(str_contains($Html, 'data-bs-minute-step="15"') && str_contains($Html, 'data-bs-hour12="true"') && str_contains($Html, 'data-bs-seconds="true"')
+    && str_contains($Html, 'data-bs-time-min="07:00"') && str_contains($Html, 'data-bs-time-max="18:00"') && str_contains($Html, 'bi-clock'),
+    'its step, clock, seconds, limits and icon');
+
   // A multi-select: a select multiple posting name[], groups, chosen and disabled options, its options
   $Cities = new BS\MultiSelect('cities', 'Cities', ['Gauteng' => ['jhb' => 'Johannesburg', 'pta' => 'Pretoria'], 'dbn' => 'Durban'], ['pta']);
   $Cities->Max(2)->Counter()->Disable(['jhb']);
