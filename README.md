@@ -252,6 +252,12 @@ $Period = new BS\DatePicker('period', 'Period', Selection: BS\DateSelection::Ran
 $Period->Months(2)->NoWeekends();       // also FirstWeekday(), NoPast(), Disable([...]), Calendar([...]) for any other option
 ```
 
+Since 1.18.0 every plain date field gets this calendar too: an `<input type="date">` anywhere in a page, or a
+`BS\Input` of `InputType::Date`. A hidden field takes its name and posts `YYYY-MM-DD` as before, so forms and their
+handlers don't change; `min` and `max` become the calendar's limits, and `required`, `disabled` and `form` carry over.
+Put `data-native` on the field (or on something around it) to keep the browser's own picker. Without JavaScript it
+stays the browser's.
+
 `BS\TimePicker` is a time field with columns of hours and minutes to click under it (seconds and AM/PM too if asked),
 with Now, Clear and Done, like CoreUI's time picker. It shows the time as the page's language writes it (or a 12-hour
 clock) and posts it 24-hour, `HH:MM` (`HH:MM:SS` with `Seconds()`); a typed time (14:30, 2:30 pm) counts, and up and

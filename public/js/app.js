@@ -235,6 +235,7 @@ function initComponents(root) {
     bootstrap.Carousel.getOrCreateInstance(element).cycle();
   });
   start('[data-bs-toggle="nav-overflow"]', navOverflow);
+  start('input[type="date"]', dateField);
   start('input[data-bs-toggle="datepicker"]', datePicker);
   start('select[data-bs-toggle="multi-select"]', multiSelect);
   start('input[data-bs-toggle="timepicker"]', timePicker);
@@ -456,6 +457,30 @@ function navOverflowCaption(link) {
   copy.querySelectorAll('[id]').forEach(element => element.removeAttribute('id'));
   copy.querySelectorAll('.visually-hidden').forEach(element => element.classList.remove('visually-hidden'));
   return Array.from(copy.childNodes);
+}
+
+// Plain date fields (<input type="date">, a BS\Input of InputType::Date, any page's) get the same calendar as
+// BS\DatePicker, so every date is chosen the same way: a hidden field takes the field's name and posts YYYY-MM-DD as
+// before; min and max become the calendar's limits; required, disabled and the form attribute carry over. A field
+// (or anything around it) with data-native keeps the browser's own picker; without the script it stays the browser's.
+function dateField(field) {
+  if (field.closest('[data-native]')) return;
+  if (!field.id) field.id = 'date_' + Math.random().toString(36).slice(2);
+  const store = document.createElement('input');
+  store.type = 'hidden';
+  store.id = field.id + '_value';
+  store.name = field.name;
+  store.value = field.value; // the browser's own date input holds YYYY-MM-DD
+  store.disabled = field.disabled;
+  if (field.hasAttribute('form')) store.setAttribute('form', field.getAttribute('form'));
+  if (field.min) field.setAttribute('data-bs-date-min', field.min);
+  if (field.max) field.setAttribute('data-bs-date-max', field.max);
+  for (const name of ['name', 'min', 'max', 'step']) field.removeAttribute(name);
+  field.type = 'text';
+  field.autocomplete = 'off';
+  field.setAttribute('data-bs-toggle', 'datepicker');
+  field.setAttribute('data-bs-value-input', '#' + CSS.escape(store.id));
+  field.after(store);
 }
 
 // Date fields with a calendar (BS\DatePicker): Bootstrap 6's Datepicker on Bootstrap 5.3, with the same library
