@@ -237,6 +237,45 @@ heading over its items. The main menu has it on (setting `menu.overflow`, `false
 button instead); it still folds away when even the kept items and More don't fit. For a nav of your own, put it in a
 `BS\NavOverflow` and call `Enable()`.
 
+## Dates and multi-selects
+
+`BS\DatePicker` is a date field with a calendar that opens under it: Bootstrap 6's
+[Datepicker](https://getbootstrap.com/docs/6.0/forms/datepicker/), done on Bootstrap 5.3 with the same library
+([Vanilla Calendar Pro](https://vanilla-calendar.pro), MIT, loaded from jsDelivr) and the same `data-bs-*` attributes.
+The field shows the dates written out in the page's language; the form posts them as `YYYY-MM-DD` under the field's
+name: several separated by commas, a range as its first and last day. A date typed as `YYYY-MM-DD` counts too.
+
+```php
+$Due = new BS\DatePicker('due', 'Due date', '2026-11-30');
+$Due->Min('2026-11-01')->Max('2026-12-31')->Required();
+$Period = new BS\DatePicker('period', 'Period', Selection: BS\DateSelection::Range);
+$Period->Months(2)->NoWeekends();       // also FirstWeekday(), NoPast(), Disable([...]), Calendar([...]) for any other option
+```
+
+`BS\MultiSelect` chooses several things from a list, like CoreUI's multi-select: what's chosen shows as chips in the
+field (`Counter()`: "3 selected"), with a search that narrows the list as you type, Select all and Clear, and groups of
+options. It's a plain `<select multiple>` underneath, posting `name[]` (`Post::Get('name')` is an array), so it works
+with the form checks (`Required()`) like any field.
+
+```php
+$Cities = new BS\MultiSelect('cities', 'Cities', ['Gauteng' => ['jhb' => 'Johannesburg', 'pta' => 'Pretoria'],
+                                                 'dbn' => 'Durban'], ['pta']);
+$Cities->Max(2)->Required();            // also Counter(), NoSearch(), NoSelectAll(), Disable([...])
+$Country = (new BS\MultiSelect('country', 'Country', $Countries))->Single();   // one choice, searchable
+```
+
+Keys: up and down move through the list, Enter chooses, Escape closes, Backspace in an empty search takes off the last
+chip.
+
+## Demos
+
+Administer → Demos (admins only, `/framework/demos/index.php`) shows what the classes look like and do, a page per
+subject: text, layout, forms (dates and multi-selects too), buttons, cards, alerts, components, tables, menus (nav
+overflow), popups, errors, and every icon in the Bootstrap Icons site's groups, with a search and 16, 24 or 32 px
+previews (click one to copy `Icon::Name`). Sites made before 1.15.0 get the menu item by loading `sql/schema.sql`
+again. `scripts/update-icon-categories.py` refreshes the icons' groups and search words (`public/demos/icons.json`)
+from icons.getbootstrap.com.
+
 ## Keeping users and the menu elsewhere
 
 `Storage\Postgres` keeps them in the settings' database. To keep them somewhere else, behind a REST service say,

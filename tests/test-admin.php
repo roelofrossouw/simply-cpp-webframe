@@ -34,6 +34,26 @@
       . escapeshellarg($Page) . ' ' . escapeshellarg(http_build_query($Post)) . ' 2>&1');
   }
 
+  // Administer → Demos: every demo page renders for an admin, without errors
+  foreach (glob(Config::FrameworkFolder() . '/demos/*.php') as $File)
+  {
+    $Demo = 'demos/' . basename($File);
+    if (in_array(basename($File), ['_demo.php', 'slow.php', 'error.php', 'warning.php', 'notice.php'], true))
+    {
+      continue; // they show problems on purpose
+    }
+    $Html = Render($Demo);
+    // PHP's own messages ("Warning: ... on line 12"), not the demos' words (Color::Warning)
+    Check(!preg_match('/(Warning|Deprecated|Notice|Fatal error): .* on line \d+|Uncaught|Something Went Wrong/', $Html) && strlen($Html) > 50,
+      "$Demo renders" . (preg_match('/(Warning|Deprecated|Notice|Fatal error): [^\n]*/', $Html, $M) ? ': ' . $M[0] : ''));
+  }
+  $Demos = Render('demos/index.php');
+  Check(str_contains($Demos, 'nav-overflow') && str_contains($Demos, 'demos\\/icons.php') && str_contains($Demos, 'nav-overflow-keep'),
+    'the demos\' menu: every page, overflowing, Text kept');
+  $Forms = Render('demos/forms.php', ['due' => '2026-05-04', 'cities' => ['dbn', 'jhb']]);
+  Check(str_contains($Forms, 'data-bs-toggle="datepicker"') && str_contains($Forms, 'name="due" type="hidden" value="2026-05-04"'), 'the forms demo: a date field, the posted date');
+  Check(str_contains($Forms, '<option value="dbn" selected>') && str_contains($Forms, '<option value="jhb" selected>'), 'and a multi-select with the posted choices');
+
   $Users = Render('admin/users.php');
   Check(str_contains($Users, 'ann@example.com') && str_contains($Users, 'form-switch'), 'Users lists the users with their switches');
   Check(str_contains($Users, '/framework/admin/usergrant.php'), 'and saves through usergrant.php');

@@ -117,15 +117,6 @@
         }
 
         /**
-         * A date has to be chosen
-         */
-        public function Required(): static
-        {
-            $this->InputElement()->AddAttribute('required');
-            return $this;
-        }
-
-        /**
          * Any other Vanilla Calendar Pro option, as Bootstrap 6's vcpOptions
          *
          * @see https://vanilla-calendar.pro/docs/reference/settings

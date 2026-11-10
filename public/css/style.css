@@ -424,3 +424,61 @@ th.sortable {
   }
 }
 
+
+/* The icon demo (demos/icons.php): tiles that fit the width, the icon at the chosen size */
+.icon-grid {
+  --icon-size: 24px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+  gap: .5rem;
+
+  .icon-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .25rem;
+    padding: .75rem .25rem .5rem;
+    border: var(--bs-border-width) solid var(--bs-border-color-translucent);
+    border-radius: var(--bs-border-radius);
+    background: var(--bs-body-bg);
+    color: var(--bs-body-color);
+    min-width: 0;
+
+    &:hover, &:focus-visible {
+      background: var(--bs-tertiary-bg);
+    }
+
+    &.copied {
+      border-color: var(--bs-success);
+      background: var(--bs-success-bg-subtle);
+    }
+
+    &[hidden] {
+      display: none;
+    }
+
+    i {
+      font-size: var(--icon-size);
+      line-height: 1;
+      height: 32px;
+      display: flex;
+      align-items: center;
+    }
+
+    .icon-case, .icon-class {
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .icon-case {
+      font-size: .8rem;
+    }
+
+    .icon-class {
+      font-size: .7rem;
+      color: var(--bs-secondary-color);
+    }
+  }
+}
