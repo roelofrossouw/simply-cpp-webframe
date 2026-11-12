@@ -18,6 +18,14 @@ function main() {
   $(document).on('hidden.bs.modal hidden.bs.offcanvas', '.modal, .offcanvas', function () {
     $(this).removeData('tabs');
   });
+  // Popups on popups, see pushPopup(): closing a popup opened from another goes back to that one
+  $(document).on('hide.bs.modal', '.modal', popupBack);
+  $(document).on('hidden.bs.modal', '.modal', function () {
+    $(this).removeData('popup-stack').removeData('popup-saved');
+  });
+  $(document).on('click', '.modal-back', function () {
+    getModal($(this).closest('.modal')[0]).hide();
+  });
 
   if (navigator.userAgent.match(/RJRIVShell/))
   {
@@ -143,6 +151,9 @@ function loadPage(url, into) {
 
   let caller = $(this);
   let target = into ? $(into) : getTarget(caller);
+  // A popup opened on top of the one the click came from (Button->Push()): that one is kept as it is, to come back to
+  const push = !into && caller.is('.modal-push') && target.is('.modal.show') && caller.closest('.modal').is(target);
+  const shown = {url: target.data('url'), tabs: target.data('tabs')};
   // Remember what the target shows: for a popup's refresh button, and for the tab its page last showed
   target.data('url', url);
 
@@ -182,6 +193,10 @@ function loadPage(url, into) {
   if (!caller.closest('.modal, .offcanvas').is(target))
   {
     closePanel(caller);
+  }
+  if (push)
+  {
+    pushPopup(target, caller, shown);
   }
 
   // Only show progress indicator after a short delay to avoid flashing on fast pages
@@ -1615,6 +1630,7 @@ function ajaxSuccess(content) {
   $(this).html(content)
   initComponents(this);
   restoreTabs(this);
+  backButton(this);
   // How a save went shows in the toast corner. A notice can name the page to show next (Toast::Then()), loaded in
   // the same place, on the tab it was on; else a popup or side panel that held nothing else closes.
   const notices = showNotices(this);
@@ -1641,6 +1657,11 @@ function showNotices(target) {
     return {then: null, empty: false};
   }
   const then = notices.filter('[data-then]').first().attr('data-then') || null;
+  // Something was saved, changed or removed here: the popup this one was opened from shows it again (popupBack())
+  if ($(target).is('.modal'))
+  {
+    $(target).data('popup-saved', true);
+  }
   notices.each(function () {
     toastSuccess($(this).detach());
   });
@@ -1759,11 +1780,87 @@ function refreshModal() {
 }
 
 
+// Closes the popup or side panel the caller is in, every popup under it too: the page goes somewhere else
 function closePanel(caller) {
   let panel = caller.closest('.modal, .offcanvas');
   if (panel.length)
   {
+    panel.removeData('popup-stack');
     getPanel(panel) ? getPanel(panel).hide() : null;
+  }
+}
+
+// Popups on popups. Bootstrap shows one popup at a time, so a popup opened from another (Button->Push(), class
+// modal-push) takes its place in the same .modal, and the one it came from waits on a stack as it was: its form as
+// filled in, its tab, its scroll position. Closing the new one (its Close buttons, the back arrow, Esc, a click beside
+// it, or a save whose notice leaves it empty) brings that one back, refreshed when the new one saved something and the
+// button asked for it (data-refresh-parent). Only Bootstrap's own hide event is used, so Bootstrap updates don't
+// break it.
+function pushPopup(modal, caller, shown) {
+  const stack = modal.data('popup-stack') || [];
+  $('.tooltip, .popover').remove();
+  stack.push({
+    content: modal.children().detach(),
+    url: shown.url,
+    tabs: shown.tabs,
+    label: modal.attr('aria-labelledby'),
+    saved: modal.data('popup-saved') || false,
+    refresh: caller.attr('data-refresh-parent') !== 'false',
+    caller: caller[0],
+  });
+  modal.data('popup-stack', stack).data('popup-saved', false);
+}
+
+// hide.bs.modal: with popups under this one, go back to the last instead of closing
+function popupBack(event) {
+  const modal = $(this);
+  // A component inside the popup with its own hide event (none use this name, but stay safe)
+  if (event.target !== this)
+  {
+    return;
+  }
+  const stack = modal.data('popup-stack');
+  if (!stack || !stack.length)
+  {
+    return;
+  }
+  event.preventDefault();
+  const saved = modal.data('popup-saved');
+  const back = stack.pop();
+  if (currentAjax)
+  {
+    currentAjax.abort();
+  }
+  clearTimeout(longAction);
+  $('.tooltip, .popover').remove();
+  modal.children().remove();
+  modal.append(back.content);
+  modal.data('url', back.url).data('tabs', back.tabs).data('popup-saved', back.saved);
+  back.label ? modal.attr('aria-labelledby', back.label) : modal.removeAttr('aria-labelledby');
+  if (back.refresh && saved)
+  {
+    // The popup's own refresh button: its page again, without the action it was opened with
+    const refresh = modal.find('.modal-refresh').first();
+    refresh.length ? refreshModal.call(refresh[0]) : null;
+  }
+  else if (back.caller && document.body.contains(back.caller))
+  {
+    back.caller.focus();
+  }
+}
+
+// A popup opened from another gets a back arrow before its title
+function backButton(target) {
+  const modal = $(target);
+  if (!modal.is('.modal') || !(modal.data('popup-stack') || []).length)
+  {
+    return;
+  }
+  const title = modal.find('.modal-header .modal-title').first();
+  if (title.length && !title.prev('.modal-back').length)
+  {
+    $('<button type="button" class="btn btn-link p-0 fs-5 lh-1 link-secondary modal-back me-2" aria-label="Back" title="Back">'
+      + '<i class="bi-arrow-left"></i></button>').insertBefore(title);
   }
 }
 

@@ -18,6 +18,12 @@
   }
 
   Page::AddContent($Card = new Card());
+  $Card->AddHeader('Popups on popups');
+  $Card->AddParagraph('Button->Push() in a popup opens its page in a popup on top, e.g. an Add or Edit from a list. The popup under it waits as it was (its form, its tab) and shows again when the new one closes; the new one gets a back arrow. Push(RefreshOnReturn: false) keeps the one under it as it was even after a save; by default it loads again when the new one saved something (showed a Toast::Notice).');
+  $Card->AddChild($Button = new Button('Open level 1', Icon::Stack, Demo('stack.php')));
+  $Button->Modal();
+
+  Page::AddContent($Card = new Card());
   $Card->AddHeader('Side panel');
   $Card->AddParagraph('Button->OffCanvas() (or MenuItem->OffCanvas()) loads the page into the side panel. The page returns an OffCanvas.');
   $Card->AddChild($Button = new Button('Open the side panel', Icon::LayoutSidebar, Demo('offcanvas.php')));

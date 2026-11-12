@@ -216,6 +216,35 @@ $Table->CellWidth('30rem');                   // how wide a one-line cell gets b
 
 Sortable headings (`TableHeadingCell::Sort()`, `DB::SortAction()`) keep the page's own query parameters (since 1.10.4).
 
+## Popups on popups (since 1.19.0)
+
+A button in a popup can open its page in a popup on top, e.g. an Add or Edit from a list that is itself in a popup.
+The popup it came from waits as it was (its form as filled in, its tab, where it was scrolled) and shows again when the
+new one closes. Popups go on top of each other as deep as needed.
+
+```php
+$Dialog->AddButton($Add = new BS\Button('Add a contact', BS\Icon::PlusLg, '/app/contact.php'));
+$Add->Push();                          // the list loads again on the way back, when the contact was saved
+$Edit = new BS\Button('Edit', BS\Icon::Pencil, "/app/contact.php?id=$ID");
+$Edit->Push(RefreshOnReturn: false);   // the list stays exactly as it was
+```
+
+- The new popup gets a back arrow before its title. The arrow, Close (in the header or the footer), Esc and a click
+  beside the popup all go back to the one under it; only the first popup really closes.
+- A save in the new popup that leaves it empty (it returns a `ModalDialog` holding only a `BS\Toast::Notice()`) goes
+  back too, and the popup under it loads again with its own refresh (the page it was opened with, without its action),
+  unless the button said `RefreshOnReturn: false`. Without a save nothing loads again, so a half-filled form under it
+  keeps what was typed.
+- A `->Then($URL)` on the notice still loads that page in the same popup level instead.
+- A link in any of them that loads into the page (not a popup) closes them all.
+- `Push()` doesn't post the form of the popup it's in. A button that isn't in a popup opens its popup as `Modal()` does.
+- In markup: class `modal-link modal-push`, `data-refresh-parent="false"` to keep the one under it as it was.
+
+Bootstrap shows one popup at a time and doesn't support nested modals, so this keeps one: the new popup takes the old
+one's place in the same `.modal`, and Bootstrap's own `hide.bs.modal` event is turned into "back" while there is one
+under it. It uses nothing but Bootstrap's documented API, so Bootstrap updates don't touch it. Administer → Demos →
+Popups shows it.
+
 ## Navs that overflow
 
 A row of tabs or the menu bar can keep to one line: what doesn't fit goes into a **More** menu at its end, last
