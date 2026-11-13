@@ -49,11 +49,15 @@
          */
         public function Recoverable(): bool
         {
+            // A deprecation is logged, never a reason to stop the page: PHP 8.5's curl_close()
+            // deprecation took Google sign-in down (2026-11-13).
             return in_array($this, [
                 ErrorType::UserWarning,
                 ErrorType::Warning,
                 ErrorType::UserNotice,
                 ErrorType::Notice,
+                ErrorType::Deprecated,
+                ErrorType::UserDeprecated,
             ]);
         }
 

@@ -90,7 +90,7 @@
 
 
       $this->Error = curl_error($ch);
-      curl_close($ch);
+      // No curl_close(): a no-op since PHP 8.0 and deprecated in 8.5; the handle closes when $ch goes
 
       if (empty($this->Response) || $this->Response === true)
       {
