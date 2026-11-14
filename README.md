@@ -27,7 +27,7 @@ plain PHP: nothing to compile, and no extension.
 | `BS\` | Bootstrap 5.3 components and layout: cards, buttons, menus, forms, tables, popups (`ModalDialog`), side panels (`OffCanvas`), toasts, alerts, grids, and their enums (`Color`, `Icon`, `ScreenSize`, ...). `BS\Toast::Notice()` says how a save, change or removal went, in the toast corner, gone after 8 seconds (15 when it didn't work; paused while the pointer is on it); a popup that held nothing else closes, unless the notice names the page to show next (`->Then($URL)`, loaded in the same place, on the tab it was on). `BS\Email` sends a page as an HTML email, formatted by bootstrap-email (sc-phplib's `SC\BootstrapEmail`, else the `bootstrap-email` program): icons are left out (mail clients lack the font), and Bootstrap 5.3 classes it doesn't know are mapped first (badge and text colours, `text-end`/`text-start`, card headers and footers, `lead`). `Html()` gives the HTML it sends, for a preview. |
 | `Page`, `Framework` | The page being built: `Page::AddContent()` adds to it, and it is shown when the script ends, as a whole page or, for requests from `js/app.js`, as the part that changes. |
 | `Config` | The settings file, and `Config::Init()`, which starts every page: the sign-in, and whether this user may open it. |
-| `Auth\` | Sign-in: `Google`, `Microsoft`, `Apple`, `GitHub`, `Facebook`, each on when its section is in the settings, `Password` (users an admin adds), and `JWT`, the signed sign-in tokens (30 minutes, renewed while in use). |
+| `Auth\` | Sign-in: `Google`, `Microsoft`, `Apple`, `GitHub`, `Facebook`, each on when its section is in the settings, `Password` (users an admin adds), `EmailCode` (a code emailed to the address, no password), `Passkey`, and `JWT`, the signed sign-in tokens (30 minutes, renewed while in use). |
 | `User` | The people who signed in: their access, profile, display name and photo. |
 | `MenuLayout` | The menu and status bar, built from `framework.menu`; the access levels that may view or edit each page. |
 | `DB` | PostgreSQL with parameters: `Rows()`, `Row()`, `Value()`, `Assoc()`, `Exists()`, `Exec()`, `Transaction()`. |
@@ -163,6 +163,68 @@ account only works once its address is shown to work (and the site needs mail):
 The schema since 1.3.0 adds `access.passwords` and `access.sign_in_failures`, and allows `password` as a provider; load
 it again after upgrading. Since 1.5.0 the account's email address is its `subject`; 1.3.0's usernames aren't carried
 over.
+
+## Signing in with an emailed code (since 1.20.0)
+
+With `"email": {"enabled": true}` in the settings' `auth` section, people sign in with a 6-digit code emailed to their
+address: no password at all.
+
+```json
+"auth": {
+  "email": {"enabled": true, "signup": true, "session_days": 30, "code_minutes": 10, "resend_seconds": 60, "hooks": "SiteEmailHooks"},
+  "first_admin": false
+}
+```
+
+- **Signing in**: the email address, then Next; a code goes to it, and the page asks for it in a `BS\OtpInput` (phones
+  offer the code from the email). A right code signs in and sets a session cookie that renews the sign-in for
+  `session_days`, as the password's does. **Send another code** waits `resend_seconds` (counting down), and
+  **Use another address** starts again.
+- **Signing up**: with `signup`, an address without an account gets a code too, and the right code makes the account
+  (provider `email`, Public access); the site asks for the rest on its own pages. Without it, such an address gets the
+  same page but no email, so the page doesn't tell which addresses have accounts. On a public site set
+  `auth.first_admin` (to `false`, or your own address): by default the first account becomes admin.
+- A code works `code_minutes` (10), once, and is kept as a hash. Five wrong codes in a row lock the address for 15
+  minutes. Wrong codes and codes asked for count against the IP address as wrong passwords do (20 in 15 minutes).
+- **Hooks**: `hooks` names a class implementing `Auth\EmailCodeHooks`, loaded from the site's classes:
+  `SendCode($Email, $Code, $Minutes)` sends the code itself (say, through the site's own mail queue) and answers whether
+  it went, or `null` for the framework's email; `Verified($UserID, $Email, $NewAccount)` is called once per account,
+  after the first right code: its address is shown to work. `Storage\Backend::Users()` gives `verified` for these
+  accounts too.
+
+The schema since 1.20.0 adds `access.email_codes`, `access.verified_emails` and `access.passkeys`, and allows `email` as a
+provider; load it again after upgrading. A storage of your own implements `Storage\EmailCodes` for it (see below).
+
+## Passkeys (since 1.20.0)
+
+With `"passkey": {"enabled": true}` in `auth`, and sc-phplib's `SC\Passkey` in PHP (the `sc` extension, 1.13.0 or later),
+people sign in with a passkey: their phone's or computer's fingerprint, face or PIN, or a security key.
+
+```json
+"passkey": {"enabled": true, "rp_id": "www.example.com", "rp_name": "Example", "origins": ["https://www.example.com"]}
+```
+
+- `rp_id` is the domain the passkeys belong to (default the site's host), `origins` where the pages are, exact or
+  `https://*.example.com` (default the site's origin), `rp_name` what authenticators may show (default `app.name`).
+- **Your profile** gets a Passkeys part once signed in some other way: **Add a passkey** (with a name, e.g. My phone),
+  and each passkey with when it was added and last used, and Remove. A passkey belongs to its account, whatever its
+  provider (an emailed code, a password, Google ...).
+- **Sign in with a passkey** on the sign-in page asks the browser for any passkey it has for the site (no address
+  needed), and signs its account in as itself, with a session cookie for that provider's `session_days` (else 30).
+- The checks are `SC\Passkey`'s; each challenge is kept in the PHP session and works once; a sign count that goes back
+  is refused. The browser side is `/framework/js/sc-passkey.js` (sc-passkey's, copied by
+  `scripts/update-sc-passkey-js.sh`) and `/framework/js/passkey.js`; `/framework/passkey.php` gives the options.
+
+## Steps (BS\Stepper, since 1.20.0)
+
+A form of several steps shows where it is with `BS\Stepper`: numbered steps with their names, the ones done ticked, the
+current one highlighted, over a thin progress bar. On a phone the names make way for "Step 2 of 4: Cover". There's no
+script: each step is a page (or a post) of its own that shows the stepper with its step current.
+
+```php
+$Card->AddChild($Steps = new BS\Stepper(['Your details', 'Firearm', 'Cover', 'Confirm'], Current: 2));
+$Steps->Links(['/apply.php?step=1']); // steps done may be opened again
+```
 
 ## Pages and access
 
@@ -399,6 +461,21 @@ implement `Storage\Backend` and name the class in the settings:
 The class loads from the site's classes like any other. Since 1.3.0 the interface includes the password accounts'
 methods (`PasswordUserID()`, `Password()`, `AddPasswordUser()`, `SetPassword()`, `PasswordFailed()`,
 `AddressFailures()`). `DB` stays available for the site's own tables either way.
+
+Emailed codes and passkeys need two more interfaces, which `Storage\Postgres` implements; a storage of your own
+implements them too to offer those sign-ins (they're only offered when it does):
+
+```php
+class SiteStorage implements Storage\Backend, Storage\EmailCodes, Storage\Passkeys { ... }
+```
+
+- `Storage\EmailCodes`: `EmailCodeUserID($Email)`, `EmailCode($Email)` (hash, expires, sent, failures, last_failure),
+  `SaveEmailCode($Email, $Hash, $Expires)`, `EmailCodeFailed($Email, $Address)`, `EmailCodeUsed($Email)` and
+  `EmailVerified($UserID)` (true the first time). The accounts themselves are made through `SignIn('email', ...)`.
+- `Storage\Passkeys`: `Passkeys($UserID)`, `Passkey($CredentialID)`, `AddPasskey($UserID, $Credential, $Name)`,
+  `PasskeyUsed($ID, $SignCount, $BackedUp)`, `RemovePasskey($UserID, $ID)` and `UserSignIn($UserID)`.
+
+See the interfaces' comments for each method's values.
 
 ## The Hello world example
 

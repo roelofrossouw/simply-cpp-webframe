@@ -38,6 +38,16 @@
         ? Toast::Notice('Check your email', "We sent {$Account['email']} a link to choose a new password. Your password works until you do.", true, \BS\Icon::Envelope)
         : Toast::Notice('Not sent', 'Something went wrong while sending the email. Please try again later.', false);
       break;
+    // Passkeys: one added from the browser's answer (js/passkey.js posts it), or removed
+    case 'addpasskey':
+      $Problem = \Auth\Passkey::Configured() ? \Auth\Passkey::Add($UserID, (string)Post::Get('passkey'), (string)Post::Get('passkey_name')) : 'Passkeys aren\'t on.';
+      $Notice = $Problem === null ? Toast::Notice('Passkey added', 'You can sign in with it now.', true, Icon::Fingerprint)
+        : Toast::Notice('Passkey not added', $Problem, false);
+      break;
+    case 'removepasskey':
+      $Problem = \Auth\Passkey::Configured() ? Storage\Store::Get()->RemovePasskey($UserID, (int)QueryString::Get('id')) : 'Passkeys aren\'t on.';
+      $Notice = $Problem === null ? Toast::Notice('Passkey removed', 'It no longer signs you in.') : Toast::Notice('Not removed', $Problem, false);
+      break;
     case 'removephoto':
       User::RemovePhoto($UserID);
       $Notice = Toast::Notice('Photo removed', 'We\'ll show your initials instead.');
@@ -146,12 +156,14 @@
 
   // Details from the sign-in provider; password users give their own
   $IsPassword = $Profile['provider'] == 'password';
+  $IsEmailCode = $Profile['provider'] == 'email';
   $CanEditName = User::CanEditName($Profile);
   $Form->AddChild($Heading = new HTML\Header(5, 'About you'));
   $Heading->Format->Margin(Side::Top, PadSize::Pad4);
   $Form->AddChild(new HTML\Paragraph(match (true)
   {
     $IsPassword => 'You sign in with your email address and a password, so your name is yours to keep up to date.',
+    $IsEmailCode => 'You sign in with a code emailed to you, so your name is yours to keep up to date.',
     $CanEditName => "$Provider didn't share your name with us, so you can fill it in here. Your email comes from $Provider.",
     default => "These details come from your $Provider account, so you can change them there.",
   }));
@@ -167,7 +179,7 @@
     }
   }
   $Details->NewRow(1);
-  $Details->Col($Email = new Input('email', $IsPassword ? 'Email' : "Email (from $Provider)", HTML\InputType::Email));
+  $Details->Col($Email = new Input('email', $IsPassword || $IsEmailCode ? 'Email' : "Email (from $Provider)", HTML\InputType::Email));
   $Email->Value($Profile['email'] ?? '');
   $Email->InputElement()->ReadOnly = true;
   $Email->InputElement()->RemoveAttribute('name');
@@ -179,7 +191,7 @@
     $Test->Modal();
   }
 
-  $Form->AddChild($Since = new HTML\Paragraph(($IsPassword ? 'Your account was made on ' : "You signed in with $Provider for the first time on ")
+  $Form->AddChild($Since = new HTML\Paragraph(($IsPassword || $IsEmailCode ? 'Your account was made on ' : "You signed in with $Provider for the first time on ")
     . date('j F Y', strtotime($Profile['created'])) . '.'));
   $Since->Format->Color(Color::BodySecondary);
   $Since->Format->Margin(Side::Top, PadSize::Pad3);
@@ -196,6 +208,55 @@
     $PasswordButton->Color(Color::Secondary);
     $PasswordButton->SkipForm();
     $PasswordButton->Modal();
+  }
+
+  // Passkeys: sign in with this device's lock or a security key, whatever the account's provider
+  if (\Auth\Passkey::Configured())
+  {
+    $Dialog->AddChild($Heading = new HTML\Header(5, 'Passkeys'));
+    $Heading->Format->Margin(Side::Top, PadSize::Pad4);
+    $Passkeys = Storage\Store::Get()->Passkeys($UserID);
+    $Dialog->AddChild(new HTML\Paragraph($Passkeys ? 'These passkeys sign you in, with your device\'s fingerprint, face or PIN:'
+      : 'Add a passkey to sign in with your device\'s fingerprint, face or PIN, without ' . ($IsEmailCode ? 'waiting for a code.' : 'a password.')));
+    if ($Passkeys)
+    {
+      $Dialog->AddChild($List = new HTML\UnorderedList());
+      $List->AddClasses(['list-group', 'mb-2']);
+      foreach ($Passkeys as $Key)
+      {
+        $List->AddChild($Row = new HTML\ListItem());
+        $Row->AddClasses(['list-group-item', 'd-flex', 'justify-content-between', 'align-items-center', 'gap-2']);
+        $Row->AddChild($About = new HTML\Div());
+        $About->AddChild(new HTML\Strong($Key['name'] ?: 'Passkey'));
+        $About->AddChild($When = new HTML\Div(Content: 'Added ' . date('j F Y', strtotime($Key['created']))
+          . ($Key['last_used'] ? ', last used ' . date('j F Y', strtotime($Key['last_used'])) : '')));
+        $When->AddClass('small');
+        $When->Format->Color(Color::BodySecondary);
+        $Row->AddChild($Remove = new Button('Remove', Icon::Trash, "$Here?action=removepasskey&id=" . (int)$Key['id']));
+        $Remove->Color(Color::Secondary);
+        $Remove->AddClass('btn-sm');
+        $Remove->SkipForm();
+        $Remove->Modal();
+      }
+    }
+    // Add a passkey asks the browser (js/passkey.js), then posts its answer with this form into the popup
+    foreach (\Auth\Passkey::Scripts() as $Script)
+    {
+      $Dialog->AddChild($Script);
+    }
+    $Dialog->AddChild($KeyForm = new HTML\Form());
+    $KeyForm->Id = uniqid('passkey_');
+    $KeyForm->AddClasses(['d-flex', 'flex-wrap', 'align-items-end', 'gap-2']);
+    $KeyForm->AddChild($KeyName = new Input('passkey_name', 'Name it (e.g. My phone)'));
+    $KeyName->InputElement()->MaxLength = 100;
+    $KeyForm->AddChild($Answer = new HTML\Input('passkey', HTML\InputType::Hidden));
+    $KeyForm->AddChild($Add = new Button('Add a passkey', Icon::Fingerprint));
+    $Add->Color(Color::Secondary);
+    $Add->OnClick('passkeyAdd(this, ' . json_encode(Config::FrameworkURL('passkey.php') . '?action=register', JSON_UNESCAPED_SLASHES) . ', '
+      . json_encode($KeyForm->Id) . ');');
+    $KeyForm->AddChild($Post = new Button('Save the passkey', Icon::Check2, "$Here?action=addpasskey"));
+    $Post->AddClasses(['passkey-save', 'd-none']);
+    $Post->Modal();
   }
 
   $Dialog->AddButton($Save = new Button('Save', Icon::Check2, "$Here?action=save"));

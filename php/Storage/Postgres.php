@@ -8,7 +8,7 @@
    * Users, access and the menu in PostgreSQL: the access and framework schemas of sql/schema.sql, in the settings'
    * database
    */
-  class Postgres implements Backend
+  class Postgres implements Backend, EmailCodes, Passkeys
   {
     // The columns SetMenuField() may set, with their cast
     private const array MENU_FIELDS = ['name' => '', 'icon' => '', 'target' => '', 'code' => '', 'position' => '::integer',
@@ -71,7 +71,8 @@
     public function Users(): array
     {
       $Users = DB::Rows('select u.user_id, u.provider, u.email, u.first_name, u.last_name, u.created, u.last_login,
-          case when u.provider = \'password\' then exists (select 1 from access.passwords p where p.user_id = u.user_id) end as verified,
+          case u.provider when \'password\' then exists (select 1 from access.passwords p where p.user_id = u.user_id)
+                          when \'email\' then exists (select 1 from access.verified_emails v where v.user_id = u.user_id) end as verified,
           coalesce((select json_agg(l.code order by l.access_id) from access.grants g join access.levels l using (access_id)
                      where g.user_id = u.user_id and g.revoked is null), \'[]\') as access
         from access.users u order by u.last_login desc nulls last, u.user_id');
@@ -201,6 +202,89 @@
     {
       return (int)DB::Value('select count(*) from access.sign_in_failures where address = $1 and at > now() - make_interval(secs => $2)',
         [$Address, $Seconds]);
+    }
+
+    public function EmailCodeUserID(string $Email): ?int
+    {
+      $ID = DB::Value('select user_id from access.users where provider = \'email\' and subject = lower(trim($1))', [$Email]);
+      return $ID === null ? null : (int)$ID;
+    }
+
+    public function EmailCode(string $Email): ?array
+    {
+      return DB::Row('select hash, extract(epoch from expires)::bigint as expires, extract(epoch from sent)::bigint as sent, failures,
+          extract(epoch from last_failure)::bigint as last_failure
+        from access.email_codes where email = lower(trim($1))', [$Email]);
+    }
+
+    public function SaveEmailCode(string $Email, string $Hash, int $Expires): void
+    {
+      DB::Exec('insert into access.email_codes (email, hash, expires, sent) values (lower(trim($1)), $2, to_timestamp($3), now())
+        on conflict (email) do update set hash = excluded.hash, expires = excluded.expires, sent = excluded.sent', [$Email, $Hash, $Expires]);
+    }
+
+    public function EmailCodeFailed(string $Email, string $Address): void
+    {
+      DB::Exec('insert into access.email_codes (email, failures, last_failure) values (lower(trim($1)), 1, now())
+        on conflict (email) do update set failures = email_codes.failures + 1, last_failure = now()', [$Email]);
+      $this->PasswordFailed(null, $Address);
+    }
+
+    public function EmailCodeUsed(string $Email): void
+    {
+      DB::Exec('delete from access.email_codes where email = lower(trim($1))', [$Email]);
+    }
+
+    public function EmailVerified(int $UserID): bool
+    {
+      return DB::Exec('insert into access.verified_emails (user_id) values ($1) on conflict do nothing', [$UserID]) > 0;
+    }
+
+    public function Passkeys(int $UserID): array
+    {
+      $Rows = DB::Rows('select id, credential_id, array_to_json(transports) as transports, name, created, last_used
+        from access.passkeys where user_id = $1 order by created, id', [$UserID]);
+      foreach ($Rows as &$Row)
+      {
+        $Row['transports'] = json_decode($Row['transports'] ?? '[]', true) ?: [];
+      }
+      return $Rows;
+    }
+
+    public function Passkey(string $CredentialID): ?array
+    {
+      return DB::Row('select id, user_id, public_key, sign_count from access.passkeys where credential_id = $1', [$CredentialID]);
+    }
+
+    public function AddPasskey(int $UserID, array $Credential, string $Name): ?string
+    {
+      if (DB::Exists('select 1 from access.passkeys where credential_id = $1', [$Credential['id'] ?? '']))
+      {
+        return 'That passkey is kept already.';
+      }
+      $Transports = '{' . implode(',', array_map(fn($T) => '"' . addcslashes((string)$T, '"\\') . '"', $Credential['transports'] ?? [])) . '}';
+      return DB::Exec('insert into access.passkeys (user_id, credential_id, public_key, sign_count, transports, name, aaguid, backed_up)
+          select $1, $2, $3, $4, $5::text[], nullif(trim($6), \'\'), $7, $8::boolean where exists (select 1 from access.users where user_id = $1)',
+        [$UserID, $Credential['id'], $Credential['publicKey'], (int)($Credential['signCount'] ?? 0), $Transports, $Name,
+          $Credential['aaguid'] ?? null, !empty($Credential['backedUp']) ? 't' : 'f']) > 0 ? null : 'Unknown user.';
+    }
+
+    public function PasskeyUsed(int $ID, int $SignCount, bool $BackedUp): void
+    {
+      DB::Exec('update access.passkeys set sign_count = $2, backed_up = $3::boolean, last_used = now() where id = $1',
+        [$ID, $SignCount, $BackedUp ? 't' : 'f']);
+    }
+
+    public function RemovePasskey(int $UserID, int $ID): ?string
+    {
+      return DB::Exec('delete from access.passkeys where id = $2 and user_id = $1', [$UserID, $ID]) > 0 ? null : 'Unknown passkey.';
+    }
+
+    public function UserSignIn(int $UserID): ?array
+    {
+      $User = DB::Row('update access.users set last_login = now() where user_id = $1
+        returning user_id, provider, email, first_name, last_name', [$UserID]);
+      return $User === null ? null : $User + ['access' => $this->Access($UserID)];
     }
 
     public function Menu(): array

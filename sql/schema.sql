@@ -8,6 +8,9 @@
 --   framework.menu_access  which access levels may view each item's page, and which may also change things there
 --   access.passwords    the password accounts' hashes, and their wrong passwords lately (since 1.3.0)
 --   access.sign_in_failures  wrong passwords by address, to slow down guessing
+--   access.email_codes  sign-in codes emailed to addresses, and their wrong codes lately (since 1.20.0)
+--   access.verified_emails  email-code accounts whose address is shown to work (since 1.20.0)
+--   access.passkeys     users' passkeys (since 1.20.0)
 --
 -- Run it once, in the database the settings' database section names, as a role that may create schemas:
 --   psql "host=db.example.com dbname=app user=app" -v ON_ERROR_STOP=1 -f /usr/share/sc-webframe/sql/schema.sql
@@ -44,10 +47,11 @@ create table if not exists access.users
   unique (provider, subject)
 );
 
--- The providers a user can sign in with, password since 1.3.0 (replaced, so older databases get the new list too)
+-- The providers a user can sign in with, password since 1.3.0, email since 1.20.0 (replaced, so older databases get the
+-- new list too)
 alter table access.users drop constraint if exists users_provider_check;
 alter table access.users add constraint users_provider_check
-  check (provider in ('google', 'apple', 'microsoft', 'github', 'facebook', 'password'));
+  check (provider in ('google', 'apple', 'microsoft', 'github', 'facebook', 'password', 'email'));
 
 -- Users who sign in with their email address and a password (provider 'password'), once a link emailed to them chose
 -- it (until then they have no row): the hash (PHP's password_hash()), and the wrong passwords since the last right one,
@@ -70,6 +74,44 @@ create table if not exists access.sign_in_failures
 );
 
 create index if not exists sign_in_failures_address on access.sign_in_failures (address, at);
+
+-- Codes emailed for signing in (provider 'email'), by address, lower case: the code's hash (PHP's password_hash()),
+-- when it stops working and when it was sent; and the address's wrong codes since the last right one, which lock it for
+-- a while. A right code removes the row.
+create table if not exists access.email_codes
+(
+  email        text        primary key,
+  hash         text,
+  expires      timestamptz,
+  sent         timestamptz,
+  failures     integer     not null default 0,
+  last_failure timestamptz
+);
+
+-- Email-code accounts whose address is shown to work: a code sent to it came back
+create table if not exists access.verified_emails
+(
+  user_id  bigint      primary key references access.users on delete cascade,
+  verified timestamptz not null default now()
+);
+
+-- Passkeys (WebAuthn), any account's: what SC\Passkey::verifyRegistration() gave, ids and the COSE key as base64url
+create table if not exists access.passkeys
+(
+  id            bigint generated always as identity primary key,
+  user_id       bigint      not null references access.users on delete cascade,
+  credential_id text        not null unique,
+  public_key    text        not null,
+  sign_count    bigint      not null default 0,
+  transports    text[]      not null default '{}',
+  name          text,
+  aaguid        text,
+  backed_up     boolean     not null default false,
+  created       timestamptz not null default now(),
+  last_used     timestamptz
+);
+
+create index if not exists passkeys_user on access.passkeys (user_id);
 
 create table if not exists access.levels
 (

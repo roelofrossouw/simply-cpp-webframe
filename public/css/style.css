@@ -822,3 +822,65 @@ th.sortable {
 .was-validated .otp-field:has(:invalid) > .invalid-feedback {
   display: block;
 }
+
+/* BS\Stepper: numbered steps over a thin progress bar; on a phone "Step 2 of 4: ..." instead of the names */
+.stepper {
+  width: 100%;
+}
+
+.stepper-steps {
+  gap: 0.5rem;
+  padding: 0;
+}
+
+.stepper-step {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.stepper-content {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--bs-secondary-color);
+  text-decoration: none;
+}
+
+.stepper-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stepper-marker {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  border: 2px solid var(--bs-border-color);
+  background: var(--bs-body-bg);
+  font-weight: 600;
+}
+
+.stepper-current .stepper-content {
+  color: var(--bs-body-color);
+  font-weight: 600;
+}
+
+.stepper-current .stepper-marker {
+  border-color: var(--bs-primary);
+  background: var(--bs-primary);
+  color: #fff;
+}
+
+.stepper-done .stepper-marker {
+  border-color: var(--bs-success);
+  color: var(--bs-success);
+}
+
+a.stepper-content:hover .stepper-label {
+  text-decoration: underline;
+}

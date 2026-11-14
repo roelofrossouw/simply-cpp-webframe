@@ -131,3 +131,47 @@
   DB::Exec('delete from access.users where user_id in ($1, $2)', [$Bob, $Ann]);
 
   DB::Exec('delete from access.users where user_id = $1', [$ID]);
+
+  // Emailed codes (Storage\EmailCodes): by address, failures kept across new codes, gone once used; an email account
+  $Mail = "code-$Name@example.com";
+  Same(null, $Storage->EmailCodeUserID($Mail), 'no email account yet');
+  Same(null, $Storage->EmailCode($Mail), 'nor a code');
+  $Storage->SaveEmailCode(strtoupper($Mail), 'hash a', time() + 600);
+  $Kept = $Storage->EmailCode($Mail);
+  Check($Kept['hash'] === 'hash a' && abs((int)$Kept['expires'] - time() - 600) < 5 && abs((int)$Kept['sent'] - time()) < 5 && $Kept['failures'] === '0',
+    'a code by its address, lower case, with when it expires and was sent');
+  $Storage->EmailCodeFailed($Mail, $Address);
+  $Storage->SaveEmailCode($Mail, 'hash b', time() + 600);
+  Same(['hash b', '1'], [$Storage->EmailCode($Mail)['hash'], $Storage->EmailCode($Mail)['failures']], 'a new code keeps the wrong ones');
+  Same(1, $Storage->AddressFailures($Address, 60), 'which count for the IP address too');
+  $Storage->EmailCodeUsed($Mail);
+  Same(null, $Storage->EmailCode($Mail), 'a used code is gone, failures and all');
+  $Storage->EmailCodeFailed("none-$Name@example.com", $Address);
+  Same([null, '1'], [$Storage->EmailCode("none-$Name@example.com")['hash'], $Storage->EmailCode("none-$Name@example.com")['failures']],
+    'a wrong code for an address without one counts too');
+  $Emailed = (int)$Storage->SignIn('email', $Mail, $Mail, null, null)['user_id'];
+  Same($Emailed, $Storage->EmailCodeUserID(strtoupper($Mail)), 'the email account, by its address');
+  Same('f', array_values(array_filter($Storage->Users(), fn($U) => (int)$U['user_id'] === $Emailed))[0]['verified'], 'not shown to work yet');
+  Same(true, $Storage->EmailVerified($Emailed), 'shown to work, the first time');
+  Same(false, $Storage->EmailVerified($Emailed), 'and known after');
+  Same('t', array_values(array_filter($Storage->Users(), fn($U) => (int)$U['user_id'] === $Emailed))[0]['verified'], 'Users says so');
+
+  // Passkeys (Storage\Passkeys)
+  $Made = ['id' => "cred-$Name", 'publicKey' => 'pAEDAyYgASFYIA', 'signCount' => 0, 'transports' => ['internal', 'hybrid'], 'backedUp' => true, 'aaguid' => '00000000-0000-0000-0000-000000000000'];
+  Same(null, $Storage->AddPasskey($Emailed, $Made, 'My phone'), 'a passkey kept');
+  Same('That passkey is kept already.', $Storage->AddPasskey($Emailed, $Made, 'Again'), 'once');
+  $Keys = $Storage->Passkeys($Emailed);
+  Same([1, ['internal', 'hybrid'], 'My phone'], [count($Keys), $Keys[0]['transports'], $Keys[0]['name']], 'listed, with its transports and name');
+  $Key = $Storage->Passkey("cred-$Name");
+  Same([(string)$Emailed, 'pAEDAyYgASFYIA', '0'], [$Key['user_id'], $Key['public_key'], $Key['sign_count']], 'found by its credential id');
+  $Storage->PasskeyUsed((int)$Key['id'], 5, false);
+  Check($Storage->Passkey("cred-$Name")['sign_count'] === '5' && $Storage->Passkeys($Emailed)[0]['last_used'] !== null, 'its use recorded');
+  $Signed = $Storage->UserSignIn($Emailed);
+  Same(['email', $Mail, ['public']], [$Signed['provider'], $Signed['email'], $Signed['access']], 'a sign-in by id, as its own provider');
+  Same(null, $Storage->UserSignIn(-1), 'not for nobody');
+  Same('Unknown passkey.', $Storage->RemovePasskey($ID, (int)$Key['id']), 'only its owner removes it');
+  Same(null, $Storage->RemovePasskey($Emailed, (int)$Key['id']), 'which they may');
+  Same([], $Storage->Passkeys($Emailed), 'gone');
+  DB::Exec('delete from access.sign_in_failures where address = $1', [$Address]);
+  DB::Exec('delete from access.email_codes where email like $1', ["%-$Name@example.com"]);
+  DB::Exec('delete from access.users where user_id = $1', [$Emailed]);

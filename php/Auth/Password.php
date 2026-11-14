@@ -590,8 +590,10 @@
       return $Form;
     }
 
-    // A submit button for a form, which can sit outside it (in the card's foot)
-    private static function Submit(\HTML\Form $Form, string $Caption, \BS\Icon $Icon): \HTML\Button
+    /**
+     * A submit button for a form, which can sit outside it (in the card's foot)
+     */
+    public static function Submit(\HTML\Form $Form, string $Caption, \BS\Icon $Icon): \HTML\Button
     {
       $Symbol = new \HTML\Italic();
       $Symbol->AddClasses(['bi', $Icon->value, 'me-1']);
@@ -605,8 +607,10 @@
       return $Button;
     }
 
-    // A button to another step: in the page in the app, else a link
-    private static function StepButton(string $Caption, \BS\Icon $Icon, string $URL): \BS\Button
+    /**
+     * A button to another step: in the page in the app, else a link
+     */
+    public static function StepButton(string $Caption, \BS\Icon $Icon, string $URL): \BS\Button
     {
       $Button = new \BS\Button($Caption, $Icon);
       $Button->Color(\BS\Color::Secondary);

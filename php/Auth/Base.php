@@ -12,6 +12,8 @@
     // Sign-in options, by the name used in ?provider= and the state parameter
     const array PROVIDERS = [
       'password' => Password::class,
+      'email' => EmailCode::class,
+      'passkey' => Passkey::class,
       'google' => Google::class,
       'microsoft' => Microsoft::class,
       'apple' => Apple::class,
@@ -26,7 +28,7 @@
     // True when the request picked a provider (or returns from one), otherwise the login page offers the choice
     private static bool $Chosen = false;
     // True when the user signed in with a provider, but their public access is revoked
-    private static bool $Blocked = false;
+    protected static bool $Blocked = false;
     protected JWT $AuthToken;
     private array $Data;
 
@@ -444,11 +446,17 @@
       $Footed = false;
       foreach (self::Providers() as $Name => $Class)
       {
-        // The password's first step itself (its Next, with Home, in the foot), the others' buttons below it
-        if ($Class === Password::class)
+        // The first email address step itself (the password's or the emailed code's: its Next, with Home, in the foot),
+        // the others' buttons below it; a passkey's button asks the browser
+        if (($Class === Password::class || $Class === EmailCode::class) && !$Footed)
         {
-          (new Password())->AddEmailStep($Card);
+          (new $Class())->AddEmailStep($Card);
           $Footed = true;
+          continue;
+        }
+        if ($Class === Passkey::class)
+        {
+          Passkey::AddButton($Card);
           continue;
         }
         $Card->AddChild($Button = new \BS\Button('Sign in with ' . $Class::TITLE, $Class::ICON, $this->LoginURI() . '?provider=' . $Name));
