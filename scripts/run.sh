@@ -42,12 +42,7 @@ if ! configure_build_test; then
     configure_build_test || exit
 fi
 
-# No cmake --install here: cpack below packages the build tree by itself, and the modules built
-# after this one get it from apt (publish-apt runs apt-get update after each deploy). Installed
-# into /usr/local, it sat beside the package's /usr copy: CMake prefers /usr/local, so later
-# builds picked up whatever version was last deployed there, and with only some modules there
-# (build-noble, 2026-11-12) a build included two copies of sc-core's headers ("redefinition of
-# concept sc::Numeric", #pragma once is per path).
+cmake --install $build_directory
 
 pushd $build_directory || exit
 rm -rf *.deb
