@@ -333,6 +333,9 @@ A page can steer it:
 
 As with every change to `js/app.js`, the service worker gives the new version from the second load of the site.
 
+Administer → Demos → Popups → Loading screens shows it, with a page that takes 2 seconds (in a popup or below the
+buttons).
+
 ## Navs that overflow
 
 A row of tabs or the menu bar can keep to one line: what doesn't fit goes into a **More** menu at its end, last

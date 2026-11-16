@@ -2038,6 +2038,8 @@ function rememberSkeleton(target, url) {
     for (const child of target[0].childNodes)
     {
       const copy = skeletonOf(child);
+      // The skeleton's top: its placeholders glow
+      copy && copy.classList ? copy.classList.add('placeholder-glow') : null;
       copy ? root.appendChild(copy) : null;
     }
     html = root.innerHTML;
@@ -2166,11 +2168,6 @@ function skeletonOf(node) {
     }
     const part = skeletonOf(child);
     part ? copy.appendChild(part) : null;
-  }
-  // The skeleton's top: its placeholders glow
-  if (element.parentNode && element.parentNode.matches && element.parentNode.matches('.menu-target, .modal, .offcanvas'))
-  {
-    copy.classList.add('placeholder-glow');
   }
   return copy;
 }

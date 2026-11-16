@@ -24,6 +24,19 @@
   $Button->Modal();
 
   Page::AddContent($Card = new Card());
+  $Card->AddHeader('Loading screens');
+  $Card->AddParagraph('While a page loads, its place shows the page as it looked last time, with placeholders that glow where its text, fields, buttons and pictures were (see the README). This demo page takes 2 seconds: the first time it loads with the card of placeholders, after that with its own shape.');
+  $Card->AddChild($Grid = new Grid(2));
+  $Grid->Columns(4, ScreenSize::Medium);
+  $Grid->AddChild($Button = new Button('In a popup', Icon::WindowStack, Demo('loading.php?in=popup')));
+  $Button->Modal();
+  $Grid->AddChild($Button = new Button('Below', Icon::ArrowDownSquare));
+  $Button->Color(Color::Secondary);
+  $Button->OnClick("loadPage.call(this, '" . Demo('loading.php') . "', '#loading-demo');");
+  $Card->AddChild($Below = new \HTML\Div());
+  $Below->AddAttribute('id', 'loading-demo')->AddClass('mt-3');
+
+  Page::AddContent($Card = new Card());
   $Card->AddHeader('Side panel');
   $Card->AddParagraph('Button->OffCanvas() (or MenuItem->OffCanvas()) loads the page into the side panel. The page returns an OffCanvas.');
   $Card->AddChild($Button = new Button('Open the side panel', Icon::LayoutSidebar, Demo('offcanvas.php')));
