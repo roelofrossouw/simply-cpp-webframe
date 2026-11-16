@@ -309,6 +309,30 @@ one's place in the same `.modal`, and Bootstrap's own `hide.bs.modal` event is t
 under it. It uses nothing but Bootstrap's documented API, so Bootstrap updates don't touch it. Administer → Demos →
 Popups shows it.
 
+## Loading screens (since 1.23.0)
+
+While a page loads (after 0.1 s), its place (the main page, the popup or the side panel) shows the shape of what that
+page showed last time, with placeholders that glow where its text was and a small spinner in its heading: the same
+grid, cards, tabs, popup size, table columns (at most 10 rows), fields (empty, disabled), buttons and badges of their
+width, pictures as blocks of their size. A page not seen before in this browser gets the card of placeholders.
+
+The shape is taken after each page shows and kept in the browser's localStorage, without any text, value, link or
+picture: the 40 pages used last, at most 60 KB each. It's kept by the place and the page's path with the names of its
+query, not their values, so `client.php?id=7` loads with the shape `client.php?id=3` had. A save's answer (a
+`Toast::Notice`) isn't kept. A popup's refresh keeps what the popup shows while its button turns.
+
+A page can steer it:
+
+| | |
+|---|---|
+| `data-skeleton="skip"` on an element | left out of the shape (a part that changes a lot, an advert) |
+| `data-skeleton="none"` on any element | the page's shape isn't kept: it loads with the card |
+| `<template data-skeleton>…</template>` | the page's own shape, used as it is (use `placeholder` spans) |
+
+`BS\PlaceHolder` still makes placeholders inside a page, for parts it fills in later itself.
+
+As with every change to `js/app.js`, the service worker gives the new version from the second load of the site.
+
 ## Navs that overflow
 
 A row of tabs or the menu bar can keep to one line: what doesn't fit goes into a **More** menu at its end, last

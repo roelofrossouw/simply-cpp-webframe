@@ -1627,7 +1627,7 @@ function ajaxSuccess(content) {
   clearTimeout(longAction);
   // Show result in target element on success; a cut cell's popover (cutCells()) doesn't outlive its cell
   $('.popover.cell-popover').remove();
-  $(this).html(content)
+  $(this).html(content).removeAttr('aria-busy');
   initComponents(this);
   restoreTabs(this);
   backButton(this);
@@ -1646,6 +1646,17 @@ function ajaxSuccess(content) {
   }
   // Reveal panel if needed
   showPanel.call($(this));
+  // Its shape, for the loading screen next time; a save's answer (a notice) isn't a page to keep
+  if (!notices.found)
+  {
+    const target = $(this);
+    const url = target.data('url');
+    // Measured as shown: a popup or side panel opening shows after its backdrop fades in
+    const keep = () => target.data('url') === url ? rememberSkeleton(target, url) : null;
+    target.is('.modal, .offcanvas') && !target[0].getClientRects().length
+      ? target.one('shown.bs.modal shown.bs.offcanvas', keep)
+      : setTimeout(keep);
+  }
 }
 
 // Notices (BS\Toast::Notice()) in loaded content move to the toast corner, and go after their delay. Returns the page
@@ -1654,7 +1665,7 @@ function showNotices(target) {
   const notices = $(target).find('.toast.notice');
   if (!notices.length)
   {
-    return {then: null, empty: false};
+    return {then: null, empty: false, found: false};
   }
   const then = notices.filter('[data-then]').first().attr('data-then') || null;
   // Something was saved, changed or removed here: the popup this one was opened from shows it again (popupBack())
@@ -1667,6 +1678,7 @@ function showNotices(target) {
   });
   const body = $(target).find('.modal-body, .offcanvas-body');
   return {
+    found: true,
     then: then,
     empty: $(target).is('.modal, .offcanvas') && body.length > 0
       && body.text().trim() === '' && body.find('input, select, textarea, button, img, table').length === 0,
@@ -1834,7 +1846,7 @@ function popupBack(event) {
   clearTimeout(longAction);
   $('.tooltip, .popover').remove();
   modal.children().remove();
-  modal.append(back.content);
+  modal.append(back.content).removeAttr('aria-busy');
   modal.data('url', back.url).data('tabs', back.tabs).data('popup-saved', back.saved);
   back.label ? modal.attr('aria-labelledby', back.label) : modal.removeAttr('aria-labelledby');
   if (back.refresh && saved)
@@ -1924,33 +1936,248 @@ function defaultTarget(caller) {
   return target.length ? target.first() : null;
 }
 
+// While a page loads: the shape of what it showed last time (skeletonOf()), its text and pictures as placeholders that
+// glow, with a small spinner in its heading. A page not shown before (in this browser) gets a card of placeholders.
+// A popup's refresh keeps what it shows: its refresh button turns.
 function showBusy(target) {
-  target.html(
-    '<div class="modal-dialog card m-4">\n' +
-    '  <div class="card-body">' +
-    '    <h5 class="card-title placeholder-glow">\n' +
-    '      <div class="spinner-border spinner-border-sm" role="status">\n' +
-    '        <span class="visually-hidden">Loading...</span>' +
-    '      </div>' +
-    '      <span class="placeholder col-6"></span>\n' +
-    '    </h5>\n' +
-    '    <p class="card-text placeholder-glow">\n' +
-    '      <span class="placeholder col-5"></span>\n' +
-    '      <span class="placeholder col-4"></span>\n' +
-    '      <span class="placeholder col-4"></span>\n' +
-    '      <span class="placeholder col-6"></span>\n' +
-    '      <span class="placeholder col-8"></span>\n' +
-    '    </p>\n' +
-    '  </div>\n' +
-    '</div>');
+  if (target.find('.modal-refresh.busy').length)
+  {
+    target.attr('aria-busy', 'true');
+    return;
+  }
+  const skeleton = skeletonFor(target, target.data('url'));
+  const spinner = '<div class="spinner-border spinner-border-sm skeleton-spinner me-2" role="status">' +
+    '<span class="visually-hidden">Loading...</span></div>';
+  if (skeleton)
+  {
+    target.html(skeleton);
+    const heading = target.find('.modal-title, .offcanvas-title, h1, h2, h3, h4, h5, h6, .card-title').first();
+    heading.length ? heading.prepend(spinner) : target.children().first().prepend(spinner);
+  }
+  else
+  {
+    target.html(
+      '<div class="modal-dialog card m-4">\n' +
+      '  <div class="card-body">' +
+      '    <h5 class="card-title placeholder-glow">\n' + spinner +
+      '      <span class="placeholder col-6"></span>\n' +
+      '    </h5>\n' +
+      '    <p class="card-text placeholder-glow">\n' +
+      '      <span class="placeholder col-5"></span>\n' +
+      '      <span class="placeholder col-4"></span>\n' +
+      '      <span class="placeholder col-4"></span>\n' +
+      '      <span class="placeholder col-6"></span>\n' +
+      '      <span class="placeholder col-8"></span>\n' +
+      '    </p>\n' +
+      '  </div>\n' +
+      '</div>');
+  }
+  target.attr('aria-busy', 'true');
   if (target.is('.modal'))
   {
     bootstrap.Modal.getOrCreateInstance(target[0]).show();
   }
 }
 
+// Loading skeletons. After a page shows, its shape is kept: the same elements and classes (so the same grid, cards,
+// tables, tabs, popup size), but every text a placeholder as wide as its lines were, pictures placeholder blocks of
+// their size, fields empty and disabled, buttons and badges placeholders of their width, at most 10 rows of a table.
+// No text, value, link or picture is kept, only the layout. They're kept in localStorage by the place (main page,
+// popup, side panel) and the page's path and the names (not values) of its query, so editing another record shows the
+// same shape; the 40 used last, at most 60 KB each.
+// A page can leave a part out (data-skeleton="skip"), not be kept at all (data-skeleton="none" on any element), or
+// give its own (a <template data-skeleton> holding the skeleton's HTML).
+const skeletonStore = 'sc-skeletons';
+const skeletonCount = 40;
+const skeletonSize = 60 * 1024;
+
+function skeletonKey(target, url) {
+  if (!url)
+  {
+    return null;
+  }
+  const address = new URL(url, window.location.origin);
+  const names = [...new Set(address.searchParams.keys())].sort();
+  const place = target.is('.modal') ? 'modal' : target.is('.offcanvas') ? 'offcanvas' : (target.attr('id') || 'main');
+  return place + ' ' + address.pathname + (names.length ? '?' + names.join('&') : '');
+}
+
+function skeletons() {
+  try
+  {
+    return JSON.parse(localStorage.getItem(skeletonStore)) || [];
+  }
+  catch (problem)
+  {
+    return [];
+  }
+}
+
+function skeletonFor(target, url) {
+  const key = skeletonKey(target, url);
+  const found = key ? skeletons().find(entry => entry[0] === key) : null;
+  return found ? found[1] : null;
+}
+
+// After a page showed in target (ajaxSuccess()): keep its shape for the next time it loads
+function rememberSkeleton(target, url) {
+  const key = skeletonKey(target, url);
+  if (!key || target.find('[data-skeleton="none"]').length)
+  {
+    return;
+  }
+  let html;
+  const template = target.find('template[data-skeleton]').first();
+  if (template.length)
+  {
+    html = template.html();
+  }
+  else
+  {
+    const root = document.createElement('div');
+    for (const child of target[0].childNodes)
+    {
+      const copy = skeletonOf(child);
+      copy ? root.appendChild(copy) : null;
+    }
+    html = root.innerHTML;
+  }
+  if (!html.trim() || html.length > skeletonSize)
+  {
+    return;
+  }
+  const kept = skeletons().filter(entry => entry[0] !== key);
+  kept.unshift([key, html]);
+  kept.length = Math.min(kept.length, skeletonCount);
+  // Full: the oldest go until it fits
+  while (kept.length)
+  {
+    try
+    {
+      localStorage.setItem(skeletonStore, JSON.stringify(kept));
+      return;
+    }
+    catch (problem)
+    {
+      kept.pop();
+    }
+  }
+}
+
+// What a skeleton keeps of an element's attributes: its layout, nothing it says
+const skeletonAttributes = ['class', 'style', 'role', 'colspan', 'rowspan', 'type', 'hidden', 'data-bs-theme', 'width', 'height'];
+
+// The skeleton of a node shown on the page (null: left out)
+function skeletonOf(node) {
+  if (node.nodeType === Node.TEXT_NODE)
+  {
+    if (!node.textContent.trim())
+    {
+      return document.createTextNode(' ');
+    }
+    // A placeholder for each line the text takes, as wide as that line
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    const lines = [...range.getClientRects()].filter(rect => rect.width > 0);
+    const out = document.createDocumentFragment();
+    lines.forEach((rect, index) => {
+      const span = document.createElement('span');
+      span.className = 'placeholder';
+      span.style.width = Math.round(rect.width) + 'px';
+      span.style.maxWidth = '100%';
+      index ? out.appendChild(document.createTextNode(' ')) : null;
+      out.appendChild(span);
+    });
+    return lines.length ? out : null;
+  }
+  if (node.nodeType !== Node.ELEMENT_NODE)
+  {
+    return null;
+  }
+  const element = node;
+  const name = element.tagName.toLowerCase();
+  if (['script', 'template', 'noscript', 'style', 'link', 'meta'].includes(name) || element.getAttribute('data-skeleton') === 'skip'
+    || element.matches('.toast, .tooltip, .popover, .modal-back, .skeleton-spinner'))
+  {
+    return null;
+  }
+  const box = element.getBoundingClientRect();
+  const sized = (tag, classes) => {
+    const block = document.createElement(tag);
+    block.className = classes;
+    block.style.width = Math.round(box.width) + 'px';
+    block.style.height = Math.round(box.height) + 'px';
+    block.style.maxWidth = '100%';
+    return block;
+  };
+  // Pictures and anything drawn: a block of their size
+  if (['img', 'svg', 'canvas', 'video', 'iframe', 'object', 'embed', 'picture'].includes(name) || element.matches('.bi, [class^="bi-"], [class*=" bi-"]'))
+  {
+    return box.width && box.height ? sized('span', 'placeholder d-inline-block') : null;
+  }
+  const copy = document.createElement(name);
+  for (const attribute of skeletonAttributes)
+  {
+    if (element.hasAttribute(attribute))
+    {
+      copy.setAttribute(attribute, element.getAttribute(attribute));
+    }
+  }
+  // A style with a picture in it (a background) is left out
+  if ((copy.getAttribute('style') || '').includes('url('))
+  {
+    copy.removeAttribute('style');
+  }
+  // Fields: empty and disabled
+  if (['input', 'select', 'textarea'].includes(name))
+  {
+    if (['hidden', 'password', 'file'].includes(element.type) && name === 'input')
+    {
+      return element.type === 'hidden' ? null : (copy.setAttribute('type', 'text'), copy.disabled = true, copy);
+    }
+    copy.disabled = true;
+    return copy;
+  }
+  // Buttons and badges: a placeholder of their size, without what they say
+  if (element.matches('.btn, .badge'))
+  {
+    copy.classList.add('placeholder', 'disabled');
+    copy.style.width = Math.round(box.width) + 'px';
+    copy.setAttribute('aria-hidden', 'true');
+    if (name === 'a' || name === 'button')
+    {
+      const span = document.createElement('span');
+      span.className = copy.className;
+      span.setAttribute('style', copy.getAttribute('style') || '');
+      span.setAttribute('aria-hidden', 'true');
+      span.innerHTML = '&nbsp;';
+      return span;
+    }
+    copy.innerHTML = '&nbsp;';
+    return copy;
+  }
+  // Tables: at most 10 rows in a body
+  let rows = 0;
+  for (const child of element.childNodes)
+  {
+    if (name === 'tbody' && child.nodeType === Node.ELEMENT_NODE && ++rows > 10)
+    {
+      break;
+    }
+    const part = skeletonOf(child);
+    part ? copy.appendChild(part) : null;
+  }
+  // The skeleton's top: its placeholders glow
+  if (element.parentNode && element.parentNode.matches && element.parentNode.matches('.menu-target, .modal, .offcanvas'))
+  {
+    copy.classList.add('placeholder-glow');
+  }
+  return copy;
+}
+
 function showError(target) {
   clearTimeout(longAction);
+  target.removeAttr('aria-busy');
   target.html('<div class="alert alert-warning m-4 p-4" role="alert">' +
     '<h2><i class="bi-exclamation-triangle-fill float-start" style="font-size: 24pt;"></i>&nbsp;&nbsp;' +
     'There was a problem loading the content' +
