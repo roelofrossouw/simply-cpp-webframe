@@ -10,7 +10,8 @@
    *   database  connection (a libpq connection string), or host, port, dbname, user, password, sslmode
    *   auth      secret (signs the sign-in tokens), keys_dir (key files, e.g. Apple's .p8), and a section per
    *             sign-in provider: google, microsoft, apple, github, facebook. A provider is on when its section is there.
-   *   mail      from, redirect, redirect_except, disabled (see BS\Email)
+   *   mail      from, redirect, redirect_except, disabled, logo, header_bg, header_color, header_border, button_bg,
+   *             button_color, link_color (see BS\Email)
    *   storage   class: where users, access and the menu are kept (default Storage\Postgres, see Storage\Backend)
    *   menu      editor: the page that manages the menu, which admins must always keep (optional)
    *

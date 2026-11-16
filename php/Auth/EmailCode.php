@@ -165,20 +165,29 @@
     public static function MailCode(string $Email, string $Code): bool
     {
       $AppName = Config::AppName();
-      $Mail = new \BS\Email();
-      $Mail->AddChild($Card = new Card(PadSize::Pad4));
-      $Card->AddChild(new \HTML\Header(3, 'Hi,'));
-      $Card->AddParagraph("Your code to sign in to $AppName:");
-      $Card->AddChild($Shown = new \HTML\Header(1, $Code));
-      $Shown->AddClasses(['text-center', 'font-monospace']);
-      $Card->AddParagraph('It works for ' . self::Minutes() . ' minutes, once. If you didn\'t ask for it, ignore this email: nobody can sign in without it.');
-      $Card->AddChild(Config::MailFooter());
-      if (!$Mail->Send($Email, "Your $AppName code: $Code"))
+      if (!self::CodeMail($Code)->Send($Email, "Your $AppName code: $Code"))
       {
         error_log('sc-webframe: the sign-in code wasn\'t sent');
         return false;
       }
       return true;
+    }
+
+    /**
+     * The email with a sign-in code, as MailCode() sends it (the code boxed in the site's button colours, see BS\Email)
+     */
+    public static function CodeMail(string $Code): \BS\Email
+    {
+      $Mail = new \BS\Email();
+      $Mail->AddChild($Card = new Card(PadSize::Pad4));
+      $Card->AddChild(new \HTML\Header(3, 'Hi,'));
+      $Card->AddParagraph('Your code to sign in to ' . Config::AppName() . ':');
+      $Card->AddChild($Shown = new \HTML\Header(1, $Code));
+      $Shown->AddClasses(['text-center', 'font-monospace']);
+      \BS\Email::Box($Shown);
+      $Card->AddParagraph('It works for ' . self::Minutes() . ' minutes, once. If you didn\'t ask for it, ignore this email: nobody can sign in without it.');
+      $Card->AddChild(Config::MailFooter());
+      return $Mail;
     }
 
     /**

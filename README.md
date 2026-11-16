@@ -82,7 +82,7 @@ It needs PHP 8.3 or later, with the pgsql, curl, gd and mbstring extensions (the
    | `auth.github` | `client_id`, `client_secret` |
    | `auth.facebook` | `app_id`, `app_secret` |
    | `auth.password` | `enabled` (`true` to offer it), `min_length` (10), `session_days` (30), `signup` (`true`: anyone may make an account); it needs mail; see [Signing in with a password](#signing-in-with-a-password) |
-   | `mail` | `from`, `redirect` (send every email there instead), `redirect_except` (addresses or domains that still get their own email: a list or comma-separated), `disabled` |
+   | `mail` | `from`, `redirect` (send every email there instead), `redirect_except` (addresses or domains that still get their own email: a list or comma-separated), `disabled`; branding, each optional (none set: emails as before): `logo` (https URL of a PNG, shown with the app name in a header), `header_bg`, `header_color`, `header_border` (e.g. `3px solid #8a6a2f`), `button_bg` and `button_color` (btn-primary buttons and the sign-in code box), `link_color` (colours as #hex, rgb()/rgba() or a CSS name; invalid values are ignored) |
    | `ipgeolocation` | `api_key`: an [ipgeolocation.io](https://ipgeolocation.io) key; wrong-password emails then say where the try came from (city, region, country, ISP), not only its IP address |
    | `storage` | `class`: a `Storage\Backend` of your own instead of `Storage\Postgres` |
    | `admin` | `settings`: a class of the site's (an `Admin\SiteSettings`) that adds its own settings to Administer → Config; `user_columns`: one (an `Admin\UserColumns`) that adds its own columns to Users, see below |

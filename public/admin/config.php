@@ -46,6 +46,13 @@
       'mail.redirect' => ['Send every email here instead, for testing', false],
       'mail.redirect_except' => ['While redirecting: addresses or domains that still get their own email, separated by commas', false],
       'mail.disabled' => ['Don\'t send email at all (true or false)', false],
+      'mail.logo' => ['Logo in the emails\' header: an https URL of a PNG (mail clients don\'t show SVG)', false],
+      'mail.header_bg' => ['Emails\' header background colour, e.g. #25292d', false],
+      'mail.header_color' => ['Emails\' header text colour, e.g. #d4ad62', false],
+      'mail.header_border' => ['Emails\' header bottom border, e.g. 3px solid #8a6a2f', false],
+      'mail.button_bg' => ['Emails\' button and code box background colour, e.g. #8a6a2f', false],
+      'mail.button_color' => ['Emails\' button and code box text colour, e.g. #ffffff', false],
+      'mail.link_color' => ['Emails\' link colour, e.g. #7a5c22', false],
     ],
     'Sign in with a password' => [
       'auth.password.enabled' => ['true to let people sign in with their email address and a password (needs mail)', false],

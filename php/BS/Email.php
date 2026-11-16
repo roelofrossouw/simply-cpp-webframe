@@ -22,6 +22,16 @@
      *              ("someone@example.com") and domains ("example.com", the whole part after the @), any case;
      *              a list, or one string with commas (see Recipient())
      *   disabled - When true nothing is sent, sysadmins see a preview instead
+     *   Branding, each optional (Brand()); with none set the email is as it always was:
+     *   logo          - An https URL of a PNG (mail clients don't show SVG), shown 40 x 40 beside the app's name in a header
+     *   header_bg     - The header's background colour
+     *   header_color  - The header's text colour
+     *   header_border - The header's bottom border, e.g. "3px solid #8a6a2f"
+     *   button_bg     - Background of btn-primary buttons and boxed text such as the sign-in code (Box())
+     *   button_color  - Their text colour
+     *   link_color    - Links' colour (MailFooter()'s too)
+     *   Colours are #hex, rgb()/rgba() or a CSS colour name; anything else is ignored. The header shows when logo or
+     *   any header_ setting is set.
      *
      * @see https://bootstrapemail.com
      */
@@ -132,8 +142,153 @@
          */
         public function Html(): string
         {
-            $Html = self::ForMail((string)$this);
+            $Html = $this->Unformatted();
             return $this->Format($Html) ?? $Html;
+        }
+
+        /**
+         * What goes to bootstrap-email: ForMail(), then the site's branding (Brand())
+         */
+        public function Unformatted(): string
+        {
+            return self::Brand(self::ForMail((string)$this));
+        }
+
+        // The class Box() marks an element with, taken out again by Brand()
+        private const string BOX = 'mail-box';
+
+        /**
+         * Marks an element as boxed text, such as the sign-in code: with mail.button_bg / button_color set it's shown
+         * in a box of those colours, else as it is
+         */
+        public static function Box(\HTML\Element $Element): \HTML\Element
+        {
+            $Element->AddClass(self::BOX);
+            return $Element;
+        }
+
+        /**
+         * The site's mail branding (the mail section's logo, header_*, button_* and link_color settings) as inline
+         * styles, the only styling bootstrap-email keeps: a header with the logo and the app's name after <body>,
+         * btn-primary buttons and Box()ed elements in the button colours, and links in link_color. Settings that
+         * aren't valid are ignored, so none can add CSS or HTML of its own. With none set only Box()'s marker goes.
+         */
+        public static function Brand(string $Html): string
+        {
+            $Logo = self::Https(\Config::Get('mail.logo'));
+            $HeaderBg = self::Colour(\Config::Get('mail.header_bg'));
+            $HeaderColor = self::Colour(\Config::Get('mail.header_color'));
+            $HeaderBorder = self::Border(\Config::Get('mail.header_border'));
+            $ButtonBg = self::Colour(\Config::Get('mail.button_bg'));
+            $ButtonColor = self::Colour(\Config::Get('mail.button_color'));
+            $LinkColor = self::Colour(\Config::Get('mail.link_color'));
+
+            $Html = preg_replace_callback('#<(a|[a-z][a-z0-9]*)\b([^>]*)>#i', function ($Tag) use ($ButtonBg, $ButtonColor, $LinkColor) {
+                $Attributes = $Tag[2];
+                $Classes = preg_match('/\sclass="([^"]*)"/', $Attributes, $Found) ? preg_split('/\s+/', trim($Found[1])) : [];
+                $Boxed = in_array(self::BOX, $Classes, true);
+                $Css = '';
+                if ($Boxed)
+                {
+                    $Classes = array_values(array_diff($Classes, [self::BOX]));
+                    $Attributes = preg_replace('/\sclass="[^"]*"/', $Classes ? ' class="' . implode(' ', $Classes) . '"' : '', $Attributes, 1);
+                    $Css = ($ButtonBg !== null ? "background-color: $ButtonBg; padding: 12px 16px; border-radius: 6px;" : '')
+                        . ($ButtonColor !== null ? " color: $ButtonColor;" : '');
+                }
+                elseif (in_array('btn-primary', $Classes, true))
+                {
+                    $Css = ($ButtonBg !== null ? "background-color: $ButtonBg; border-color: $ButtonBg;" : '')
+                        . ($ButtonColor !== null ? " color: $ButtonColor;" : '');
+                }
+                elseif (strtolower($Tag[1]) === 'a' && !in_array('btn', $Classes, true) && $LinkColor !== null)
+                {
+                    $Css = "color: $LinkColor;";
+                }
+                $Css = trim($Css);
+                if ($Css === '')
+                {
+                    return $Boxed ? '<' . $Tag[1] . $Attributes . '>' : $Tag[0];
+                }
+                // After any style already there, so the branding wins
+                $Attributes = preg_match('/\sstyle="([^"]*)"/', $Attributes, $Style)
+                    ? str_replace($Style[0], ' style="' . rtrim(trim($Style[1]), ';') . '; ' . $Css . '"', $Attributes)
+                    : $Attributes . ' style="' . $Css . '"';
+                return '<' . $Tag[1] . $Attributes . '>';
+            }, $Html);
+
+            if ($Logo === null && $HeaderBg === null && $HeaderColor === null && $HeaderBorder === null)
+            {
+                return $Html;
+            }
+            $Bar = 'width: 100%;' . ($HeaderBg !== null ? " background-color: $HeaderBg;" : '') . ($HeaderBorder !== null ? " border-bottom: $HeaderBorder;" : '');
+            $Header = '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="' . $Bar . '"><tr>'
+                . ($Logo !== null ? '<td style="width: 40px; padding: 12px 0 12px 16px;"><img src="' . htmlspecialchars($Logo, ENT_QUOTES) . '" width="40" height="40" alt="" style="display: block; width: 40px; height: 40px;"></td>' : '')
+                . '<td style="padding: 12px 16px; font-size: 22px; font-weight: bold;' . ($HeaderColor !== null ? " color: $HeaderColor;" : '') . '">'
+                . htmlspecialchars(\Config::AppName(), ENT_QUOTES) . '</td></tr></table>';
+            return preg_replace('#<body\b[^>]*>#i', '$0' . str_replace(['\\', '$'], ['\\\\', '\\$'], $Header), $Html, 1);
+        }
+
+        /**
+         * A CSS colour as a setting may give it: #hex (3, 4, 6 or 8 digits), rgb()/rgba() or a colour name; else null
+         */
+        public static function Colour(mixed $Value): ?string
+        {
+            if (!is_string($Value))
+            {
+                return null;
+            }
+            $Value = trim($Value);
+            $Number = '\s*\d{1,3}(?:\.\d+)?%?\s*';
+            return preg_match('/^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i', $Value)
+                || preg_match("/^rgba?\($Number,$Number,$Number(?:,\s*(?:0|1|0?\.\d+|\d{1,3}%)\s*)?\)$/i", $Value)
+                || preg_match('/^[a-z]{3,20}$/i', $Value) ? $Value : null;
+        }
+
+        /**
+         * A CSS border as a setting may give it: up to a width (px), a style and a colour, e.g. "3px solid #8a6a2f"; else null
+         */
+        public static function Border(mixed $Value): ?string
+        {
+            if (!is_string($Value) || trim($Value) === '')
+            {
+                return null;
+            }
+            $Parts = preg_split('/\s+/', trim($Value));
+            $Width = $Style = $Colour = null;
+            foreach ($Parts as $Part)
+            {
+                if ($Width === null && preg_match('/^(?:0|\d{1,2}(?:\.\d+)?px)$/', $Part))
+                {
+                    $Width = $Part;
+                }
+                elseif ($Style === null && preg_match('/^(?:none|solid|dashed|dotted|double|groove|ridge|inset|outset)$/i', $Part))
+                {
+                    $Style = strtolower($Part);
+                }
+                elseif ($Colour === null && !str_contains($Part, '(') && ($Found = self::Colour($Part)) !== null && !preg_match('/^(?:none|solid|dashed|dotted|double|groove|ridge|inset|outset)$/i', $Part))
+                {
+                    $Colour = $Found;
+                }
+                else
+                {
+                    return null;
+                }
+            }
+            return implode(' ', array_filter([$Width, $Style, $Colour], fn($Part) => $Part !== null));
+        }
+
+        /**
+         * An https URL a setting gives (e.g. mail.logo), else null
+         */
+        public static function Https(mixed $Value): ?string
+        {
+            if (!is_string($Value) || ($Value = trim($Value)) === '' || filter_var($Value, FILTER_VALIDATE_URL) === false
+                || strtolower((string)parse_url($Value, PHP_URL_SCHEME)) !== 'https' || (string)parse_url($Value, PHP_URL_HOST) === ''
+                || preg_match('/["\'<>\\\\\s]/', $Value))
+            {
+                return null;
+            }
+            return $Value;
         }
 
         /**
