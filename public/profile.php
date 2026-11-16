@@ -77,8 +77,8 @@
     {
       return Toast::Notice('Email not sent', 'Something went wrong while sending the email. Please try again later.', false);
     }
-    $Redirect = Config::Get('mail.redirect');
-    return Toast::Notice('Email sent', 'We sent a test email to ' . ($Redirect ? "$Redirect (this server sends all email there)" : $Profile['email'])
+    $Recipient = \BS\Email::Recipient($Profile['email']);
+    return Toast::Notice('Email sent', 'We sent a test email to ' . ($Recipient !== $Profile['email'] ? "$Recipient (this server sends email there)" : $Profile['email'])
       . '. It should arrive within a minute or two, check your junk folder if it doesn\'t.', true, \BS\Icon::Envelope);
   }
 

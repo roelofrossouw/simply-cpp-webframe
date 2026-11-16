@@ -44,6 +44,7 @@
     'Email' => [
       'mail.from' => ['From address (default: the app\'s name <noreply@this host>)', false],
       'mail.redirect' => ['Send every email here instead, for testing', false],
+      'mail.redirect_except' => ['While redirecting: addresses or domains that still get their own email, separated by commas', false],
       'mail.disabled' => ['Don\'t send email at all (true or false)', false],
     ],
     'Sign in with a password' => [

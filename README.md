@@ -80,7 +80,7 @@ It needs PHP 8.3 or later, with the pgsql, curl, gd and mbstring extensions (the
    | `auth.github` | `client_id`, `client_secret` |
    | `auth.facebook` | `app_id`, `app_secret` |
    | `auth.password` | `enabled` (`true` to offer it), `min_length` (10), `session_days` (30), `signup` (`true`: anyone may make an account); it needs mail; see [Signing in with a password](#signing-in-with-a-password) |
-   | `mail` | `from`, `redirect` (send every email there instead), `disabled` |
+   | `mail` | `from`, `redirect` (send every email there instead), `redirect_except` (addresses or domains that still get their own email: a list or comma-separated), `disabled` |
    | `ipgeolocation` | `api_key`: an [ipgeolocation.io](https://ipgeolocation.io) key; wrong-password emails then say where the try came from (city, region, country, ISP), not only its IP address |
    | `storage` | `class`: a `Storage\Backend` of your own instead of `Storage\Postgres` |
    | `admin` | `settings`: a class of the site's (an `Admin\SiteSettings`) that adds its own settings to Administer → Config; `user_columns`: one (an `Admin\UserColumns`) that adds its own columns to Users, see below |

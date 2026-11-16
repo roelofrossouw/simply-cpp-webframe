@@ -18,6 +18,9 @@
      * Settings in the settings' mail section (see Config):
      *   from     - Sender, default "<app name> <noreply@<this site's host>>"
      *   redirect - When set, every email goes to this address instead (for development servers)
+     *   redirect_except - Recipients that still get their own email while redirect is set: addresses
+     *              ("someone@example.com") and domains ("example.com", the whole part after the @), any case;
+     *              a list, or one string with commas (see Recipient())
      *   disabled - When true nothing is sent, sysadmins see a preview instead
      *
      * @see https://bootstrapemail.com
@@ -65,7 +68,7 @@
                 return false;
             }
 
-            $Recipient = \Config::Get('mail.redirect') ?: $To;
+            $Recipient = self::Recipient($To);
             $From = \Config::Get('mail.from') ?: \Config::AppName() . ' <noreply@' . \Config::Host() . '>';
             $Boundary = 'part_' . bin2hex(random_bytes(12));
             $Headers = [
@@ -85,6 +88,43 @@
             $Envelope = preg_match('/<([^>]+)>/', $From, $Match) ? $Match[1] : $From;
             $Parameters = filter_var($Envelope, FILTER_VALIDATE_EMAIL) ? '-f' . $Envelope : '';
             return mail($Recipient, self::EncodeHeader($Subject), $Body, $Headers, $Parameters);
+        }
+
+        /**
+         * Where an email to $To goes: $To itself, or mail.redirect when that's set and $To isn't one of
+         * mail.redirect_except's addresses or domains. A domain matches only the whole part after the @, so
+         * "example.com" takes name@example.com and not name@sub.example.com or name@badexample.com.
+         *
+         * @param string $To Recipient, e.g. 'Name <name@example.com>' or 'name@example.com'
+         */
+        public static function Recipient(string $To): string
+        {
+            $Redirect = \Config::Get('mail.redirect');
+            if (!is_string($Redirect) || trim($Redirect) === '')
+            {
+                return $To;
+            }
+            $Except = \Config::Get('mail.redirect_except') ?? [];
+            if (is_string($Except))
+            {
+                $Except = explode(',', $Except);
+            }
+            $Address = strtolower(trim(preg_match('/<([^>]*)>\s*$/', $To, $Match) ? $Match[1] : $To));
+            $At = strrpos($Address, '@');
+            if ($At === false || !is_array($Except))
+            {
+                return $Redirect;
+            }
+            $Domain = substr($Address, $At + 1);
+            foreach ($Except as $Entry)
+            {
+                $Entry = is_string($Entry) ? strtolower(trim($Entry)) : '';
+                if ($Entry !== '' && $Entry === (str_contains($Entry, '@') ? $Address : $Domain))
+                {
+                    return $To;
+                }
+            }
+            return $Redirect;
         }
 
         /**
