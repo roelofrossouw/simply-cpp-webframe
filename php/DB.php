@@ -66,7 +66,13 @@
       $Result = @pg_query_params(self::Connection(), $Query, array_map([self::class, 'Parameter'], array_values($Parameters)));
       if ($Result === false)
       {
-        throw new RuntimeException('Database: ' . trim(pg_last_error(self::Connection())));
+        $Error = trim(pg_last_error(self::Connection()));
+        // A table of a newer version that the site's database doesn't have yet
+        if (preg_match('/relation "(access|framework)\.[a-z_]+" does not exist/', $Error))
+        {
+          $Error .= ' (the site\'s database is missing sc-webframe tables: run /usr/share/sc-webframe/sql/schema.sql in it)';
+        }
+        throw new RuntimeException('Database: ' . $Error);
       }
       return $Result;
     }

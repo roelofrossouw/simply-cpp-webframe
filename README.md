@@ -64,7 +64,9 @@ It needs PHP 8.3 or later, with the pgsql, curl, gd and mbstring extensions (the
    psql "host=db.example.com dbname=hello user=hello" -v ON_ERROR_STOP=1 -f /usr/share/sc-webframe/sql/schema.sql
    ```
 
-   Loading it again changes nothing.
+   Loading it again changes nothing, and it's how a site gets the tables a newer version adds: **after upgrading the
+   package, load it again in each site's database.** Until then a page using a new table fails with "missing
+   sc-webframe tables: run schema.sql". Sign-in providers a site added itself stay allowed.
 
 2. **The settings.** A JSON file outside the document root, readable by PHP's user only (it holds passwords), e.g.
    `/etc/hello/config.json`; see [examples/hello/config.json](examples/hello/config.json):

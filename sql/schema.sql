@@ -48,10 +48,20 @@ create table if not exists access.users
 );
 
 -- The providers a user can sign in with, password since 1.3.0, email since 1.20.0 (replaced, so older databases get the
--- new list too)
-alter table access.users drop constraint if exists users_provider_check;
-alter table access.users add constraint users_provider_check
-  check (provider in ('google', 'apple', 'microsoft', 'github', 'facebook', 'password', 'email'));
+-- new list too). A provider a site added itself (a test user's, say) stays allowed as long as a user has it, so running
+-- this again never fails on the site's own rows.
+do $$
+declare
+  providers text;
+begin
+  select string_agg(quote_literal(provider), ', ' order by provider) into providers
+    from (select unnest(array['google', 'apple', 'microsoft', 'github', 'facebook', 'password', 'email']) as provider
+          union
+          select distinct provider from access.users) all_providers;
+  alter table access.users drop constraint if exists users_provider_check;
+  execute format('alter table access.users add constraint users_provider_check check (provider in (%s))', providers);
+end
+$$;
 
 -- Users who sign in with their email address and a password (provider 'password'), once a link emailed to them chose
 -- it (until then they have no row): the hash (PHP's password_hash()), and the wrong passwords since the last right one,
