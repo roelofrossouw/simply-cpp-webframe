@@ -71,7 +71,8 @@
   $Missing = [];
   foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($Root, FilesystemIterator::SKIP_DOTS)) as $File)
   {
-    if ($File->getExtension() !== 'php' || $File->getFilename() === 'autoload.php')
+    // The loaders (autoload.php, charts.php) aren't classes
+    if ($File->getExtension() !== 'php' || in_array($File->getPathname(), [$Root . '/autoload.php', $Root . '/charts.php'], true))
     {
       continue;
     }
