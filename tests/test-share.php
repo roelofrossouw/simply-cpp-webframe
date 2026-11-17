@@ -41,12 +41,12 @@
         'a Twitter/X card with the picture');
   Check(str_contains($Html, '<title>Test site</title>'), 'the tab keeps its title');
 
-  Config::Set('app.share_title', '1Web MAN');
-  Config::Set('app.image_alt', 'The 1Web logo');
+  Config::Set('app.share_title', 'Example App');
+  Config::Set('app.image_alt', 'The Example logo');
   $Html = Head();
-  Check(Has($Html, 'og:title', '1Web MAN') && Has($Html, 'twitter:title', '1Web MAN'), 'app.share_title for what is shared');
+  Check(Has($Html, 'og:title', 'Example App') && Has($Html, 'twitter:title', 'Example App'), 'app.share_title for what is shared');
   Check(str_contains($Html, '<title>Test site</title>'), 'but not the tab');
-  Check(Has($Html, 'og:image:alt', 'The 1Web logo') && Has($Html, 'twitter:image:alt', 'The 1Web logo'), 'app.image_alt');
+  Check(Has($Html, 'og:image:alt', 'The Example logo') && Has($Html, 'twitter:image:alt', 'The Example logo'), 'app.image_alt');
 
   Config::Set('app.image', '/img/share.svg');
   Config::Set('app.image_width', '800');

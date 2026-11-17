@@ -115,7 +115,10 @@
   $Card = $Demo('Figure, blockquote and icon link', "new Figure(\$Src, \$Alt, \$Caption); new BlockQuote(\$Quote, \$Source); new IconLink(...)");
   $Card->AddChild($Row = new Stack(true, PadSize::Pad4));
   $Row->Format->AlignItems(Align::Start);
-  $Row->AddChild($Figure = new Figure('/img/app-icon-1024.png', '1Web MAN icon', 'The app icon'));
+  // A placeholder picture drawn inline, so the demo needs no image file
+  $Icon = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><rect width="120" height="120" rx="24" fill="#0d6efd"/>'
+    . '<path d="M30 84 52 52l14 18 10-12 14 26z" fill="#fff"/><circle cx="82" cy="38" r="9" fill="#fff"/></svg>';
+  $Row->AddChild($Figure = new Figure('data:image/svg+xml,' . rawurlencode($Icon), 'An example app icon', 'The app icon'));
   $Figure->Format->Width(120);
   $Row->AddChild($Text = new Stack());
   $Text->AddChild(new BlockQuote('Simple things should be simple.', 'Alan Kay'));
