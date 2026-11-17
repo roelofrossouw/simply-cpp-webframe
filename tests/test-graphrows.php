@@ -55,6 +55,11 @@
   Check(str_contains($Html, 'display:flex') && str_contains($Html, 'display:inline-block;width:.75em'), 'the legend is laid out without style.css');
   Check(str_contains($Html, '>Premium</span>') && str_contains($Html, '>Claims</span>'), 'the series named');
 
+  Check(str_contains($Html, 'data-series="1" role="button" tabindex="0" aria-pressed="true" style="cursor:pointer" onclick="event.stopPropagation();'),
+    'outside the app a legend item hides and shows its series itself, the click going no further');
+  Check(str_contains($Html, 'querySelectorAll(&apos;svg [data-series=&quot;&apos;+this.getAttribute(&apos;data-series&apos;)+&apos;&quot;]&apos;)')
+    || str_contains($Html, "querySelectorAll('svg [data-series=") || str_contains($Html, 'querySelectorAll(&#039;svg [data-series=&quot;&#039;'),
+    "it hides the series' items in its own chart");
   // Only the series the rows have; unnamed ones numbered
   $Html = (string)(new Chart\LineChart())->FromGraphRows([['category1' => 1, '_graph_value' => 5], ['category1' => 2, '_graph_value' => 6]]);
   Check(substr_count($Html, '<polyline') === 1 && !str_contains($Html, 'sc-chart-legend'), 'one series: one line, no legend');
