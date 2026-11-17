@@ -3,4 +3,17 @@ Copyright 2026 Roelof Rossouw
 
 Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-The pages load jQuery and Bootstrap 5.3.3 (MIT) and Bootstrap Icons (MIT) from their CDNs.
+The pages load these from content delivery networks (not shipped in this package):
+- Bootstrap 5.3.8 (CSS and JavaScript bundle), MIT License, https://getbootstrap.com
+  from cdn.jsdelivr.net
+- Bootstrap Icons 1.11.3, MIT License, https://icons.getbootstrap.com
+  from cdn.jsdelivr.net
+- jQuery 3.7.1, MIT License, https://jquery.com
+  from ajax.aspnetcdn.com (Microsoft's CDN; the others come from jsDelivr)
+- Vanilla Calendar Pro 3.4.0 (JavaScript and CSS, used by BS\DatePicker), MIT License,
+  https://vanilla-calendar.pro
+  from cdn.jsdelivr.net
+
+Shipped in this package:
+- public/js/sc-passkey.js, a copy of sc-passkey's browser helper (simply-cpp-passkey),
+  Copyright Roelof Rossouw, Apache License 2.0 (scripts/update-sc-passkey-js.sh keeps it in step)
