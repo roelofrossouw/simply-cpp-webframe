@@ -252,6 +252,7 @@ function initComponents(root) {
     bootstrap.Carousel.getOrCreateInstance(element).cycle();
   });
   start('[data-bs-toggle="nav-overflow"]', navOverflow);
+  start('.sc-dashboard', armDashboard);
   start('input[type="date"]', dateField);
   start('input[data-bs-toggle="datepicker"]', datePicker);
   start('select[data-bs-toggle="multi-select"]', multiSelect);
@@ -2366,4 +2367,69 @@ function setupCharts() {
     });
   // A page loading in place of the chart takes the tooltip with it
   $(document).on('show.bs.modal show.bs.offcanvas', hideTip);
+
+  // A dashboard's bar (php/Chart/Dashboard.php): a time range, variable or refresh chosen loads the dashboard's page
+  // again with it in the address; the refresh button reloads it in place
+  const choose = function (element, value) {
+    const dashboard = element.closest('.sc-dashboard');
+    const url = new URL(dashboard.getAttribute('data-url'), window.location.href);
+    url.searchParams.set(element.getAttribute('data-dashboard-param'), value);
+    loadPage.call(dashboard, url.pathname + url.search);
+  };
+  $(document)
+    .on('click', '.sc-dashboard-bar button[data-dashboard-param]', function () {
+      choose(this, this.getAttribute('data-value'));
+    })
+    .on('change', '.sc-dashboard-bar select[data-dashboard-param]', function () {
+      choose(this, this.value);
+    })
+    .on('click', '.sc-dashboard-bar [data-dashboard-reload]', function () {
+      reloadDashboard(this.closest('.sc-dashboard'));
+    });
+}
+
+// A dashboard refreshes itself every data-refresh seconds while it's shown (not while the browser tab is hidden)
+function armDashboard(dashboard) {
+  clearTimeout(dashboard.refreshTimer);
+  const seconds = parseInt(dashboard.getAttribute('data-refresh') || '0', 10);
+  if (seconds > 0)
+  {
+    dashboard.refreshTimer = setTimeout(function () {
+      if (!document.body.contains(dashboard)) return;
+      document.hidden ? armDashboard(dashboard) : reloadDashboard(dashboard);
+    }, seconds * 1000);
+  }
+}
+
+// The dashboard's page loaded again, quietly: the new dashboard's content replaces the old, without the loading
+// screen, and series hidden in its charts' legends stay hidden
+function reloadDashboard(dashboard) {
+  const button = $(dashboard).find('[data-dashboard-reload] i');
+  button.addClass('spin');
+  $.ajax({
+    url: dashboard.getAttribute('data-url'),
+    method: 'POST',
+    success: function (content) {
+      const fresh = $('<div>').html(content).find('.sc-dashboard').first();
+      if (!fresh.length || !document.body.contains(dashboard)) return;
+      const hidden = $(dashboard).find('.sc-chart').map(function () {
+        return [$(this).find('.sc-legend-item.sc-off').map(function () { return this.getAttribute('data-series'); }).get()];
+      }).get();
+      $(dashboard).html(fresh.html());
+      dashboard.setAttribute('data-refresh', fresh.attr('data-refresh') || '0');
+      dashboard.setAttribute('data-url', fresh.attr('data-url') || dashboard.getAttribute('data-url'));
+      $(dashboard).find('.sc-chart').each(function (index) {
+        for (const series of hidden[index] || []) {
+          $(this).find('.sc-legend-item[data-series="' + series + '"]').trigger('click');
+        }
+      });
+      initComponents(dashboard);
+      armDashboard(dashboard);
+    },
+    error: function () {
+      // Not this time: try again at the next refresh
+      button.removeClass('spin');
+      armDashboard(dashboard);
+    },
+  });
 }

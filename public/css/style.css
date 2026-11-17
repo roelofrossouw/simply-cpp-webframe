@@ -1030,3 +1030,30 @@ a.stepper-content:hover .stepper-label {
   height: 28px;
   margin-top: .25rem;
 }
+
+/* A doughnut stays doughnut-sized in a wide panel */
+.sc-chart.sc-pie svg {
+  max-width: 320px;
+  margin: 0 auto;
+}
+
+/* Dashboards (php/Chart/Dashboard.php) */
+.sc-dashboard .sc-panel .sc-chart-title {
+  font-size: .9375rem;
+}
+
+.sc-dashboard .sc-stat {
+  height: 100%;
+}
+
+.sc-dashboard-bar .spin,
+.sc-dashboard-bar i.spin {
+  display: inline-block;
+  animation: sc-spin 1s linear infinite;
+}
+
+@keyframes sc-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

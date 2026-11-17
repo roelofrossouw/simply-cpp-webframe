@@ -16,6 +16,7 @@
     public function __construct(?string $Title = null, ?string $ID = null)
     {
       parent::__construct($Title, $ID);
+      $this->AddClass('sc-pie');
       $this->Width = 240;
       $this->Height = 240;
     }

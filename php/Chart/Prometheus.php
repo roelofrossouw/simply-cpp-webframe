@@ -73,6 +73,26 @@
     }
 
     /**
+     * A label's values, sorted (e.g. every instance, for a Dashboard variable); with $Match only those of series it
+     * selects ('up{job="oneapi"}'), and of the last $Within ('6h') only, as Prometheus keeps a label's values for as long
+     * as it keeps the series
+     *
+     * @return string[]
+     */
+    public function LabelValues(string $Label, ?string $Match = null, string $Within = '6h'): array
+    {
+      $Parameters = ['start' => time() - TimeRange::Seconds($Within), 'end' => time()];
+      if ($Match !== null)
+      {
+        $Parameters['match[]'] = $Match;
+      }
+      $Values = $this->Call('label/' . rawurlencode($Label) . '/values', $Parameters);
+      $Values = array_map('strval', array_values($Values));
+      sort($Values, SORT_NATURAL);
+      return $Values;
+    }
+
+    /**
      * A range query's results as the chart's series, its labels the times (the chart is switched to Time()), each named
      * by $Legend: Grafana's {{label}} form ('{{instance}} {{route}}'), or by default the result's labels. A series
      * keeps its labels for OpenSeries()'s and Open()'s placeholders. When the query fails, the chart says why.

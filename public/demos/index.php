@@ -21,6 +21,7 @@
     [Icon::Grid3x3Gap, 'Components', 'components.php'],
     [Icon::Table, 'Tables', 'tables.php'],
     [Icon::BarChart, 'Charts', 'charts.php'],
+    [Icon::Speedometer2, 'Dashboard', 'dashboard.php'],
     [Icon::MenuButtonWide, 'Menus', 'menus.php'],
     [Icon::WindowStack, 'Popups', 'popups.php'],
     [Icon::EmojiSmile, 'Icons', 'icons.php'],
