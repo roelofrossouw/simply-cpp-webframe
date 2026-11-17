@@ -96,3 +96,92 @@
   Check(str_contains($Js, "loadPage.call(this, this.getAttribute('data-href'))"), 'chart links load like buttons (modal-link, oc-link)');
   $Css = file_get_contents(__DIR__ . '/../public/css/style.css');
   Check(str_contains($Css, '.sc-chart svg .sc-off') && str_contains($Css, '.sc-chart-tip'), 'style.css hides series and styles the tooltip');
+
+  // Time ranges: durations, steps rounded so queries share times, ends on a step
+  Same(21600, Chart\TimeRange::Seconds('6h'), "Seconds('6h')");
+  Same(604800, Chart\TimeRange::Seconds('1w'), "Seconds('1w')");
+  $Range = Chart\TimeRange::Last('6h', 240, 1_000_000_000);
+  Same(120, $Range->Step, '6 hours in about 240 points: 2-minute steps');
+  Check($Range->Start % 120 === 0 && $Range->End % 120 === 0 && $Range->End <= 1_000_000_000, 'the ends fall on a step, not after now');
+  try
+  {
+    Chart\TimeRange::Seconds('6 hours');
+    $Refused = false;
+  }
+  catch (InvalidArgumentException)
+  {
+    $Refused = true;
+  }
+  Check($Refused, "'6 hours' isn't a duration");
+
+  // Round times, in the site's time zone
+  date_default_timezone_set('UTC');
+  $Start = gmmktime(9, 7, 0, 11, 17, 2026);
+  $Texts = array_column(Chart\TimeTicks::Between($Start, $Start + 6 * 3600 - 600, 6), 1);
+  Same(['10:00', '11:00', '12:00', '13:00', '14:00'], $Texts, '6 hours: hourly ticks on the hour');
+  $Texts = array_column(Chart\TimeTicks::Between(gmmktime(18, 0, 0, 11, 15, 2026), gmmktime(12, 0, 0, 11, 17, 2026), 8), 1);
+  Check(in_array('Mon 16 Nov', $Texts, true) && in_array('06:00', $Texts, true), "2 days: 6-hourly, the day's name at midnight");
+  $Texts = array_column(Chart\TimeTicks::Between(gmmktime(0, 0, 0, 1, 10, 2026), gmmktime(0, 0, 0, 11, 10, 2026), 6), 1);
+  Same(['Apr 2026', 'Jul', 'Oct'], $Texts, 'months: quarters, the year with the first');
+  date_default_timezone_set('Africa/Johannesburg');
+  $Local = Chart\TimeTicks::Between(gmmktime(20, 0, 0, 11, 16, 2026), gmmktime(4, 0, 0, 11, 17, 2026), 3);
+  Same(['00:00', '03:00', '06:00'], array_column($Local, 1), 'ticks fall on round local hours (22:00 to 06:00 at +02:00, 3-hourly)');
+
+  // A chart on a time axis: in time order, placed by time, a gap where samples are missing
+  InApp(true);
+  $Base = gmmktime(10, 0, 0, 11, 17, 2026);
+  $Timed = (new LineChart())->Time();
+  $Values = [];
+  foreach ([0, 1, 2, 3, 7, 8, 9] as $Minute)
+  {
+    $Values[$Base + 60 * $Minute] = $Minute;
+  }
+  $Values = array_reverse($Values, true); // given out of order
+  $Timed->AddSeries('Rate', $Values);
+  $Timed->Open('/at.php?t={time}&iso={iso}');
+  $Html = (string)$Timed;
+  Same(2, substr_count($Html, '<polyline'), 'four minutes without samples split the line');
+  Check(preg_match_all('/data-href="\/at\.php\?t=(\d+)/', $Html, $Found) && $Found[1] === array_map('strval', array_keys(array_reverse($Values, true))),
+    'the bands in time order, {time} filled in');
+  Check(str_contains($Html, 'iso=' . rawurlencode(date('c', $Base))), '{iso} filled in');
+  Check(str_contains($Html, '>12:00</text>') || str_contains($Html, '>12:02</text>'), 'the axis shows round local times');
+  Check(str_contains($Html, "Tue 17 Nov 12:00\nRate: 0"), "a point's tooltip names its time");
+  $Text = (new LineChart())->Time()->Labels(['2026-11-17 10:00', 'not a time', '2026-11-17 11:00']);
+  $Text->AddSeries('x', ['2026-11-17 10:00' => 1, '2026-11-17 11:00' => 2]);
+  Same(2, substr_count((string)$Text, 'class="sc-band"'), 'text times are read; what isn\'t a time is left out');
+
+  // Series links: a line opens its series' page with its labels
+  $Series = (new LineChart())->Time();
+  $Series->AddSeries('api1', [$Base => 1, $Base + 60 => 2])->Labels = ['instance' => 'api1', 'job' => 'oneapi'];
+  $Series->AddSeries('api2', [$Base => 3, $Base + 60 => 4])->Labels = ['instance' => 'api2', 'job' => 'oneapi'];
+  $Series->OpenSeries('/servers/view.php?name={instance}&job={job}', Open::SidePanel);
+  $Html = (string)$Series;
+  Check(str_contains($Html, 'class="sc-series-link oc-link"') && str_contains($Html, 'data-href="/servers/view.php?name=api2&amp;job=oneapi"'),
+    "a line opens its series' page, its labels filled in");
+  Check(str_contains($Html, '<span class="sc-legend-item oc-link" data-href="/servers/view.php?name=api1&amp;job=oneapi"'),
+    "with OpenSeries() a legend item opens the series' page instead of hiding it");
+
+  // Prometheus: answers parsed, legends, intervals, and a chart that says why there's nothing
+  $Matrix = Chart\Prometheus::Matrix(['resultType' => 'matrix', 'result' => [
+    ['metric' => ['__name__' => 'up', 'instance' => 'api1', 'job' => 'oneapi'], 'values' => [[1700000000, '1'], [1700000015.000, 'NaN'], [1700000030, '0.5']]]]]);
+  Same([1700000000 => 1.0, 1700000015 => null, 1700000030 => 0.5], $Matrix[0]['points'], 'a matrix: times to values, NaN as no point');
+  Same('api1 (oneapi)', Chart\Prometheus::Legend('{{instance}} ({{ job }})', $Matrix[0]['labels']), 'a legend fills in {{label}}s');
+  Same('up{instance="api1", job="oneapi"}', Chart\Prometheus::Legend('', $Matrix[0]['labels']), 'without a legend: the metric as Prometheus writes it');
+  Same([['labels' => [], 'value' => 42.0]], Chart\Prometheus::Vector(['resultType' => 'scalar', 'result' => [1700000000, '42']]), 'a scalar');
+  Same(2.5, Chart\Prometheus::Vector(['resultType' => 'vector', 'result' => [['metric' => ['job' => 'x'], 'value' => [1, '2.5']]]])[0]['value'], 'a vector');
+  $Prometheus = new Chart\Prometheus('http://127.0.0.1:1', 2);
+  Same('rate(x[135s]) step 120s', $Prometheus->Intervals('rate(x[$__rate_interval]) step $__interval', 120), "Grafana's \$__rate_interval and \$__interval");
+  Same('rate(x[60s])', $Prometheus->Intervals('rate(x[$__rate_interval])', 15), '$__rate_interval is at least four scrapes');
+  $Down = new LineChart();
+  $Prometheus->AddTo($Down, 'up', Chart\TimeRange::Last('1h'));
+  Check(str_contains((string)$Down, 'Prometheus did not answer'), 'a Prometheus that does not answer: the chart says so');
+  try
+  {
+    $Prometheus->Value('up');
+    $Threw = false;
+  }
+  catch (RuntimeException)
+  {
+    $Threw = true;
+  }
+  Check($Threw, 'Value() throws when Prometheus does not answer');

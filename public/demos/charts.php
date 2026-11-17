@@ -1,8 +1,8 @@
 <?php
   require_once __DIR__ . '/_demo.php';
 
-  use BS\{Card, Grid, ScreenSize};
-  use Chart\{BarChart, LineChart, Open, PieChart, Stat};
+  use BS\{AlertInfo, Card, Grid, ScreenSize};
+  use Chart\{BarChart, LineChart, Open, PieChart, Prometheus, Stat, TimeRange};
 
   Config::Init(Access: Config::FrameworkURL(DEMOS));
 
@@ -65,3 +65,51 @@
   $Pie = new PieChart('Recipients by domain');
   $Pie->FromRows($Domains, 'domain', 'mails')->Open("$Popup?domain={domain}&value={value}", Open::Popup);
   $Grid->AddChild($Pie);
+
+  // A time axis: points placed by their time, round times marked; 40 minutes without samples leave a gap
+  Page::AddContent($Card = new Card());
+  $Card->AddHeader('On a time axis');
+  $Card->AddParagraph('LineChart->Time(): the labels are times (Unix seconds, or text such as 2026-11-17 14:05), so the points lie by their time and the axis marks round times. A stretch without samples is a gap. Click a point to open its time ({time}, {iso}).');
+  $Now = intdiv(time(), 300) * 300;
+  $Points = [];
+  for ($Time = $Now - 6 * 3600; $Time <= $Now; $Time += 300)
+  {
+    if ($Time < $Now - 3 * 3600 || $Time > $Now - 3 * 3600 + 2400)
+    {
+      $Points[$Time] = round(120 + 60 * sin($Time / 3000) + 15 * cos($Time / 700));
+    }
+  }
+  $Timed = (new LineChart())->Time();
+  $Timed->AddSeries('Requests per minute', $Points);
+  $Timed->Open("$Popup?what=Requests+per+minute&label={iso}", Open::Popup);
+  $Card->AddChild($Timed);
+
+  // From Prometheus, when the site's settings name one (prometheus.url)
+  Page::AddContent($Card = new Card());
+  $Card->AddHeader('From Prometheus');
+  if (empty(Config::Get('prometheus.url')))
+  {
+    $Card->AddChild(new AlertInfo('No Prometheus', 'Set prometheus.url in the site\'s settings (e.g. http://prometheus.example.com:9090) to see its metrics here.'));
+  }
+  else
+  {
+    $Card->AddParagraph('Chart\Prometheus->AddTo($Chart, $Query, TimeRange::Last(\'6h\'), \'{{job}}\'): a line per result, named by its labels. OpenSeries() opens a line\'s page with its labels as placeholders ({job}, {instance}): click a line or its legend item.');
+    $Prometheus = new Prometheus();
+    try
+    {
+      $Up = $Prometheus->Value('count(up == 1)');
+      $Down = $Prometheus->Value('count(up == 0)') ?? 0;
+      $Card->AddChild($Tiles = new Grid());
+      $Tiles->Columns(2, ScreenSize::Medium);
+      $Tiles->AddChild((new Stat('Targets up', $Up ?? '–')));
+      $Tiles->AddChild((new Stat('Targets down', $Down))->Change(0, UpIsGood: false));
+    }
+    catch (RuntimeException $Problem)
+    {
+      $Card->AddChild(new AlertInfo('Prometheus', $Problem->getMessage()));
+    }
+    $Jobs = new LineChart('Targets up, by job (last 6 hours)');
+    $Prometheus->AddTo($Jobs, 'sum by (job) (up)', TimeRange::Last('6h'), '{{job}}');
+    $Jobs->OpenSeries("$Popup?what={job}", Open::Popup);
+    $Card->AddChild($Jobs);
+  }

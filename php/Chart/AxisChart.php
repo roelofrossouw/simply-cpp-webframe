@@ -91,15 +91,20 @@
         $Svg .= '<text x="' . self::Coordinate($this->Left - 6) . '" y="' . self::Coordinate($this->Y($Tick) + 4) . '" text-anchor="end">' .
           self::Escape($this->Tick($Tick)) . '</text>';
       }
+      if ($this->Times !== null && $this->TimeAxis())
+      {
+        return $Svg . $this->TimeLabels() . '</g>';
+      }
       // Every n-th label, so they don't overlap
-      $Count = count($this->Labels);
-      $Widest = max(1, max(array_map('mb_strlen', $this->Labels)));
+      $Texts = array_map(fn(int $Index) => $this->AxisLabel($Index), array_keys($this->Labels));
+      $Count = count($Texts);
+      $Widest = max(1, max(array_map('mb_strlen', $Texts)));
       $Fit = max(1, (int)floor($this->PlotWidth() / ($Widest * self::CHARACTER + 8)));
       $Every = max(1, (int)ceil($Count / $Fit));
       for ($Index = 0; $Index < $Count; $Index += $Every)
       {
         $Svg .= '<text x="' . self::Coordinate($this->X($Index)) . '" y="' . self::Coordinate($this->Height - 8) . '" text-anchor="middle">' .
-          self::Escape($this->Labels[$Index]) . '</text>';
+          self::Escape($Texts[$Index]) . '</text>';
       }
       return $Svg . '</g>';
     }
@@ -109,11 +114,51 @@
      */
     protected function LabelTip(int $Index): string
     {
-      $Lines = [$this->Labels[$Index]];
+      $Lines = [$this->LabelText($Index)];
       foreach ($this->Series as $Series)
       {
         $Lines[] = $Series->Name . ': ' . $this->Value($Series->Values[$Index] ?? null);
       }
       return implode("\n", $Lines);
+    }
+
+    /**
+     * Whether the labels lie by their time across the axis (LineChart with Time()); bars keep a slot per label
+     */
+    protected function TimeAxis(): bool
+    {
+      return false;
+    }
+
+    // A label on the axis: with Time() (bars) the time, as short as the spacing allows
+    private function AxisLabel(int $Index): string
+    {
+      if ($this->Times === null)
+      {
+        return $this->Labels[$Index];
+      }
+      return date(TimeTicks::FormatFor(TimeTicks::Step($this->Times)), $this->Times[$Index]);
+    }
+
+    // Where a time lies across, in pixels (TimeAxis())
+    protected function TimeX(int $Time): float
+    {
+      $First = min($this->Times);
+      $Last = max($this->Times);
+      return $this->Left + ($Last > $First ? $this->PlotWidth() * ($Time - $First) / ($Last - $First) : $this->PlotWidth() / 2);
+    }
+
+    // Round times along the bottom, as many as fit
+    private function TimeLabels(): string
+    {
+      $First = min($this->Times);
+      $Last = max($this->Times);
+      $Svg = '';
+      foreach (TimeTicks::Between($First, $Last, max(2, (int)floor($this->PlotWidth() / 70))) as [$Time, $Text])
+      {
+        $Svg .= '<text x="' . self::Coordinate($this->TimeX($Time)) . '" y="' . self::Coordinate($this->Height - 8) . '" text-anchor="middle">' .
+          self::Escape($Text) . '</text>';
+      }
+      return $Svg;
     }
   }

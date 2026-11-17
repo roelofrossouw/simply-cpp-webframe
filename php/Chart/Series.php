@@ -9,6 +9,8 @@
   {
     /** @var array<int, float|null> by the label's position */
     public array $Values = [];
+    /** @var array<string, string> what it measures, e.g. Prometheus' labels (instance, job, ...), for OpenSeries()'s placeholders */
+    public array $Labels = [];
 
     public function __construct(public string $Name, public ?string $Color = null)
     {

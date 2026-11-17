@@ -30,8 +30,17 @@
       return $this;
     }
 
+    protected function TimeAxis(): bool
+    {
+      return true;
+    }
+
     protected function X(int $Index): float
     {
+      if ($this->Times !== null)
+      {
+        return $this->TimeX($this->Times[$Index]);
+      }
       $Count = count($this->Labels);
       return $this->Left + ($Count < 2 ? $this->PlotWidth() / 2 : $this->PlotWidth() * $Index / ($Count - 1));
     }
@@ -40,6 +49,7 @@
     {
       $Count = count($this->Labels);
       $Dots = $this->Dots ?? $Count <= 40;
+      $Gap = $this->GapAfter();
       $Bottom = self::Coordinate($this->Y(max($this->Scale->Low, min(0.0, $this->Scale->High))));
       $Svg = '';
       foreach ($this->Series as $Number => $Series)
@@ -60,6 +70,12 @@
             $Run = [];
             continue;
           }
+          // With Time(): no line across a stretch without samples
+          if ($Run && $Gap !== null && $this->Times[$Index] - $this->Times[$Index - 1] > $Gap)
+          {
+            $Runs[] = $Run;
+            $Run = [];
+          }
           $Run[] = [$this->X($Index), $this->Y($Value)];
         }
         if ($Run)
@@ -67,6 +83,7 @@
           $Runs[] = $Run;
         }
         $Svg .= '<g data-series="' . $Number . '">';
+        $Lines = [];
         foreach ($Runs as $Points)
         {
           $Line = implode(' ', array_map(fn(array $Point) => self::Coordinate($Point[0]) . ',' . self::Coordinate($Point[1]), $Points));
@@ -76,6 +93,7 @@
               self::Coordinate(end($Points)[0]) . ',' . $Bottom . '" fill="' . $Color . '" fill-opacity="0.12" stroke="none"/>';
           }
           $Svg .= '<polyline points="' . $Line . '" fill="none" stroke="' . $Color . '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+          $Lines[] = $Line;
           if ($Dots || count($Points) == 1)
           {
             foreach ($Points as [$X, $Y])
@@ -85,20 +103,57 @@
           }
         }
         $Svg .= '</g>';
+        $Hits[$Number] = $Lines;
       }
-      return $Svg . $this->Bands();
+      return $Svg . $this->Bands() . $this->SeriesLinks($Hits ?? []);
     }
 
-    // A see-through strip over each label, for its tooltip and link
+    // With Time(): how long between samples counts as a gap: more than twice the usual step (the median)
+    private function GapAfter(): ?int
+    {
+      if ($this->Times === null || count($this->Times) < 3)
+      {
+        return null;
+      }
+      $Steps = [];
+      for ($Index = 1; $Index < count($this->Times); $Index++)
+      {
+        $Steps[] = $this->Times[$Index] - $this->Times[$Index - 1];
+      }
+      sort($Steps);
+      return max(1, 2 * $Steps[intdiv(count($Steps), 2)]);
+    }
+
+    // OpenSeries(): each line also as a wide see-through stroke on top, which opens the series' page
+    private function SeriesLinks(array $Hits): string
+    {
+      if (empty($this->LinkAttributes(null, 0, '')) || empty($Hits))
+      {
+        return '';
+      }
+      $Svg = '<g class="sc-series-links">';
+      foreach ($Hits as $Number => $Lines)
+      {
+        foreach ($Lines as $Line)
+        {
+          $Svg .= $this->Item('polyline', ['class' => 'sc-series-link', 'points' => $Line, 'fill' => 'none', 'stroke' => '#888',
+            'stroke-opacity' => '0', 'stroke-width' => '10', 'pointer-events' => 'stroke'], $this->Series[$Number]->Name, null, $Number);
+        }
+      }
+      return $Svg . '</g>';
+    }
+
+    // A see-through strip over each label, for its tooltip and link: from halfway to the label before to halfway to the
+    // one after
     private function Bands(): string
     {
       $Count = count($this->Labels);
-      $Step = $Count < 2 ? $this->PlotWidth() : $this->PlotWidth() / ($Count - 1);
       $Svg = '<g class="sc-bands">';
       for ($Index = 0; $Index < $Count; $Index++)
       {
-        $Left = max($this->Left, $this->X($Index) - $Step / 2);
-        $Right = min($this->Left + $this->PlotWidth(), $this->X($Index) + $Step / 2);
+        $X = $this->X($Index);
+        $Left = $Index > 0 ? ($this->X($Index - 1) + $X) / 2 : $this->Left;
+        $Right = $Index < $Count - 1 ? ($X + $this->X($Index + 1)) / 2 : $this->Left + $this->PlotWidth();
         $Svg .= $this->Item('rect', ['class' => 'sc-band', 'x' => $Left, 'y' => self::TOP, 'width' => max(1.0, $Right - $Left),
           'height' => $this->Height - self::TOP - self::BOTTOM, 'fill' => '#888', 'fill-opacity' => '0'], $this->LabelTip($Index), $Index);
       }

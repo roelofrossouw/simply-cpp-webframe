@@ -29,9 +29,14 @@
     protected int $Width = 640;
     protected int $Height = 240;
     protected bool $ShowLegend = true;
+    /** @var array<int, int>|null each label's time (Unix seconds) when the labels are times (Time()) */
+    protected ?array $Times = null;
     private string $Title;
     private ?string $Template = null;
     private Open $In = Open::Page;
+    private ?string $SeriesTemplate = null;
+    private Open $SeriesIn = Open::Page;
+    private ?string $Message = null;
     /** @var callable|null */
     private $Formatter = null;
 
@@ -49,8 +54,35 @@
     {
       foreach ($Labels as $Label)
       {
-        $this->LabelIndex((string)$Label);
+        $this->LabelIndex($Label);
       }
+      return $this;
+    }
+
+    /**
+     * The labels are times: Unix seconds (or milliseconds), or text strtotime() reads ('2026-11-17 14:00'). The values
+     * then lie by their time, in time order: a LineChart spaces them so and marks round times on its axis, and series
+     * keyed by the same times meet. Labels that aren't times are left out.
+     */
+    public function Time(): static
+    {
+      if ($this->Times === null)
+      {
+        $this->Times = [];
+        foreach ($this->Labels as $Index => $Label)
+        {
+          $this->Times[$Index] = self::ParseTime($Label) ?? 0;
+        }
+      }
+      return $this;
+    }
+
+    /**
+     * Shown in place of the drawing, e.g. why there's no data (Prometheus did not answer)
+     */
+    public function Message(string $Message): static
+    {
+      $this->Message = $Message;
       return $this;
     }
 
@@ -63,7 +95,11 @@
       $IsList = array_is_list($Values);
       foreach ($Values as $Key => $Value)
       {
-        $Index = $IsList ? $Key : $this->LabelIndex((string)$Key);
+        $Index = $IsList && $this->Times === null ? $Key : $this->LabelIndex($IsList ? $Key : (string)$Key);
+        if ($Index < 0)
+        {
+          continue;
+        }
         if ($IsList && !isset($this->Labels[$Index]))
         {
           $this->Labels[$Index] = (string)($Index + 1);
@@ -86,7 +122,11 @@
       foreach ($Rows as $Row)
       {
         $Row = (array)$Row;
-        $Index = $this->LabelIndex((string)($Row[$Label] ?? ''));
+        $Index = $this->LabelIndex($Row[$Label] ?? '');
+        if ($Index < 0)
+        {
+          continue;
+        }
         $this->Rows[$Index] = $Row;
         foreach ($Columns as $Column => $Name)
         {
@@ -104,12 +144,24 @@
 
     /**
      * Clicking a point, bar or slice opens this page. Placeholders, URL-encoded: {label}, {series} (its name),
-     * {value}, and the label's row's columns ({id}, {month}, ... from FromRows())
+     * {value}, the label's row's columns ({id}, {month}, ... from FromRows()), the series' labels (Prometheus':
+     * {instance}, {job}, ...), and with Time() {time} (Unix seconds) and {iso} (ISO 8601)
      */
     public function Open(string $Template, Open $In = Open::Page): static
     {
       $this->Template = $Template;
       $this->In = $In;
+      return $this;
+    }
+
+    /**
+     * Clicking a series' line (LineChart) or its legend item opens this page instead of hiding the series. Placeholders:
+     * {series} (its name) and the series' labels ({instance}, {job}, ... from Prometheus)
+     */
+    public function OpenSeries(string $Template, Open $In = Open::Page): static
+    {
+      $this->SeriesTemplate = $Template;
+      $this->SeriesIn = $In;
       return $this;
     }
 
@@ -146,6 +198,7 @@
     protected function OwnString(): string
     {
       $this->Children = [];
+      $this->InTimeOrder();
       if ($this->Title !== '')
       {
         $Caption = (new \HTML\FigureCaption())->AddClass('sc-chart-title');
@@ -155,19 +208,61 @@
       $Label = $this->Title !== '' ? $this->Title : 'Chart';
       $this->AddChild(new \HTML\Raw('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' . $this->Width . ' ' . $this->Height .
         '" width="' . $this->Width . '" height="' . $this->Height . '" role="img" aria-label="' . self::Escape($Label) .
-        '" font-family="system-ui, -apple-system, sans-serif" font-size="11">' . (empty($this->Labels) ? $this->Empty() : $this->Draw()) .
+        '" font-family="system-ui, -apple-system, sans-serif" font-size="11">' . ($this->Message !== null || empty($this->Labels) ? $this->Empty() : $this->Draw()) .
         '</svg>'));
-      if ($this->ShowLegend && !empty($this->Labels))
+      if ($this->ShowLegend && !empty($this->Labels) && $this->Message === null)
       {
         $this->AddChild(new \HTML\Raw($this->Legend()));
       }
       return parent::OwnString();
     }
 
-    // A chart without data says so
+    // A chart without data says so (or says Message())
     private function Empty(): string
     {
-      return '<text x="' . $this->Width / 2 . '" y="' . $this->Height / 2 . '" text-anchor="middle" fill="#888">No data</text>';
+      return '<text x="' . $this->Width / 2 . '" y="' . $this->Height / 2 . '" text-anchor="middle" fill="#888">' .
+        self::Escape($this->Message ?? 'No data') . '</text>';
+    }
+
+    // With Time(): the labels, rows and values put in time order
+    private function InTimeOrder(): void
+    {
+      if ($this->Times === null || empty($this->Times))
+      {
+        return;
+      }
+      $Order = array_keys($this->Times);
+      usort($Order, fn(int $A, int $B) => $this->Times[$A] <=> $this->Times[$B]);
+      if ($Order === array_keys($this->Labels))
+      {
+        return;
+      }
+      $Move = fn(array $From) => array_values(array_map(fn(int $Old) => $From[$Old] ?? null, $Order));
+      $this->Labels = $Move($this->Labels);
+      $this->Times = $Move($this->Times);
+      $Rows = $Move($this->Rows);
+      $this->Rows = array_filter($Rows, fn($Row) => $Row !== null);
+      foreach ($this->Series as $Series)
+      {
+        $Series->Values = $Move($Series->Values);
+      }
+    }
+
+    /**
+     * A label as tooltips show it: with Time() the time written out (to the minute, or the second when the points are
+     * closer than a minute; the date alone when every time is midnight)
+     */
+    protected function LabelText(int $Index): string
+    {
+      if ($this->Times === null)
+      {
+        return $this->Labels[$Index] ?? '';
+      }
+      $Time = $this->Times[$Index];
+      $Midnights = array_reduce($this->Times, fn(bool $All, int $T) => $All && date('H:i:s', $T) === '00:00:00', true);
+      $Seconds = count($this->Times) > 1 && min(array_map(fn($A, $B) => abs($B - $A) ?: PHP_INT_MAX,
+          array_slice($this->Times, 0, -1), array_slice($this->Times, 1))) < 60;
+      return date($Midnights ? 'D j M Y' : ($Seconds ? 'D j M H:i:s' : 'D j M H:i'), $Time);
     }
 
     /**
@@ -182,8 +277,17 @@
       $Items = '';
       foreach ($this->Series as $Index => $Series)
       {
-        $Items .= '<span class="sc-legend-item" data-series="' . $Index . '" role="button" tabindex="0" aria-pressed="true">' .
-          '<i style="background:' . self::Escape($this->ColorOf($Index)) . '"></i>' . self::Escape($Series->Name) . '</span>';
+        $Swatch = '<i style="background:' . self::Escape($this->ColorOf($Index)) . '"></i>' . self::Escape($Series->Name);
+        $Link = $this->LinkAttributes(null, $Index, $Series->Name);
+        if ($Link)
+        {
+          // OpenSeries(): the legend item opens the series' page
+          $Classes = trim('sc-legend-item ' . ($Link['class'] ?? ''));
+          unset($Link['class']);
+          $Items .= '<span class="' . $Classes . '"' . self::Attributes($Link) . '>' . $Swatch . '</span>';
+          continue;
+        }
+        $Items .= '<span class="sc-legend-item" data-series="' . $Index . '" role="button" tabindex="0" aria-pressed="true">' . $Swatch . '</span>';
       }
       return '<div class="sc-chart-legend">' . $Items . '</div>';
     }
@@ -199,7 +303,7 @@
      *
      * @param array<string, string|int|float> $Attributes
      */
-    protected function Item(string $Tag, array $Attributes, string $Tip, int $Label, ?int $Series = null): string
+    protected function Item(string $Tag, array $Attributes, string $Tip, ?int $Label, ?int $Series = null): string
     {
       $Attributes['data-tip'] = $Tip;
       if ($Series !== null)
@@ -222,7 +326,7 @@
      *
      * @return array<string, string|int>
      */
-    protected function LinkAttributes(int $Label, ?int $Series, string $Description): array
+    protected function LinkAttributes(?int $Label, ?int $Series, string $Description): array
     {
       $Href = \Config::AppPage() ? $this->Href($Label, $Series) : null;
       if ($Href === null)
@@ -230,29 +334,42 @@
         return [];
       }
       $Attributes = ['data-href' => $Href, 'tabindex' => 0, 'role' => 'link', 'aria-label' => $Description];
-      if (($Class = $this->In->LinkClass()) !== null)
+      if (($Class = ($Label === null ? $this->SeriesIn : $this->In)->LinkClass()) !== null)
       {
         $Attributes['class'] = $Class;
       }
       return $Attributes;
     }
 
-    // Open()'s page for a label (and series), its placeholders filled in
-    private function Href(int $Label, ?int $Series): ?string
+    // Open()'s page for a label (and series), or OpenSeries()'s for a series alone ($Label null), placeholders filled in
+    private function Href(?int $Label, ?int $Series): ?string
     {
-      if ($this->Template === null)
+      $Template = $Label === null ? $this->SeriesTemplate : $this->Template;
+      if ($Template === null)
       {
         return null;
       }
-      $Values = $this->Rows[$Label] ?? [];
-      $Values['label'] = $this->Labels[$Label] ?? '';
+      $Values = $Series !== null ? $this->Series[$Series]->Labels : [];
+      if ($Label !== null)
+      {
+        $Values = array_merge($Values, $this->Rows[$Label] ?? []);
+        $Values['label'] = $this->Labels[$Label] ?? '';
+        if ($this->Times !== null && isset($this->Times[$Label]))
+        {
+          $Values['time'] = $this->Times[$Label];
+          $Values['iso'] = date('c', $this->Times[$Label]);
+        }
+      }
       if ($Series !== null)
       {
         $Values['series'] = $this->Series[$Series]->Name;
-        $Values['value'] = $this->Series[$Series]->Values[$Label] ?? '';
+        if ($Label !== null)
+        {
+          $Values['value'] = $this->Series[$Series]->Values[$Label] ?? '';
+        }
       }
       return preg_replace_callback('/\{(\w+)}/', fn(array $Match) => array_key_exists($Match[1], $Values)
-        ? rawurlencode((string)$Values[$Match[1]]) : $Match[0], $this->Template);
+        ? rawurlencode((string)$Values[$Match[1]]) : $Match[0], $Template);
     }
 
     /**
@@ -315,8 +432,26 @@
       return str_ends_with($Text, '.0') ? substr($Text, 0, -2) : $Text;
     }
 
-    private function LabelIndex(string $Label): int
+    // A label's position, added when new; with Time() keyed by its time, -1 for one that isn't a time
+    private function LabelIndex(mixed $Label): int
     {
+      if ($this->Times !== null)
+      {
+        $Time = self::ParseTime($Label);
+        if ($Time === null)
+        {
+          return -1;
+        }
+        $Index = array_search($Time, $this->Times, true);
+        if ($Index === false)
+        {
+          $Index = count($this->Labels);
+          $this->Labels[] = (string)$Label;
+          $this->Times[] = $Time;
+        }
+        return $Index;
+      }
+      $Label = (string)$Label;
       $Index = array_search($Label, $this->Labels, true);
       if ($Index === false)
       {
@@ -324,6 +459,22 @@
         $this->Labels[] = $Label;
       }
       return $Index;
+    }
+
+    // Unix seconds from seconds, milliseconds (Prometheus' and JavaScript's), a DateTimeInterface or text; null if none
+    private static function ParseTime(mixed $Value): ?int
+    {
+      if ($Value instanceof \DateTimeInterface)
+      {
+        return $Value->getTimestamp();
+      }
+      if (is_numeric($Value))
+      {
+        $Number = (float)$Value;
+        return (int)round(abs($Number) > 1e11 ? $Number / 1000 : $Number);
+      }
+      $Time = is_string($Value) && trim($Value) !== '' ? strtotime($Value) : false;
+      return $Time === false ? null : $Time;
     }
 
     private static function Number(mixed $Value): ?float

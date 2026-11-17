@@ -936,6 +936,12 @@ a.stepper-content:hover .stepper-label {
   opacity: .8;
 }
 
+.sc-chart .sc-series-link:hover,
+.sc-chart .sc-series-link:focus-visible {
+  stroke-opacity: .25;
+  outline: none;
+}
+
 .sc-chart svg .sc-off {
   display: none;
 }

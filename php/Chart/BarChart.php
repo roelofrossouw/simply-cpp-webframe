@@ -84,7 +84,7 @@
             [$Top, $Bottom] = [min($Zero, $this->Y($Value)), max($Zero, $this->Y($Value))];
             $X = $Start + $Number * ($Width + 1);
           }
-          $Tip = $this->Labels[$Index] . "\n" . $Series->Name . ': ' . $this->Value($Value);
+          $Tip = $this->LabelText($Index) . "\n" . $Series->Name . ': ' . $this->Value($Value);
           $Svg .= $this->Item('rect', ['class' => 'sc-bar', 'x' => $X, 'y' => $Top, 'width' => $Width,
             'height' => max(0.5, $Bottom - $Top), 'rx' => min(2.0, $Width / 4), 'fill' => $this->ColorOf($Number)], $Tip, $Index, $Number);
         }
