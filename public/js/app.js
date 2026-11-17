@@ -26,6 +26,8 @@ function main() {
   $(document).on('click', '.modal-back', function () {
     getModal($(this).closest('.modal')[0]).hide();
   });
+  // Charts (php/Chart): their items' tooltips and links, and the legend hiding a series
+  setupCharts();
 
   if (navigator.userAgent.match(/RJRIVShell/))
   {
@@ -2305,3 +2307,63 @@ function init() {
 
 // Run when all scripts are loaded and ready
 $(document).ready(init);
+
+// Charts drawn by php/Chart: an item with data-tip shows it beside the pointer; one with data-href opens its page when
+// clicked or on Enter (in the place its class says, as buttons do: modal-link, oc-link, else the page); a series'
+// legend item hides or shows that series. Bound once on the document, so charts loaded later work too.
+function setupCharts() {
+  let tip = null;
+  const showTip = function (event) {
+    const text = this.getAttribute('data-tip');
+    if (!text) return;
+    if (!tip)
+    {
+      tip = document.createElement('div');
+      tip.className = 'sc-chart-tip';
+      tip.setAttribute('role', 'tooltip');
+      document.body.appendChild(tip);
+    }
+    tip.textContent = text;
+    tip.style.display = 'block';
+    moveTip(event);
+  };
+  const moveTip = function (event) {
+    if (!tip || tip.style.display !== 'block') return;
+    const gap = 14;
+    let x = event.clientX + gap;
+    let y = event.clientY + gap;
+    if (x + tip.offsetWidth > window.innerWidth - 4) x = event.clientX - tip.offsetWidth - gap;
+    if (y + tip.offsetHeight > window.innerHeight - 4) y = event.clientY - tip.offsetHeight - gap;
+    tip.style.left = Math.max(4, x) + 'px';
+    tip.style.top = Math.max(4, y) + 'px';
+  };
+  const hideTip = function () {
+    if (tip) tip.style.display = 'none';
+  };
+  const open = function (event) {
+    event.preventDefault();
+    hideTip();
+    loadPage.call(this, this.getAttribute('data-href'));
+  };
+  $(document)
+    .on('mouseenter', '.sc-chart [data-tip]', showTip)
+    .on('mousemove', '.sc-chart [data-tip]', moveTip)
+    .on('mouseleave', '.sc-chart [data-tip]', hideTip)
+    .on('click', '.sc-chart [data-href], .sc-stat[data-href]', open)
+    .on('keydown', '.sc-chart [data-href], .sc-stat[data-href]', function (event) {
+      if (event.key === 'Enter' || event.key === ' ') open.call(this, event);
+    })
+    .on('click keydown', '.sc-chart-legend .sc-legend-item[data-series]', function (event) {
+      if (event.type === 'keydown' && event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      const off = !this.classList.contains('sc-off');
+      this.classList.toggle('sc-off', off);
+      this.setAttribute('aria-pressed', off ? 'false' : 'true');
+      const series = this.getAttribute('data-series');
+      $(this).closest('.sc-chart').find('svg [data-series="' + series + '"]').each(function () {
+        this.classList.toggle('sc-off', off);
+      });
+    });
+  // A page loading in place of the chart takes the tooltip with it
+  $(document).on('show.bs.modal show.bs.offcanvas', hideTip);
+}

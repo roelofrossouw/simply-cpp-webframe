@@ -884,3 +884,143 @@ th.sortable {
 a.stepper-content:hover .stepper-label {
   text-decoration: underline;
 }
+
+/* Charts (php/Chart): drawn as SVG with colours of their own (for emails and PDFs), which these adapt to the theme */
+.sc-chart {
+  margin: 0;
+}
+
+.sc-chart-title {
+  font-weight: 600;
+  margin-bottom: .5rem;
+}
+
+.sc-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.sc-chart .sc-axis text {
+  fill: var(--bs-secondary-color);
+}
+
+.sc-chart .sc-grid line {
+  stroke: var(--bs-border-color);
+  stroke-opacity: 1;
+}
+
+.sc-chart .sc-pie-total {
+  fill: var(--bs-body-color);
+}
+
+.sc-chart .sc-slice {
+  stroke: var(--bs-body-bg);
+}
+
+.sc-chart [data-href] {
+  cursor: pointer;
+}
+
+.sc-chart [data-href]:focus-visible {
+  outline: 2px solid var(--bs-primary);
+}
+
+.sc-chart .sc-band:hover {
+  fill-opacity: .08;
+}
+
+.sc-chart .sc-bar:hover,
+.sc-chart .sc-slice:hover {
+  opacity: .8;
+}
+
+.sc-chart svg .sc-off {
+  display: none;
+}
+
+.sc-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: .25rem 1rem;
+  margin-top: .5rem;
+  font-size: .875rem;
+}
+
+.sc-legend-item {
+  cursor: pointer;
+  user-select: none;
+}
+
+.sc-legend-item i {
+  display: inline-block;
+  width: .75rem;
+  height: .75rem;
+  margin-right: .35rem;
+  border-radius: 2px;
+  vertical-align: -.05rem;
+}
+
+.sc-legend-item.sc-off {
+  opacity: .4;
+  text-decoration: line-through;
+}
+
+.sc-pie-legend .sc-legend-item:not([data-href]) {
+  cursor: default;
+}
+
+.sc-chart-tip {
+  position: fixed;
+  z-index: 1090;
+  display: none;
+  max-width: 20rem;
+  padding: .25rem .5rem;
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+  background: var(--bs-body-bg);
+  color: var(--bs-body-color);
+  box-shadow: var(--bs-box-shadow-sm);
+  font-size: .8125rem;
+  white-space: pre-line;
+  pointer-events: none;
+}
+
+.sc-stat {
+  padding: .75rem 1rem;
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius-lg);
+  background: var(--bs-body-bg);
+}
+
+.sc-stat[data-href] {
+  cursor: pointer;
+}
+
+.sc-stat[data-href]:hover {
+  border-color: var(--bs-primary);
+}
+
+.sc-stat-caption {
+  color: var(--bs-secondary-color);
+  font-size: .875rem;
+}
+
+.sc-stat-value {
+  font-size: 1.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.sc-stat-change {
+  font-size: .875rem;
+}
+
+.sc-stat-trend {
+  display: block;
+  width: 100%;
+  height: 28px;
+  margin-top: .25rem;
+}
