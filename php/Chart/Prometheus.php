@@ -27,13 +27,13 @@
 
     public function __construct(?string $URL = null, ?int $Timeout = null)
     {
-      $URL ??= (string)\Config::Get('prometheus.url', '');
+      $URL ??= (string)self::Setting('prometheus.url', '');
       if ($URL === '')
       {
         throw new \RuntimeException('Prometheus: no address (the settings\' prometheus.url)');
       }
       $this->URL = rtrim($URL, '/');
-      $this->Timeout = max(1, $Timeout ?? (int)\Config::Get('prometheus.timeout', 10));
+      $this->Timeout = max(1, $Timeout ?? (int)self::Setting('prometheus.timeout', 10));
     }
 
     /**
@@ -196,8 +196,15 @@
      */
     public function Intervals(string $Query, int $Step): string
     {
-      $Scrape = max(1, (int)\Config::Get('prometheus.scrape_interval', 15));
+      $Scrape = max(1, (int)self::Setting('prometheus.scrape_interval', 15));
       return strtr($Query, ['$__rate_interval' => max($Step + $Scrape, 4 * $Scrape) . 's', '$__interval' => $Step . 's']);
+    }
+
+    // A setting from sc-webframe's settings file, when there is one (not in another app's)
+    private static function Setting(string $Path, mixed $Default): mixed
+    {
+      return class_exists('Config', false) && method_exists('Config', 'Get') && method_exists('Config', 'AppPage')
+        ? \Config::Get($Path, $Default) : $Default;
     }
 
     // Prometheus writes values as text; NaN and infinities aren't points

@@ -118,7 +118,7 @@
       $Items = '';
       foreach ($Slices as $Index => $Value)
       {
-        $Swatch = '<i style="background:' . self::Escape($this->ColorOf($Index)) . '"></i>';
+        $Swatch = '<i style="' . self::SWATCH . self::Escape($this->ColorOf($Index)) . '"></i>';
         $Text = self::Escape($this->Labels[$Index]) . ' <span class="text-body-secondary">' . $this->Share($Value, $Total) . '</span>';
         // The slice's link on its legend item too
         $Link = $this->LinkAttributes($Index, 0, $this->Labels[$Index]);
@@ -127,6 +127,6 @@
         $Attributes = self::Attributes($Link);
         $Items .= '<span class="' . $Classes . '"' . $Attributes . '>' . $Swatch . $Text . '</span>';
       }
-      return '<div class="sc-chart-legend sc-pie-legend">' . $Items . '</div>';
+      return '<div class="sc-chart-legend sc-pie-legend" style="' . self::LEGEND . '">' . $Items . '</div>';
     }
   }

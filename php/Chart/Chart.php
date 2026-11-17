@@ -20,6 +20,10 @@
     protected const array PALETTE = ['#0d6efd', '#20c997', '#fd7e14', '#6f42c1', '#d63384', '#ffc107', '#198754', '#0dcaf0',
       '#6c757d', '#dc3545'];
 
+    // A legend item's colour swatch, styled inline so it shows without sc-webframe's style.css (another app, an email)
+    protected const string LEGEND = 'display:flex;flex-wrap:wrap;justify-content:center;gap:.25rem 1rem;margin-top:.5rem;font-size:.875rem';
+    protected const string SWATCH = 'display:inline-block;width:.75em;height:.75em;margin-right:.35em;border-radius:2px;background:';
+
     /** @var string[] the labels, in order */
     protected array $Labels = [];
     /** @var array<int, array> each label's row (FromRows()), for Open()'s placeholders */
@@ -37,6 +41,8 @@
     private ?string $SeriesTemplate = null;
     private Open $SeriesIn = Open::Page;
     private ?string $Message = null;
+    /** @var array<string, string> ItemAttributes() */
+    private array $ItemAttributes = [];
     /** @var callable|null */
     private $Formatter = null;
 
@@ -166,6 +172,74 @@
     }
 
     /**
+     * Attributes for every point, bar or slice, with the placeholders Open() takes and {number} (the series' number,
+     * from 1); one whose placeholder has no value on an item is left off it. For an app's own click handling, e.g. One Web's drill-down reads value and data from the element clicked:
+     * ItemAttributes(['value' => '{category1}', 'data' => 'bar{number}'])
+     *
+     * @param array<string, string> $Attributes
+     */
+    public function ItemAttributes(array $Attributes): static
+    {
+      $this->ItemAttributes = $Attributes;
+      return $this;
+    }
+
+    /**
+     * From rows in One Web's graph form (as sysutil.chart() took them): category1 the label, _graph_value,
+     * _graph_value2 ... _graph_value5 the series (those the rows have), named by $Names in that order. $LabelOf turns a
+     * category into its text (fn($Category, array $Row): string); else it's shown as it is. A label's row gives Open()
+     * and ItemAttributes() their placeholders ({category1}, ...).
+     *
+     * @param string[] $Names
+     */
+    public function FromGraphRows(array $Rows, array $Names = [], ?callable $LabelOf = null): static
+    {
+      $Columns = [];
+      foreach (['_graph_value', '_graph_value2', '_graph_value3', '_graph_value4', '_graph_value5'] as $Number => $Column)
+      {
+        foreach ($Rows as $Row)
+        {
+          if (array_key_exists($Column, (array)$Row))
+          {
+            $Columns[$Column] = (string)($Names[$Number] ?? ('Value ' . ($Number + 1)));
+            break;
+          }
+        }
+      }
+      $Labelled = [];
+      foreach ($Rows as $Row)
+      {
+        $Row = (array)$Row;
+        $Row['_label'] = $LabelOf !== null ? (string)$LabelOf($Row['category1'] ?? null, $Row) : (string)($Row['category1'] ?? '');
+        $Labelled[] = $Row;
+      }
+      return $this->FromRows($Labelled, '_label', $Columns);
+    }
+
+    /**
+     * A chart for One Web's graph types (sysutil.group_info.graph_type): 1 a pie, 2 bars, 3 lines; null for others
+     */
+    public static function ForGraphType(int $Type, ?string $Title = null): ?self
+    {
+      return match ($Type)
+      {
+        1 => new PieChart($Title),
+        2 => new BarChart($Title),
+        3 => new LineChart($Title),
+        default => null,
+      };
+    }
+
+    /**
+     * Whether the chart is drawn for sc-webframe's app (its app.js follows links and shows tooltips) or elsewhere: an
+     * email, a PDF, or another app (One Web), where links are SVG links and tooltips the browser's own (<title>)
+     */
+    public static function InApp(): bool
+    {
+      return class_exists('Config', false) && method_exists('Config', 'AppPage') && \Config::AppPage();
+    }
+
+    /**
      * The drawing's size in pixels; it scales to the width it's given, keeping this shape
      */
     public function Size(int $Width, int $Height): static
@@ -207,7 +281,7 @@
       }
       $Label = $this->Title !== '' ? $this->Title : 'Chart';
       $this->AddChild(new \HTML\Raw('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' . $this->Width . ' ' . $this->Height .
-        '" width="' . $this->Width . '" height="' . $this->Height . '" role="img" aria-label="' . self::Escape($Label) .
+        '" width="' . $this->Width . '" height="' . $this->Height . '" style="max-width:100%;height:auto" role="img" aria-label="' . self::Escape($Label) .
         '" font-family="system-ui, -apple-system, sans-serif" font-size="11">' . ($this->Message !== null || empty($this->Labels) ? $this->Empty() : $this->Draw()) .
         '</svg>'));
       if ($this->ShowLegend && !empty($this->Labels) && $this->Message === null)
@@ -277,7 +351,7 @@
       $Items = '';
       foreach ($this->Series as $Index => $Series)
       {
-        $Swatch = '<i style="background:' . self::Escape($this->ColorOf($Index)) . '"></i>' . self::Escape($Series->Name);
+        $Swatch = '<i style="' . self::SWATCH . self::Escape($this->ColorOf($Index)) . '"></i>' . self::Escape($Series->Name);
         $Link = $this->LinkAttributes(null, $Index, $Series->Name);
         if ($Link)
         {
@@ -289,7 +363,7 @@
         }
         $Items .= '<span class="sc-legend-item" data-series="' . $Index . '" role="button" tabindex="0" aria-pressed="true">' . $Swatch . '</span>';
       }
-      return '<div class="sc-chart-legend">' . $Items . '</div>';
+      return '<div class="sc-chart-legend" style="' . self::LEGEND . '">' . $Items . '</div>';
     }
 
     protected function ColorOf(int $Series): string
@@ -310,13 +384,24 @@
       {
         $Attributes['data-series'] = $Series;
       }
+      foreach ($this->ItemAttributes as $Name => $Template)
+      {
+        // Left off where a placeholder has no value here (a line chart's strip has a category, not a series)
+        $Value = $this->Fill($Template, $Label, $Series, false);
+        if (!preg_match('/\{\w+}/', $Value))
+        {
+          $Attributes[$Name] = $Value;
+        }
+      }
       $Link = $this->LinkAttributes($Label, $Series, str_replace("\n", ', ', $Tip));
       if (isset($Link['class']))
       {
         $Link['class'] = trim(($Attributes['class'] ?? '') . ' ' . $Link['class']);
       }
-      $Element = '<' . $Tag . self::Attributes(array_merge($Attributes, $Link)) . '/>';
-      $Href = \Config::AppPage() ? null : $this->Href($Label, $Series);
+      $InApp = self::InApp();
+      // Outside the app the browser's own tooltip, from a <title>
+      $Element = '<' . $Tag . self::Attributes(array_merge($Attributes, $Link)) . ($InApp ? '/>' : '><title>' . self::Escape($Tip) . '</title></' . $Tag . '>');
+      $Href = $InApp ? null : $this->Href($Label, $Series);
       return $Href !== null ? '<a href="' . self::Escape($Href) . '">' . $Element . '</a>' : $Element;
     }
 
@@ -328,7 +413,7 @@
      */
     protected function LinkAttributes(?int $Label, ?int $Series, string $Description): array
     {
-      $Href = \Config::AppPage() ? $this->Href($Label, $Series) : null;
+      $Href = self::InApp() ? $this->Href($Label, $Series) : null;
       if ($Href === null)
       {
         return [];
@@ -345,10 +430,12 @@
     private function Href(?int $Label, ?int $Series): ?string
     {
       $Template = $Label === null ? $this->SeriesTemplate : $this->Template;
-      if ($Template === null)
-      {
-        return null;
-      }
+      return $Template === null ? null : $this->Fill($Template, $Label, $Series, true);
+    }
+
+    // A template's placeholders filled in for a label and series, URL-encoded or as they are
+    private function Fill(string $Template, ?int $Label, ?int $Series, bool $Encode): string
+    {
       $Values = $Series !== null ? $this->Series[$Series]->Labels : [];
       if ($Label !== null)
       {
@@ -363,13 +450,14 @@
       if ($Series !== null)
       {
         $Values['series'] = $this->Series[$Series]->Name;
+        $Values['number'] = $Series + 1;
         if ($Label !== null)
         {
           $Values['value'] = $this->Series[$Series]->Values[$Label] ?? '';
         }
       }
       return preg_replace_callback('/\{(\w+)}/', fn(array $Match) => array_key_exists($Match[1], $Values)
-        ? rawurlencode((string)$Values[$Match[1]]) : $Match[0], $Template);
+        ? ($Encode ? rawurlencode((string)$Values[$Match[1]]) : (string)$Values[$Match[1]]) : $Match[0], $Template);
     }
 
     /**

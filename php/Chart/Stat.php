@@ -81,7 +81,7 @@
       $this->AddChild(new \HTML\Raw($Html));
       if ($this->Href !== null)
       {
-        if (\Config::AppPage())
+        if (Chart::InApp())
         {
           $this->AddAttribute('data-href', $this->Href);
           $this->AddAttribute('role', 'link');
