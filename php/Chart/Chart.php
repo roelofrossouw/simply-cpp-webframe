@@ -43,6 +43,8 @@
     private ?string $Message = null;
     // Outside the app: whether the hover script (standalone.js) goes with the first chart of the request, and has
     private static bool $HoverScript = true;
+    /** @var array<int, array{match: string, color: ?string, negative: ?bool, dashed: ?bool, width: ?float}> Override() */
+    private array $Overrides = [];
     // Top(): how many series to keep, by what, and the name of the series the rest are folded into
     private int $TopCount = 0;
     private string $TopBy = 'max';
@@ -247,6 +249,51 @@
     }
 
     /**
+     * Settings for the series named $Match, or matching it when it's a regular expression ('/^5../'), for series named
+     * only when they come (Prometheus'): a fixed colour (2xx green, 5xx red), below zero (Negative: network sent under
+     * received), dashed, a line's width. Later overrides win; null leaves a setting as it is.
+     *
+     *   $Chart->Override('/^2/', Color: BarGauge::GREEN)->Override('/^5/', Color: BarGauge::RED)->Override('sent', Negative: true);
+     */
+    public function Override(string $Match, ?string $Color = null, ?bool $Negative = null, ?bool $Dashed = null, ?float $Width = null): static
+    {
+      $this->Overrides[] = ['match' => $Match, 'color' => $Color, 'negative' => $Negative, 'dashed' => $Dashed, 'width' => $Width];
+      return $this;
+    }
+
+    // Override()'s settings on the series they match
+    private function ApplyOverrides(): void
+    {
+      foreach ($this->Overrides as $Override)
+      {
+        $Pattern = strlen($Override['match']) > 2 && $Override['match'][0] === '/' && @preg_match($Override['match'], '') !== false;
+        foreach ($this->Series as $Series)
+        {
+          if ($Pattern ? preg_match($Override['match'], $Series->Name) !== 1 : $Series->Name !== $Override['match'])
+          {
+            continue;
+          }
+          if ($Override['color'] !== null)
+          {
+            $Series->Color = $Override['color'];
+          }
+          if ($Override['negative'] !== null)
+          {
+            $Series->Negative = $Override['negative'];
+          }
+          if ($Override['dashed'] !== null)
+          {
+            $Series->Dashed = $Override['dashed'];
+          }
+          if ($Override['width'] !== null)
+          {
+            $Series->Width = max(0.5, $Override['width']);
+          }
+        }
+      }
+    }
+
+    /**
      * Only the $Count series that rank highest $By 'max' (their highest value), 'mean' or 'last' (their last value),
      * the rest added up into one more series, "Others (n)": for many series (100 job names), so the legend stays usable
      */
@@ -360,6 +407,7 @@
       $this->Children = [];
       $this->InTimeOrder();
       $this->FoldSeries();
+      $this->ApplyOverrides();
       if ($this->Title !== '')
       {
         $Caption = (new \HTML\FigureCaption())->AddClass('sc-chart-title');

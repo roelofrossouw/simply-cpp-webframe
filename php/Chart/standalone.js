@@ -39,6 +39,7 @@
     const places = Number.isInteger(value) ? 0 : Math.abs(value) < 10 ? 2 : Math.abs(value) < 1000 ? 1 : 0;
     let text = value.toFixed(places);
     if (places > 0) text = text.replace(/\.?0+$/, '');
+    if (/^-0(\.0*)?$/.test(text)) text = '0';
     const [whole, part] = text.split('.');
     return whole.replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + (part ? '.' + part : '');
   };
@@ -154,6 +155,32 @@
     }
     return Math.abs(xs[low] - x) <= Math.abs(xs[high] - x) ? low : high;
   };
+  // Where each series' point is drawn at a label: its value, below zero (neg), stacked (normal, percent), as
+  // LineChart::Position() places them
+  const positions = function (chart, index) {
+    const tops = [];
+    let up = 0;
+    let down = 0;
+    let total = 0;
+    if (chart.stack === 'percent')
+    {
+      chart.series.forEach((series, number) => total += Math.abs(chart.v[number][index] ?? 0));
+    }
+    chart.series.forEach(function (series, number) {
+      const value = chart.v[number][index];
+      let shown = value === null || value === undefined ? 0 : (series.neg ? -value : value);
+      if (chart.stack === 'percent') shown = total > 0 ? 100 * Math.abs(shown) / total : 0;
+      if (!chart.stack)
+      {
+        tops[number] = value === null || value === undefined ? null : shown;
+        return;
+      }
+      const under = shown >= 0 ? up : down;
+      shown >= 0 ? up += shown : down += shown;
+      tops[number] = value === null || value === undefined ? null : under + shown;
+    });
+    return tops;
+  };
   // Show label `index` of a line chart: crosshair, dots, box (near the pointer, or the crosshair for keys), link
   const showAt = function (area, index, clientX, clientY) {
     const chart = dataOf(area);
@@ -173,13 +200,14 @@
     const hidden = hiddenIn(area.closest('.sc-chart'));
     const rows = [];
     const span = (chart.y.high - chart.y.low) || 1;
+    const tops = positions(chart, index);
     chart.series.forEach(function (series, number) {
       if (hidden.has(String(number))) return;
       const value = chart.v[number][index];
       if (value === null || value === undefined) return;
       const dot = document.createElementNS(svg, 'circle');
       dot.setAttribute('cx', x);
-      dot.setAttribute('cy', chart.y.bottom - (value - chart.y.low) / span * (chart.y.bottom - chart.y.top));
+      dot.setAttribute('cy', chart.y.bottom - (tops[number] - chart.y.low) / span * (chart.y.bottom - chart.y.top));
       dot.setAttribute('r', 4);
       dot.setAttribute('fill', series.c);
       dot.setAttribute('class', 'sc-hover-dot');

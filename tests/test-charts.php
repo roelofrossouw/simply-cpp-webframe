@@ -282,3 +282,46 @@
   Check(preg_match('/<path d="M\d+ \d+l\d+ 0"/', (string)$Busy) === 1, '240 equal values: one step');
   Same(290, (new LineChart())->Resolution(), 'the default size shows 290 points apart');
   Same(170, (new LineChart())->Size(400, 200)->Resolution(), 'a smaller chart fewer');
+
+  // Stacked, below zero, overrides, thresholds
+  function Tops(LineChart $Chart): array
+  {
+    (string)$Chart;
+    return (new ReflectionProperty(LineChart::class, 'Tops'))->getValue($Chart);
+  }
+  $Stack = new LineChart();
+  $Stack->AddSeries('a', [1, 2, null]);
+  $Stack->AddSeries('b', [3, 4, 5]);
+  Same([[1.0, 2.0, null], [4.0, 6.0, 5.0]], Tops($Stack->Stacked()), 'stacked: each on the ones before (a gap stands on nothing)');
+  Check(str_contains((string)$Stack, '"stack":"normal"'), 'the hover knows the stacking, for its dots');
+  $Percent = new LineChart();
+  $Percent->AddSeries('a', [1, 3]);
+  $Percent->AddSeries('b', [3, 1]);
+  Same([[25.0, 75.0], [100.0, 100.0]], Tops($Percent->Stacked('percent')), "percent: each time's total is 100");
+  Check(str_contains((string)$Percent, '>100%</text>'), 'percent: the axis in %');
+  $Net = new LineChart();
+  $Net->AddSeries('received', [5, 6]);
+  $Net->AddSeries('sent', [2, 3])->Negative();
+  Same([[5.0, 6.0], [-2.0, -3.0]], Tops($Net), 'Negative(): below zero');
+  Same([2, 3], HoverData((string)$Net)['v'][1], 'the hover shows its own value');
+  Check(HoverData((string)$Net)['series'][1]['neg'] ?? false, 'and knows it is drawn below zero, for its dot');
+  $Both = new LineChart();
+  $Both->AddSeries('up', [2]);
+  $Both->AddSeries('down', [3])->Negative();
+  $Both->AddSeries('up2', [1]);
+  Same([[2.0], [-3.0], [3.0]], Tops($Both->Stacked()), 'stacked: above and below zero apart');
+  $Area = (string)(new LineChart())->Area()->Stacked()->FromRows([['m' => 'a', 'x' => 1, 'y' => 2], ['m' => 'b', 'x' => 2, 'y' => 2]], 'm', ['x', 'y']);
+  Same(2, preg_match_all('/<path d="M[^"]*L[^"]*Z" fill="[^"]*" fill-opacity="0.35"/', $Area), 'stacked areas: each fills down to the one below');
+  $Codes = new LineChart();
+  foreach (['200', '404', '503', 'other'] as $Code)
+  {
+    $Codes->AddSeries($Code, [1, 2]);
+  }
+  $Codes->Override('/^2/', Color: '#56a64b')->Override('/^5/', Color: '#f2495c', Dashed: true)->Override('other', Width: 1);
+  $Data = HoverData($Html = (string)$Codes);
+  Same(['#56a64b', '#20c997', '#f2495c'], array_slice(array_column($Data['series'], 'c'), 0, 3), 'Override(): colours by name or pattern');
+  Check(str_contains($Html, 'stroke="#f2495c" stroke-width="2" stroke-dasharray="6 4"') && str_contains($Html, 'stroke-width="1" stroke-linejoin'), 'dashed, and a width');
+  $Cpu = new LineChart();
+  $Cpu->AddSeries('cpu', [20, 95]);
+  Same(2, substr_count((string)(clone $Cpu)->Thresholds([0 => 'green', 80 => 'orange', 90 => 'red']), 'class="sc-threshold"'), 'threshold lines at 80 and 90, none at the lowest');
+  Same(3, substr_count((string)$Cpu->Thresholds([0 => 'green', 80 => 'orange', 90 => 'red'], 'area'), 'class="sc-threshold"'), 'threshold bands: one per threshold');

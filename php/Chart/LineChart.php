@@ -11,6 +11,15 @@
   {
     private bool $Area = false;
     private ?bool $Dots = null;
+    // Stacked(): '' (not), 'normal' or 'percent'
+    private string $Stack = '';
+    /** @var array<int|string, string> Thresholds(): from => colour */
+    private array $Thresholds = [];
+    private string $ThresholdStyle = 'line';
+    /** @var array<int, array<int, float|null>> where each series' points are drawn (stacked, below zero), by series and label */
+    private array $Tops = [];
+    /** @var array<int, array<int, float>> what each series stands on (stacked: the ones below it), for its area */
+    private array $Unders = [];
 
     /**
      * Fill under each line, lightly
@@ -28,6 +37,150 @@
     {
       $this->Dots = $On;
       return $this;
+    }
+
+    /**
+     * Each series on top of the ones before it, as Grafana's stacking: 'normal' (the values add up) or 'percent' (each
+     * time's total is 100%). Values above and below zero stack apart. With Area() each series fills down to the one
+     * below; the hover still shows each series' own value.
+     */
+    public function Stacked(string $Mode = 'normal'): static
+    {
+      if (!in_array($Mode, ['normal', 'percent'], true))
+      {
+        throw new \InvalidArgumentException("Stacked(): normal or percent, not '$Mode'");
+      }
+      $this->Stack = $Mode;
+      return $this;
+    }
+
+    /**
+     * Thresholds on the chart, the same [from => colour] as BarGauge's: 'line' a dashed line at each (but the lowest),
+     * 'area' a faint band from each to the next
+     *
+     * @param array<int|string, string> $Thresholds
+     */
+    public function Thresholds(array $Thresholds, string $Style = 'line'): static
+    {
+      if (!in_array($Style, ['line', 'area'], true))
+      {
+        throw new \InvalidArgumentException("Thresholds(): line or area, not '$Style'");
+      }
+      ksort($Thresholds, SORT_NUMERIC);
+      $this->Thresholds = $Thresholds;
+      $this->ThresholdStyle = $Style;
+      return $this;
+    }
+
+    // Where each series' points are drawn and what its area stands on: its values, below zero when Negative, stacked
+    private function Position(): void
+    {
+      $Count = count($this->Labels);
+      $this->Tops = [];
+      $this->Unders = [];
+      $Up = array_fill(0, $Count, 0.0);
+      $Down = array_fill(0, $Count, 0.0);
+      $Totals = array_fill(0, $Count, 0.0);
+      if ($this->Stack === 'percent')
+      {
+        foreach ($this->Series as $Series)
+        {
+          for ($Index = 0; $Index < $Count; $Index++)
+          {
+            $Totals[$Index] += abs($Series->Values[$Index] ?? 0.0);
+          }
+        }
+      }
+      foreach ($this->Series as $Number => $Series)
+      {
+        for ($Index = 0; $Index < $Count; $Index++)
+        {
+          $Value = $Series->Values[$Index] ?? null;
+          $Shown = $Value === null ? 0.0 : ($Series->Negative ? -$Value : $Value);
+          if ($this->Stack === 'percent')
+          {
+            $Shown = $Totals[$Index] > 0 ? 100 * abs($Shown) / $Totals[$Index] : 0.0;
+          }
+          if ($this->Stack === '')
+          {
+            $this->Unders[$Number][$Index] = 0.0;
+            $this->Tops[$Number][$Index] = $Value === null ? null : $Shown;
+            continue;
+          }
+          $Under = $Shown >= 0 ? $Up[$Index] : $Down[$Index];
+          $Shown >= 0 ? $Up[$Index] += $Shown : $Down[$Index] += $Shown;
+          $this->Unders[$Number][$Index] = $Under;
+          $this->Tops[$Number][$Index] = $Value === null ? null : $Under + $Shown;
+        }
+      }
+    }
+
+    protected function Range(): array
+    {
+      $this->Position();
+      if ($this->Stack === 'percent')
+      {
+        return [0.0, 100.0];
+      }
+      $Values = [];
+      foreach ($this->Tops as $Number => $Tops)
+      {
+        foreach ($Tops as $Index => $Top)
+        {
+          if ($Top !== null)
+          {
+            $Values[] = $Top;
+            if ($this->Stack !== '')
+            {
+              $Values[] = $this->Unders[$Number][$Index];
+            }
+          }
+        }
+      }
+      return empty($Values) ? [0.0, 1.0] : [min($Values), max($Values)];
+    }
+
+    protected function Tick(float $Value): string
+    {
+      return parent::Tick($Value) . ($this->Stack === 'percent' && !$this->Formatted() ? '%' : '');
+    }
+
+    // Thresholds(): faint bands under the lines, or dashed lines over them
+    private function ThresholdMarks(): string
+    {
+      if (!$this->Thresholds)
+      {
+        return '';
+      }
+      $Svg = '';
+      $Froms = array_keys($this->Thresholds);
+      $Left = (int)floor($this->Left);
+      $Right = (int)ceil($this->Left + $this->PlotWidth());
+      $Top = self::TOP;
+      $Bottom = $this->Height - self::BOTTOM;
+      $Clip = fn(float $Y) => (int)round(max($Top, min($Bottom, $Y)));
+      foreach ($Froms as $At => $From)
+      {
+        $Color = self::Escape($this->Thresholds[$From]);
+        if ($this->ThresholdStyle === 'area')
+        {
+          $Low = $At === 0 ? $this->Scale->Low : max($this->Scale->Low, (float)$From);
+          $High = isset($Froms[$At + 1]) ? min($this->Scale->High, (float)$Froms[$At + 1]) : $this->Scale->High;
+          if ($High > $Low)
+          {
+            $Y1 = $Clip($this->Y($High));
+            $Svg .= '<rect class="sc-threshold" x="' . $Left . '" y="' . $Y1 . '" width="' . ($Right - $Left) . '" height="' . max(0, $Clip($this->Y($Low)) - $Y1) .
+              '" fill="' . $Color . '" fill-opacity="0.1"/>';
+          }
+        }
+        elseif ($At > 0 && (float)$From >= $this->Scale->Low && (float)$From <= $this->Scale->High)
+        {
+          $Y = (int)round($this->Y((float)$From));
+          $Svg .= '<line class="sc-threshold" x1="' . $Left . '" x2="' . $Right . '" y1="' . $Y . '" y2="' . $Y . '" stroke="' . $Color .
+            '" stroke-width="1.5" stroke-dasharray="6 4"/>';
+        }
+      }
+      return $Svg;
     }
 
     protected function TimeAxis(): bool
@@ -57,7 +210,7 @@
       {
         $Xs[$Index] = (int)round($this->X($Index));
       }
-      $Svg = '';
+      $Svg = $this->ThresholdStyle === 'area' ? $this->ThresholdMarks() : '';
       $Hits = [];
       // With OpenSeries() each line is also a wide see-through stroke to click: its shape then goes in <defs> once and
       // both draw it (<use>), rather than the shape twice
@@ -70,10 +223,12 @@
         // Runs of values without gaps, each a line of its own, as points in whole pixels
         $Runs = [];
         $Run = [];
+        $RunIndexes = [];
         $Circles = '';
+        $Stroke = '" stroke-width="' . self::Coordinate($Series->Width) . '"' . ($Series->Dashed ? ' stroke-dasharray="6 4"' : '');
         for ($Index = 0; $Index <= $Count; $Index++)
         {
-          $Value = $Index < $Count ? ($Series->Values[$Index] ?? null) : null;
+          $Value = $Index < $Count ? ($this->Tops[$Number][$Index] ?? null) : null;
           $Break = $Value === null || ($Run && $Gap !== null && $this->Times[$Index] - $this->Times[$Index - 1] > $Gap);
           if ($Break && $Run)
           {
@@ -86,6 +241,7 @@
           }
           $Point = [$Xs[$Index], (int)round($this->Y($Value))];
           $Run[] = $Point;
+          $RunIndexes[count($Runs)][] = $Index;
           if ($Dots)
           {
             $Circles .= '<circle cx="' . $Point[0] . '" cy="' . $Point[1] . '" r="2.5" fill="' . $Color . '"/>';
@@ -93,7 +249,7 @@
         }
         $Svg .= '<g data-series="' . $Number . '">';
         $Lines = [];
-        foreach ($Runs as $Points)
+        foreach ($Runs as $RunNumber => $Points)
         {
           $Start = $Points[0];
           $End = $Points[count($Points) - 1];
@@ -107,7 +263,13 @@
             continue;
           }
           $Line = self::PathOf($Points);
-          if ($this->Area)
+          if ($this->Area && $this->Stack !== '')
+          {
+            // Down to the series below: its top, back from right to left
+            $Lower = array_reverse(array_map(fn(int $Index) => [$Xs[$Index], (int)round($this->Y($this->Unders[$Number][$Index]))], $RunIndexes[$RunNumber]));
+            $Svg .= '<path d="' . $Line . 'L' . substr(self::PathOf($Lower), 1) . 'Z" fill="' . $Color . '" fill-opacity="0.35" stroke="none"/>';
+          }
+          elseif ($this->Area)
           {
             $Svg .= '<path d="' . $Line . 'L' . $End[0] . ' ' . $Bottom . 'L' . $Start[0] . ' ' . $Bottom . 'Z" fill="' . $Color . '" fill-opacity="0.12" stroke="none"/>';
           }
@@ -115,17 +277,18 @@
           {
             $Id = $Prefix . $Number . '-' . count($Lines);
             $Shapes .= '<path id="' . $Id . '" d="' . $Line . '"/>';
-            $Svg .= '<use href="#' . $Id . '" fill="none" stroke="' . $Color . '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+            $Svg .= '<use href="#' . $Id . '" fill="none" stroke="' . $Color . $Stroke . ' stroke-linejoin="round" stroke-linecap="round"/>';
             $Lines[] = '#' . $Id;
           }
           else
           {
-            $Svg .= '<path d="' . $Line . '" fill="none" stroke="' . $Color . '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+            $Svg .= '<path d="' . $Line . '" fill="none" stroke="' . $Color . $Stroke . ' stroke-linejoin="round" stroke-linecap="round"/>';
           }
         }
         $Svg .= $Circles . '</g>';
         $Hits[$Number] = $Lines;
       }
+      $Svg .= $this->ThresholdStyle === 'line' ? $this->ThresholdMarks() : '';
       return ($Shapes !== '' ? '<defs>' . $Shapes . '</defs>' : '') . $Svg . $this->SeriesLinks($Hits) . $this->HoverArea($Xs);
     }
 
@@ -266,7 +429,7 @@
       }
       foreach ($this->Series as $Number => $Series)
       {
-        $Data['series'][] = ['n' => $Series->Name, 'c' => $this->ColorOf($Number)];
+        $Data['series'][] = ['n' => $Series->Name, 'c' => $this->ColorOf($Number)] + ($Series->Negative ? ['neg' => true] : []);
         $Values = [];
         $Texts = [];
         for ($Index = 0; $Index < $Count; $Index++)
@@ -285,6 +448,10 @@
         {
           $Data['f'][] = self::Runs($Texts);
         }
+      }
+      if ($this->Stack !== '')
+      {
+        $Data['stack'] = $this->Stack;
       }
       $Hrefs = [];
       $Attributes = [];

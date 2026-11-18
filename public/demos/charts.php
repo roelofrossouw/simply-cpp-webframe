@@ -135,3 +135,39 @@
   $Jobs->OpenSeries("$Popup?what={name}", Open::Popup);
   $Card->AddChild($Jobs);
   $Card->AddChild($Ten->Top(10));
+
+  // Stacked, below zero, per-series settings and thresholds
+  Page::AddContent($Grid = new Grid());
+  $Grid->Columns(2, ScreenSize::Large);
+  $Made = function (callable $Value): array {
+    $Points = [];
+    $Start = intdiv(time(), 300) * 300 - 119 * 300;
+    for ($Point = 0; $Point < 120; $Point++)
+    {
+      $Points[$Start + 300 * $Point] = round($Value($Point), 2);
+    }
+    return $Points;
+  };
+  $Cpu = (new LineChart('CPU by mode: Stacked()->Area(), Thresholds()'))->Time()->Stacked()->Area()
+    ->Thresholds([0 => Chart\BarGauge::GREEN, 80 => Chart\BarGauge::ORANGE, 90 => Chart\BarGauge::RED]);
+  $Cpu->AddSeries('user', $Made(fn($I) => 30 + 15 * sin($I / 9)));
+  $Cpu->AddSeries('system', $Made(fn($I) => 12 + 5 * cos($I / 7)));
+  $Cpu->AddSeries('iowait', $Made(fn($I) => $I > 60 && $I < 75 ? 30 : 4));
+  $Cpu->Override('user', Color: '#5794f2')->Override('system', Color: '#ff9830')->Override('iowait', Color: '#f2495c');
+  $Grid->AddChild($Cpu);
+  $Network = (new LineChart('Network: Negative() draws sent below zero'))->Time()->Area();
+  $Network->AddSeries('received', $Made(fn($I) => 50 + 30 * sin($I / 10)));
+  $Network->AddSeries('sent', $Made(fn($I) => 20 + 10 * cos($I / 8)))->Negative();
+  $Grid->AddChild($Network);
+  $Status = (new LineChart('Requests by status: Stacked(\'percent\'), Override(\'/^5/\', ...)'))->Time()->Stacked('percent')->Area();
+  foreach (['200' => 80, '404' => 12, '503' => 3] as $Code => $Share)
+  {
+    $Status->AddSeries((string)$Code, $Made(fn($I) => $Share * (1 + 0.3 * sin($I / 5 + $Share))));
+  }
+  $Status->Override('/^2/', Color: Chart\BarGauge::GREEN)->Override('/^4/', Color: Chart\BarGauge::ORANGE)->Override('/^5/', Color: Chart\BarGauge::RED);
+  $Grid->AddChild($Status);
+  $Load = (new LineChart('Load: a Dashed() limit, Thresholds(..., \'area\')'))->Time()
+    ->Thresholds([0 => Chart\BarGauge::GREEN, 70 => Chart\BarGauge::ORANGE, 90 => Chart\BarGauge::RED], 'area');
+  $Load->AddSeries('load', $Made(fn($I) => 50 + 40 * sin($I / 15)));
+  $Load->AddSeries('limit', $Made(fn($I) => 85))->Dashed()->Width(1.5)->Color('#888');
+  $Grid->AddChild($Load);
