@@ -127,6 +127,19 @@
     if (data.has(area)) return data.get(area);
     const block = area.ownerSVGElement.querySelector('script.sc-chart-data');
     const parsed = block ? JSON.parse(block.textContent) : null;
+    // Each series' values come as runs: value, count, value, count ...
+    const expand = function (runs) {
+      const values = [];
+      for (let at = 0; at < runs.length; at += 2) {
+        for (let times = 0; times < runs[at + 1]; times++) values.push(runs[at]);
+      }
+      return values;
+    };
+    if (parsed)
+    {
+      parsed.v = parsed.v.map(expand);
+      if (parsed.f) parsed.f = parsed.f.map(expand);
+    }
     data.set(area, parsed);
     return parsed;
   };
@@ -281,6 +294,26 @@
     const area = areaOf(event.target);
     if (area) clear(area);
   });
+  // Outside sc-webframe's app (app.js does it there): a legend item hides or shows its series, greyed and struck
+  // through while hidden; the click goes no further (One Web's drill-down on the chart's cell would take it)
+  const toggle = function (event) {
+    const item = event.target instanceof Element ? event.target.closest('.sc-chart-legend .sc-legend-item[data-series]') : null;
+    if (!item || typeof window.loadPage === 'function') return;
+    if (event.type === 'keydown' && event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    event.stopPropagation();
+    const off = item.getAttribute('aria-pressed') === 'true';
+    item.setAttribute('aria-pressed', off ? 'false' : 'true');
+    item.classList.toggle('sc-off', off);
+    item.style.opacity = off ? '.4' : '';
+    item.style.textDecoration = off ? 'line-through' : '';
+    item.closest('.sc-chart').querySelectorAll('svg [data-series="' + item.getAttribute('data-series') + '"]').forEach(function (element) {
+      element.style.display = off ? 'none' : '';
+    });
+  };
+  document.addEventListener('click', toggle, true);
+  document.addEventListener('keydown', toggle, true);
+
   // A click takes the box away; outside sc-webframe's app a time's link is followed here (app.js follows it in the app)
   document.addEventListener('click', function (event) {
     hide();

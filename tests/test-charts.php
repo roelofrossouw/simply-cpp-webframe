@@ -14,7 +14,26 @@
   // A line chart's hover data block, and the HTML without its scripts (the hover script mentions data-href itself)
   function HoverData(string $Html): ?array
   {
-    return preg_match('/<script type="application\/json" class="sc-chart-data">(.*?)<\/script>/s', $Html, $Found) ? json_decode($Found[1], true) : null;
+    if (!preg_match('/<script type="application\/json" class="sc-chart-data">(.*?)<\/script>/s', $Html, $Found))
+    {
+      return null;
+    }
+    // The values come as runs (value, count, ...), expanded here as the script does
+    $Data = json_decode($Found[1], true);
+    $Expand = function (array $Runs): array {
+      $Values = [];
+      for ($At = 0; $At < count($Runs); $At += 2)
+      {
+        array_push($Values, ...array_fill(0, $Runs[$At + 1], $Runs[$At]));
+      }
+      return $Values;
+    };
+    $Data['v'] = array_map($Expand, $Data['v']);
+    if (isset($Data['f']))
+    {
+      $Data['f'] = array_map($Expand, $Data['f']);
+    }
+    return $Data;
   }
 
   function NoScripts(string $Html): string
@@ -250,3 +269,16 @@
     $Wide->AddSeries("s$Number", [1, 2]);
   }
   Check(str_contains((string)$Wide, 'max-height:7.5rem;overflow-y:auto'), 'a legend of more than 12 series scrolls');
+
+  // Thinning: only the points that show
+  Same('M0 50l40 0', LineChart::PathOf(array_map(fn(int $X) => [$X, 50], range(0, 40))), 'a flat stretch is one step');
+  Same('M0 0l10 10 10 -10', LineChart::PathOf([[0, 0], [5, 5], [10, 10], [15, 5], [20, 0]]), 'steps in one direction merge, a turn stays');
+  Same('M0 10l0 -10 0 20 0 -10 5 0', LineChart::PathOf([[0, 10], [0, 3], [0, 0], [0, 7], [0, 20], [0, 12], [0, 10], [5, 10]]),
+    "in one pixel column: its first, lowest, highest and last point (a spike still shows)");
+  Same('M3 3l0 0', LineChart::PathOf([[3, 3], [3, 3]]), 'all in one pixel: a dot');
+  Same([0, 3, 1.5, 1, null, 2, 0, 1], LineChart::Runs([0, 0, 0, 1.5, null, null, 0]), 'values as runs: value, count');
+  $Busy = new LineChart();
+  $Busy->AddSeries('flat', array_fill(0, 240, 5));
+  Check(preg_match('/<path d="M\d+ \d+l\d+ 0"/', (string)$Busy) === 1, '240 equal values: one step');
+  Same(290, (new LineChart())->Resolution(), 'the default size shows 290 points apart');
+  Same(170, (new LineChart())->Size(400, 200)->Resolution(), 'a smaller chart fewer');

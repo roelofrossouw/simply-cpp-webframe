@@ -95,11 +95,19 @@
     /**
      * A range query's results as the chart's series, its labels the times (the chart is switched to Time()), each named
      * by $Legend: Grafana's {{label}} form ('{{instance}} {{route}}'), or by default the result's labels. A series
-     * keeps its labels for OpenSeries()'s and Open()'s placeholders. When the query fails, the chart says why.
+     * keeps its labels for OpenSeries()'s and Open()'s placeholders. When the query fails, the chart says why. A range
+     * with more points than the chart can show apart (Chart::Resolution(): 290 at the default size) is fetched in larger
+     * steps.
      */
     public function AddTo(Chart $Chart, string $Query, TimeRange $Range, string $Legend = ''): static
     {
       $Chart->Time();
+      // No more points than the chart can show apart: a long range in small steps is fetched in larger ones
+      $Points = intdiv($Range->End - $Range->Start, $Range->Step);
+      if ($Points > 1.25 * $Chart->Resolution())
+      {
+        $Range = TimeRange::Between($Range->Start, $Range->End, $Chart->Resolution());
+      }
       try
       {
         $Results = $this->Range($Query, $Range);

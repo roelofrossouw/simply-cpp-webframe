@@ -21,12 +21,6 @@
       '#6c757d', '#dc3545'];
 
     // A legend item's colour swatch, styled inline so it shows without sc-webframe's style.css (another app, an email)
-    // A legend item's click outside the app (no app.js): hide or show its series, greyed and struck through while hidden;
-    // the click goes no further (One Web's drill-down on the chart's cell would take it)
-    private const string TOGGLE = "event.stopPropagation();var o=this.getAttribute('aria-pressed')==='true';this.setAttribute('aria-pressed',o?'false':'true');" .
-      "this.classList.toggle('sc-off',o);this.style.opacity=o?'.4':'';this.style.textDecoration=o?'line-through':'';" .
-      "this.closest('figure').querySelectorAll('svg [data-series=\"'+this.getAttribute('data-series')+'\"]').forEach(function(e){e.style.display=o?'none':''});";
-
     protected const string LEGEND = 'display:flex;flex-wrap:wrap;justify-content:center;gap:.25rem 1rem;margin-top:.5rem;font-size:.875rem';
     protected const string SWATCH = 'display:inline-block;width:.75em;height:.75em;margin-right:.35em;border-radius:2px;background:';
 
@@ -323,6 +317,15 @@
     }
 
     /**
+     * How many points the drawing can show apart: one per two pixels of the plot's width (Prometheus->AddTo() asks for
+     * no more than this)
+     */
+    public function Resolution(): int
+    {
+      return max(20, intdiv($this->Width - 60, 2));
+    }
+
+    /**
      * The drawing's size in pixels; it scales to the width it's given, keeping this shape
      */
     public function Size(int $Width, int $Height): static
@@ -450,9 +453,8 @@
           $Items .= '<span class="' . $Classes . '"' . self::Attributes($Link) . '>' . $Swatch . '</span>';
           continue;
         }
-        // In the app, app.js hides and shows the series; elsewhere (One Web) the item does it itself
-        $Toggle = self::InApp() ? '' : ' style="cursor:pointer" onclick="' . self::Escape(self::TOGGLE) . '" onkeydown="' .
-          self::Escape("if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}") . '"';
+        // In the app, app.js hides and shows the series; elsewhere (One Web) the hover script does (Chart/standalone.js)
+        $Toggle = self::InApp() ? '' : ' style="cursor:pointer"';
         $Items .= '<span class="sc-legend-item" data-series="' . $Index . '" role="button" tabindex="0" aria-pressed="true"' . $Toggle . '>' . $Swatch . '</span>';
       }
       // Many series: the legend scrolls rather than pushing the page down

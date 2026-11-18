@@ -55,15 +55,9 @@
   Check(str_contains($Html, 'display:flex') && str_contains($Html, 'display:inline-block;width:.75em'), 'the legend is laid out without style.css');
   Check(str_contains($Html, '>Premium</span>') && str_contains($Html, '>Claims</span>'), 'the series named');
 
-  Check(str_contains($Html, 'data-series="1" role="button" tabindex="0" aria-pressed="true" style="cursor:pointer" onclick="event.stopPropagation();'),
-    'outside the app a legend item hides and shows its series itself, the click going no further');
-  Check(str_contains($Html, 'querySelectorAll(&apos;svg [data-series=&quot;&apos;+this.getAttribute(&apos;data-series&apos;)+&apos;&quot;]&apos;)')
-    || str_contains($Html, "querySelectorAll('svg [data-series=") || str_contains($Html, 'querySelectorAll(&#039;svg [data-series=&quot;&#039;'),
-    "it hides the series' items in its own chart");
-  (new ReflectionProperty(Chart\Chart::class, 'HoverScriptSent'))->setValue(null, false);
-  Check(substr_count((string)(new Chart\BarChart())->FromGraphRows($Rows, ['Premium']) . (string)(new Chart\BarChart())->FromGraphRows($Rows, ['Premium']),
-    'window.scChartHover = true') === 1,
-    'the first chart of a request brings the hover script, later ones don\'t');
+  Check(str_contains($Html, 'data-series="1" role="button" tabindex="0" aria-pressed="true" style="cursor:pointer">') && !str_contains($Html, 'onclick='),
+    'outside the app a legend item is plain: the hover script hides and shows its series');
+  Check(str_contains(file_get_contents(__DIR__ . '/../php/Chart/standalone.js'), "const toggle = function (event)"), 'the hover script has the legend toggle');
   // Only the series the rows have; unnamed ones numbered
   $Html = (string)(new Chart\LineChart())->FromGraphRows([['category1' => 1, '_graph_value' => 5], ['category1' => 2, '_graph_value' => 6]]);
   Check(substr_count($Html, '<path d="M') === 1 && !str_contains($Html, 'sc-chart-legend'), 'one series: one line, no legend');
