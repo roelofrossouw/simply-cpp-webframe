@@ -4,7 +4,8 @@
 // A line chart has one see-through area over its plot (.sc-hover-area) and one block of data (.sc-chart-data): as the
 // pointer moves (or the arrow keys), the nearest time gets a dashed line, a dot on each line and a box with its time and
 // each series' colour, name and value, highest first; the time's link and attributes go on the area for a click. A bar,
-// slice or a line's link (anything with data-tip) shows its own box. Series hidden in the legend are left out.
+// slice or a line's link (anything with data-tip) shows its own box. A heatmap (.sc-heat-area) outlines the cell
+// pointed at and shows its row, time and value. Series hidden in the legend are left out.
 (function () {
   if (window.scChartHover) return;
   window.scChartHover = true;
@@ -138,7 +139,7 @@
     };
     if (parsed)
     {
-      parsed.v = parsed.v.map(expand);
+      if (parsed.v) parsed.v = parsed.v.map(expand);
       if (parsed.f) parsed.f = parsed.f.map(expand);
     }
     data.set(area, parsed);
@@ -248,6 +249,53 @@
     const inside = point.matrixTransform(drawing.getScreenCTM().inverse());
     showAt(area, nearest(chart.x, inside.x), event.clientX, event.clientY);
   };
+
+  // A heatmap (php/Chart/Heatmap.php): the cell under the pointer outlined, and a box with its row, time and value
+  const heatAt = function (area, event) {
+    const chart = dataOf(area);
+    if (!chart || !chart.heat) return;
+    const drawing = area.ownerSVGElement;
+    const point = drawing.createSVGPoint();
+    point.x = event.clientX;
+    point.y = event.clientY;
+    const inside = point.matrixTransform(drawing.getScreenCTM().inverse());
+    const column = Math.min(chart.columns - 1, Math.max(0, Math.floor((inside.x - chart.left) / chart.width * chart.columns)));
+    const row = Math.min(chart.rows.length - 1, Math.max(0, Math.floor((inside.y - chart.top) / chart.row)));
+    const layer = layerOf(drawing);
+    layer.replaceChildren();
+    const value = chart.f[row][column];
+    if (value === null || value === undefined)
+    {
+      hide();
+      return;
+    }
+    const cell = document.createElementNS(svg, 'rect');
+    const width = chart.width / chart.columns;
+    for (const [name, size] of [['x', chart.left + column * width], ['y', chart.top + row * chart.row], ['width', width], ['height', chart.row]]) {
+      cell.setAttribute(name, size);
+    }
+    cell.setAttribute('fill', 'none');
+    cell.setAttribute('stroke', 'currentColor');
+    cell.setAttribute('stroke-width', 1.5);
+    layer.appendChild(cell);
+    fill(chart.rows[row], [{n: chart.heads[column], c: chart.color, v: value}], false);
+    tip.style.display = 'block';
+    place(event.clientX, event.clientY);
+  };
+  const heatOf = target => target instanceof Element ? target.closest('.sc-chart .sc-heat-area') : null;
+  document.addEventListener('mousemove', function (event) {
+    const area = heatOf(event.target);
+    if (area) heatAt(area, event);
+  });
+  document.addEventListener('mouseout', function (event) {
+    const area = heatOf(event.target);
+    if (area && !(event.relatedTarget instanceof Element && area.contains(event.relatedTarget)))
+    {
+      hide();
+      const layer = area.ownerSVGElement.querySelector('g.sc-hover');
+      if (layer) layer.replaceChildren();
+    }
+  });
 
   const itemOf = target => target instanceof Element ? target.closest('.sc-chart [data-tip]') : null;
   const areaOf = target => target instanceof Element ? target.closest('.sc-chart .sc-hover-area') : null;

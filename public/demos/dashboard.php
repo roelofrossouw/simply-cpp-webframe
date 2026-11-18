@@ -1,7 +1,7 @@
 <?php
   require_once __DIR__ . '/_demo.php';
 
-  use Chart\{BarChart, BarGauge, Dashboard, LineChart, Open, PieChart, Prometheus, Stat, StateTimeline, Table};
+  use Chart\{BarChart, BarGauge, Dashboard, Heatmap, LineChart, Open, PieChart, Prometheus, Stat, StateTimeline, Table};
 
   Config::Init(Access: Config::FrameworkURL(DEMOS));
 
@@ -46,6 +46,12 @@
     $Traffic->AddSeries($Name, $Points)->Labels = ['server' => $Name];
   }
   $Traffic->Open("$Popup?label={iso}&what=Mails+per+minute", Open::Popup)->OpenSeries("$Popup?what={server}&in=panel", Open::SidePanel);
+  // Annotations: a moment (a deploy) and a stretch (a maintenance window), from rows as a query gives them
+  $Traffic->Annotations([
+    ['at' => $Range->Start + intdiv($Range->End - $Range->Start, 3), 'what' => 'mail-post 1.2.0 installed', 'id' => 1],
+    ['at' => $Range->Start + intdiv(2 * ($Range->End - $Range->Start), 3), 'until' => $Range->Start + intdiv(3 * ($Range->End - $Range->Start), 4),
+      'what' => 'Maintenance window', 'id' => 2],
+  ], 'at', 'what', 'until', "$Popup?what={what}");
   $Dashboard->Add($Traffic, 8);
   $Domains = [['domain' => 'gmail.com', 'mails' => 4210], ['domain' => 'outlook.com', 'mails' => 2870], ['domain' => 'example.com', 'mails' => 1260],
     ['domain' => 'other', 'mails' => 980]];
@@ -61,6 +67,20 @@
     ->Stacked()->Open("$Popup?label={hour}&what={series}&value={value}", Open::Popup), 12);
 
   // Up and down over the range, and a table of the servers with a bar and a sparkline each
+  // A heatmap: a row per job, a column per stretch of time
+  $Dashboard->Row('Jobs');
+  $Heat = (new Heatmap('Job runs per minute'))->Aggregate('sum');
+  foreach (['Allocations', 'Debit run', 'Letter queue', 'Process policy', 'Scheduled reports', 'Recalc requests', 'WhatsApp replies', 'Heartbeat'] as $Number => $Job)
+  {
+    $Runs = [];
+    for ($Time = $Range->Start, $Step = 0; $Time <= $Range->End; $Time += $Range->Step, $Step++)
+    {
+      $Runs[$Time] = max(0, round((2 + $Number) * (1 + sin($Step / (4 + $Number))) * ($Step % (7 + $Number) < 3 ? 6 : 1) - 3, 1));
+    }
+    $Heat->AddSeries($Job, $Runs);
+  }
+  $Dashboard->Add($Heat, 12);
+
   $Dashboard->Row('Servers');
   $Timeline = new StateTimeline('Up');
   foreach ($Servers as $Number => $Name)

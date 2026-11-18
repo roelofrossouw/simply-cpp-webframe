@@ -119,10 +119,9 @@
     }
 
     // The drawing is as tall as its rows: set before the drawing is made, which states its size first
-    protected function OwnString(): string
+    protected function Prepare(): void
     {
       $this->Height = (int)ceil(self::TOP + max(1, count($this->Series)) * (self::ROW + self::GAP) + self::BOTTOM);
-      return parent::OwnString();
     }
 
     protected function Draw(): string
@@ -130,6 +129,7 @@
       $Count = count($this->Labels);
       $Widest = max(1, max(array_map(fn(Series $Series) => mb_strlen($Series->Name), $this->Series ?: [new Series('')])));
       $this->Left = min($this->Width * 0.35, ceil($Widest * self::CHARACTER) + 12);
+      $Fits = (int)floor(($this->Left - 12) / self::CHARACTER);
       $Step = TimeTicks::Step($this->Times);
       $Svg = '';
       foreach ($this->Series as $Number => $Series)
@@ -139,7 +139,7 @@
         $Name = $this->LinkAttributes(null, $Number, $Series->Name);
         $Name['class'] = trim('sc-row-name ' . ($Name['class'] ?? ''));
         $Svg .= '<text x="' . self::Coordinate($this->Left - 8) . '" y="' . self::Coordinate($Y + self::ROW / 2 + 4) .
-          '" text-anchor="end" fill="#444"' . self::Attributes($Name) . '>' . self::Escape($Series->Name) . '</text>';
+          '" text-anchor="end" fill="#444"' . self::Attributes($Name) . '>' . self::Escape(self::Fit($Series->Name, $Fits)) . '</text>';
         // Stretches: neighbours in the same state, until a gap (no value, or more than twice the usual step)
         $From = null;
         $State = null;

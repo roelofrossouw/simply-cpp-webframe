@@ -16,6 +16,8 @@
     /** @var array<int|string, string> Thresholds(): from => colour */
     private array $Thresholds = [];
     private string $ThresholdStyle = 'line';
+    /** @var array<int, array{time: int, until: ?int, text: string, color: string, href: ?string}> Annotate() */
+    private array $Annotations = [];
     /** @var array<int, array<int, float|null>> where each series' points are drawn (stacked, below zero), by series and label */
     private array $Tops = [];
     /** @var array<int, array<int, float>> what each series stands on (stacked: the ones below it), for its area */
@@ -70,6 +72,84 @@
       $this->Thresholds = $Thresholds;
       $this->ThresholdStyle = $Style;
       return $this;
+    }
+
+    /**
+     * A moment marked on a time chart (Time()): a dashed line, or with $Until a faint stretch, and a marker under the
+     * chart that shows $Text and the time when the pointer is on it, and opens $Href when clicked. Times as Time() reads
+     * them (Unix seconds or milliseconds, text, a DateTimeInterface).
+     */
+    public function Annotate(mixed $Time, string $Text, ?string $Color = null, ?string $Href = null, mixed $Until = null): static
+    {
+      $At = self::ParseTime($Time);
+      if ($At !== null)
+      {
+        $Last = $Until === null ? null : self::ParseTime($Until);
+        $this->Annotations[] = ['time' => $At, 'until' => $Last !== null && $Last > $At ? $Last : null, 'text' => $Text,
+          'color' => $Color ?? '#6f42c1', 'href' => $Href];
+      }
+      return $this;
+    }
+
+    /**
+     * Annotate() from a query's rows (deploys, publishes, job changes): $Time names the column with the time, $Text the
+     * text, $Until the end of a stretch; $Href a page with the row's columns as placeholders ({id}, {name})
+     */
+    public function Annotations(array $Rows, string $Time, string $Text, ?string $Until = null, ?string $Href = null, ?string $Color = null): static
+    {
+      foreach ($Rows as $Row)
+      {
+        $Row = (array)$Row;
+        $Link = $Href === null ? null : preg_replace_callback('/\{(\w+)}/', fn(array $Match) => array_key_exists($Match[1], $Row)
+          ? rawurlencode((string)$Row[$Match[1]]) : $Match[0], $Href);
+        $this->Annotate($Row[$Time] ?? null, (string)($Row[$Text] ?? ''), $Color, $Link, $Until === null ? null : ($Row[$Until] ?? null));
+      }
+      return $this;
+    }
+
+    // Annotate()'s marks: under the lines a stretch's shade and a moment's dashed line, and below the chart a marker to
+    // point at and click
+    private function AnnotationMarks(): string
+    {
+      if (!$this->Annotations || $this->Times === null || !$this->Times)
+      {
+        return '';
+      }
+      $First = min($this->Times);
+      $Last = max($this->Times);
+      $Top = self::TOP;
+      $Bottom = $this->Height - self::BOTTOM;
+      $Svg = '';
+      $InApp = self::InApp();
+      foreach ($this->Annotations as $Mark)
+      {
+        if ($Mark['time'] > $Last || ($Mark['until'] ?? $Mark['time']) < $First)
+        {
+          continue;
+        }
+        $X = (int)round($this->TimeX(max($First, $Mark['time'])));
+        $Color = self::Escape($Mark['color']);
+        if ($Mark['until'] !== null)
+        {
+          $Until = (int)round($this->TimeX(min($Last, $Mark['until'])));
+          $Svg .= '<rect class="sc-annotation" x="' . $X . '" y="' . $Top . '" width="' . max(1, $Until - $X) . '" height="' . ($Bottom - $Top) . '" fill="' . $Color .
+            '" fill-opacity="0.1" pointer-events="none"/>';
+        }
+        $Svg .= '<line class="sc-annotation" x1="' . $X . '" x2="' . $X . '" y1="' . $Top . '" y2="' . $Bottom . '" stroke="' . $Color . '" stroke-width="1" stroke-dasharray="4 3" pointer-events="none"/>';
+        $When = date('D j M H:i', $Mark['time']) . ($Mark['until'] !== null ? ' – ' . date(date('Ymd', $Mark['time']) === date('Ymd', $Mark['until']) ? 'H:i' : 'D j M H:i', $Mark['until']) : '');
+        $Attributes = ['class' => 'sc-annotation-marker', 'points' => ($X - 5) . ',' . ($Bottom + 9) . ' ' . ($X + 5) . ',' . ($Bottom + 9) . ' ' . $X . ',' . ($Bottom + 2),
+          'fill' => $Mark['color'], 'data-tip' => $Mark['text'] . "
+" . $When, 'data-head' => '',
+          'data-rows' => json_encode([['n' => $Mark['text'], 'c' => $Mark['color'], 'v' => $When]], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)];
+        if ($Mark['href'] !== null && $InApp)
+        {
+          $Attributes += ['data-href' => $Mark['href'], 'role' => 'link', 'tabindex' => 0, 'aria-label' => $Mark['text']];
+        }
+        $Marker = '<polygon' . self::Attributes($Attributes) . ($InApp ? '/>' : '><title>' . self::Escape($Mark['text'] . "
+" . $When) . '</title></polygon>');
+        $Svg .= $Mark['href'] !== null && !$InApp ? '<a href="' . self::Escape($Mark['href']) . '">' . $Marker . '</a>' : $Marker;
+      }
+      return $Svg;
     }
 
     // Where each series' points are drawn and what its area stands on: its values, below zero when Negative, stacked
@@ -289,7 +369,7 @@
         $Hits[$Number] = $Lines;
       }
       $Svg .= $this->ThresholdStyle === 'line' ? $this->ThresholdMarks() : '';
-      return ($Shapes !== '' ? '<defs>' . $Shapes . '</defs>' : '') . $Svg . $this->SeriesLinks($Hits) . $this->HoverArea($Xs);
+      return ($Shapes !== '' ? '<defs>' . $Shapes . '</defs>' : '') . $Svg . $this->SeriesLinks($Hits) . $this->HoverArea($Xs) . $this->AnnotationMarks();
     }
 
     /**

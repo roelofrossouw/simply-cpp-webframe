@@ -398,6 +398,22 @@
     }
 
     /**
+     * Called once the series are settled (time order, Top(), Override()), before the drawing states its size: e.g. a
+     * chart as tall as its rows sets its height here
+     */
+    protected function Prepare(): void
+    {
+    }
+
+    /**
+     * A name cut to $Characters, ending in … when it's longer (its row's hover gives it whole)
+     */
+    protected static function Fit(string $Name, int $Characters): string
+    {
+      return mb_strlen($Name) > $Characters ? rtrim(mb_substr($Name, 0, max(1, $Characters - 1))) . '…' : $Name;
+    }
+
+    /**
      * The SVG's contents, inside a viewBox of Width x Height
      */
     abstract protected function Draw(): string;
@@ -408,6 +424,7 @@
       $this->InTimeOrder();
       $this->FoldSeries();
       $this->ApplyOverrides();
+      $this->Prepare();
       if ($this->Title !== '')
       {
         $Caption = (new \HTML\FigureCaption())->AddClass('sc-chart-title');
@@ -757,7 +774,7 @@
     }
 
     // Unix seconds from seconds, milliseconds (Prometheus' and JavaScript's), a DateTimeInterface or text; null if none
-    private static function ParseTime(mixed $Value): ?int
+    protected static function ParseTime(mixed $Value): ?int
     {
       if ($Value instanceof \DateTimeInterface)
       {
