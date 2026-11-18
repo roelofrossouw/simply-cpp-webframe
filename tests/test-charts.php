@@ -11,6 +11,17 @@
     (new ReflectionProperty(Config::class, 'AppPage'))->setValue(null, $On);
   }
 
+  // A line chart's hover data block, and the HTML without its scripts (the hover script mentions data-href itself)
+  function HoverData(string $Html): ?array
+  {
+    return preg_match('/<script type="application\/json" class="sc-chart-data">(.*?)<\/script>/s', $Html, $Found) ? json_decode($Found[1], true) : null;
+  }
+
+  function NoScripts(string $Html): string
+  {
+    return preg_replace('/<script\b.*?<\/script>/s', '', $Html);
+  }
+
   // Scales: rounded steps, 0 kept for bars, one value
   $Scale = Scale::Around(3, 97);
   Same([0.0, 20.0, 40.0, 60.0, 80.0, 100.0], $Scale->Ticks(), 'Scale 3..97: steps of 20 from 0 to 100');
@@ -36,7 +47,7 @@
   Check(str_contains($Html, '<figcaption class="sc-chart-title">Mail &lt;sent&gt;</figcaption>'), 'the title, escaped');
   Check(str_contains($Html, 'Mar &amp; Apr'), 'labels are escaped in the SVG');
   Check(str_contains($Html, '<a href="/mail/month.php?id=2&amp;what=Sent">'), 'outside the app an item is an SVG link, placeholders filled in');
-  Check(!str_contains($Html, 'data-href'), 'no data-href outside the app');
+  Check(!str_contains(NoScripts($Html), 'data-href'), 'no data-href outside the app');
   Check(str_contains($Html, 'class="sc-chart-legend"') && substr_count($Html, 'class="sc-legend-item"') === 2, 'a legend item per series');
   Check(preg_match('/<svg [^>]*viewBox="0 0 640 240"/', $Html) === 1, 'drawn at its size (640 x 240 by default)');
   Check(str_contains($Html, 'data-tip="Feb' . "\n" . 'Sent: 150"'), "a bar's tooltip: label, series and value");
@@ -61,13 +72,17 @@
   $Line->AddSeries('Rate', ['00:00' => 1, '01:00' => 2, '02:00' => null, '03:00' => 4, '04:00' => 5]);
   $Line->Open('/hour.php?at={label}', Open::SidePanel);
   $Html = (string)$Line;
-  Same(2, substr_count($Html, '<polyline'), 'a missing value splits the line in two');
-  Same(5, substr_count($Html, 'class="sc-band oc-link"'), 'a strip per label, opening in the side panel');
-  Check(str_contains($Html, 'data-href="/hour.php?at=02%3A00"'), "the strip's link names its label");
-  Check(str_contains($Html, "02:00\nRate: –"), 'a missing value reads as – in the tooltip');
+  $Data = HoverData($Html);
+  Same(2, substr_count($Html, '<path d="M'), 'a missing value splits the line in two');
+  Check(str_contains($Html, 'class="sc-hover-area oc-link"') && count($Data['x']) === 5, 'one hover area over the five labels, opening in the side panel');
+  Same('/hour.php?at=02%3A00', $Data['href'][2], "each label's link, its label filled in");
+  Same([1, 2, null, 4, 5], $Data['v'][0], 'the values, a missing one null');
+  Same(['n' => 'Rate', 'c' => '#0d6efd'], $Data['series'][0], "the series' name and colour");
+  Check(preg_match('/<path d="M\d+ \d+l-?\d+ -?\d+"/', $Html) === 1, 'a line as one path in whole pixels, each point a step from the last');
   Same(0, substr_count((string)(new LineChart())->Dots(false)->FromRows($Rows, 'month', 'sent'), '<circle'), 'Dots(false): no dots');
-  Check(str_contains((string)(new LineChart())->Area()->FromRows($Rows, 'month', 'sent'), '<polygon'), 'Area() fills under the line');
-  Check(str_contains((string)(new LineChart())->Format(fn(float $V) => 'R ' . $V)->FromRows($Rows, 'month', 'sent'), 'sent: R 150'), 'Format() writes the values');
+  Check(preg_match('/<path d="M[^"]*Z" fill="#0d6efd" fill-opacity="0.12"/', (string)(new LineChart())->Area()->FromRows($Rows, 'month', 'sent')) === 1, 'Area() fills under the line');
+  Same(['R 100', 'R 150', 'R 90'], HoverData((string)(new LineChart())->Format(fn(float $V) => 'R ' . $V)->FromRows($Rows, 'month', 'sent'))['f'][0], 'Format() writes the values');
+  Check(!isset(HoverData((string)(new LineChart())->FromRows($Rows, 'month', 'sent'))['f']), 'without Format() the script writes them');
 
   // Pie: slices with shares, links on the legend too
   $Pie = (new PieChart())->FromRows([['d' => 'a.example', 'n' => 3], ['d' => 'b.example', 'n' => 1], ['d' => 'none', 'n' => 0]], 'd', 'n')
@@ -140,15 +155,17 @@
   $Timed->AddSeries('Rate', $Values);
   $Timed->Open('/at.php?t={time}&iso={iso}');
   $Html = (string)$Timed;
-  Same(2, substr_count($Html, '<polyline'), 'four minutes without samples split the line');
-  Check(preg_match_all('/data-href="\/at\.php\?t=(\d+)/', $Html, $Found) && $Found[1] === array_map('strval', array_keys(array_reverse($Values, true))),
-    'the bands in time order, {time} filled in');
+  $Data = HoverData($Html);
+  Same(2, substr_count($Html, '<path d="M'), 'four minutes without samples split the line');
+  Same(array_map(fn(int $Time) => '/at.php?t=' . $Time . '&iso=' . rawurlencode(date('c', $Time)), array_keys(array_reverse($Values, true))), $Data['href'],
+    'the links in time order, {time} and {iso} filled in');
+  Check($Data['x'][0] < $Data['x'][1] && $Data['x'][4] - $Data['x'][3] > 3 * ($Data['x'][1] - $Data['x'][0]), 'each label where its time lies across');
   Check(str_contains($Html, 'iso=' . rawurlencode(date('c', $Base))), '{iso} filled in');
   Check(str_contains($Html, '>12:00</text>') || str_contains($Html, '>12:02</text>'), 'the axis shows round local times');
-  Check(str_contains($Html, "Tue 17 Nov 12:00\nRate: 0"), "a point's tooltip names its time");
+  Same('Tue 17 Nov 12:00', $Data['head'][0], "a time's box names it");
   $Text = (new LineChart())->Time()->Labels(['2026-11-17 10:00', 'not a time', '2026-11-17 11:00']);
   $Text->AddSeries('x', ['2026-11-17 10:00' => 1, '2026-11-17 11:00' => 2]);
-  Same(2, substr_count((string)$Text, 'class="sc-band"'), 'text times are read; what isn\'t a time is left out');
+  Same(2, count(HoverData((string)$Text)['x']), 'text times are read; what isn\'t a time is left out');
 
   // Series links: a line opens its series' page with its labels
   $Series = (new LineChart())->Time();
@@ -192,18 +209,44 @@
   $Hover->AddSeries('Submitted', [$Base => 1603, $Base + 60 => 1610]);
   $Hover->AddSeries('Approved', [$Base => 1535, $Base + 60 => null]);
   $Html = (string)$Hover;
-  Check(preg_match('/class="sc-band" [^>]*data-x="([\d.]+)"/', $Html, $Found) === 1, "a strip says where its time lies across");
-  Check(str_contains($Html, 'data-sort="desc"'), "a line chart's box is sorted from the highest");
-  Check(str_contains($Html, 'data-head="Tue 17 Nov 12:00"'), 'the box\'s header: the time written out');
-  Check(preg_match('/data-rows="(\[[^"]*\])"/', $Html, $Rows) === 1, 'the rows, as JSON');
-  $Decoded = json_decode(html_entity_decode($Rows[1], ENT_QUOTES | ENT_HTML5), true);
-  Same(['n' => 'Submitted', 'c' => '#0d6efd', 'v' => '1 603', 'r' => 1603, 's' => 0], array_diff_key($Decoded[0], ['y' => 1]), 'a row: name, colour, value, number, series');
-  Check(isset($Decoded[0]['y']) && isset($Decoded[1]['y']), "each line's point, for the dots");
-  Check(preg_match_all('/data-rows="(\[[^"]*\])"/', $Html, $All) === 2 && !str_contains(html_entity_decode($All[1][1]), '"s":1,"y"'),
-    'a missing value has no dot');
+  $Data = HoverData($Html);
+  Same([['n' => 'Submitted', 'c' => '#0d6efd'], ['n' => 'Approved', 'c' => '#20c997']], $Data['series'], 'the series for the box');
+  Same([[1603, 1610], [1535, null]], $Data['v'], 'the values for the box and the dots, a missing one null (no dot)');
+  Same(['top', 'bottom', 'low', 'high'], array_values(array_intersect(['top', 'bottom', 'low', 'high'], array_keys($Data['y']))), 'the scale, for the dots');
+  Same(1, substr_count($Html, 'class="sc-chart-data"'), 'one data block for the chart');
+  $Many = new LineChart();
+  $Many->AddSeries('x', [1.23456, 123.456, 12345.6, 7.0]);
+  Same([1.23, 123.5, 12346.0, 7.0], array_map('floatval', HoverData((string)$Many)['v'][0]), 'values rounded as the box shows them');
+  $Odd = new LineChart('a');
+  $Odd->AddSeries('</script><b>&', [1, 2]);
+  Check(str_contains((string)$Odd, '\u003C/script\u003E\u003Cb\u003E\u0026') && HoverData((string)$Odd)['series'][0]['n'] === '</script><b>&',
+    "names with markup characters can't break out of the data block");
   $Bars = (string)(new BarChart())->FromRows($Rows2 = [['m' => 'Jan', 'a' => 3]], 'm', ['a' => 'Sent']);
   Check(str_contains(html_entity_decode($Bars), 'data-rows="[{"n":"Sent","c":"#0d6efd","v":"3","r":3,"s":0}]"') && str_contains($Bars, 'data-head="Jan"'), 'a bar\'s box: its own value');
   $Slice = (string)(new PieChart())->FromRows([['d' => 'a', 'n' => 3], ['d' => 'b', 'n' => 1]], 'd', 'n');
   Check(str_contains(html_entity_decode($Slice), '"n":"a","c":"#0d6efd","v":"3 (75%)"'), "a slice's box: its name, value and share");
   $Js = file_get_contents(__DIR__ . '/../public/js/app.js');
-  Check(str_contains($Js, 'const crosshair = function (band)') && str_contains($Js, "tip.classList.add('sc-chart-tip-rows')"), 'app.js draws the crosshair and the box');
+  $Script = file_get_contents(__DIR__ . '/../php/Chart/standalone.js');
+  Check(str_contains($Script, 'const showAt = function (area, index, clientX, clientY)') && str_contains($Script, "line.setAttribute('class', 'sc-crosshair')")
+    && !str_contains($Js, 'const crosshair'), 'the hover (crosshair, dots, box) is standalone.js, in the app too; app.js has no copy');
+  $Top = new LineChart();
+  foreach (range(1, 8) as $Number)
+  {
+    $Top->AddSeries("s$Number", [$Number, $Number * 2, $Number]);
+  }
+  $Top->Top(3);
+  $Data = HoverData((string)$Top);
+  Same(['s6', 's7', 's8', 'Others (5)'], array_column($Data['series'], 'n'), 'Top(3): the three highest, the rest as Others');
+  Same([15, 30, 15], $Data['v'][3], 'Others adds the rest up');
+  Same('#adb5bd', $Data['series'][3]['c'], 'Others in grey');
+  $Last = new LineChart();
+  $Last->AddSeries('early', [9, 1]);
+  $Last->AddSeries('late', [1, 5]);
+  $Last->AddSeries('flat', [2, 2]);
+  Same(['late', 'Others (2)'], array_column(HoverData((string)$Last->Top(1, 'last'))['series'], 'n'), "Top(1, 'last'): by the last value");
+  $Wide = new LineChart();
+  foreach (range(1, 14) as $Number)
+  {
+    $Wide->AddSeries("s$Number", [1, 2]);
+  }
+  Check(str_contains((string)$Wide, 'max-height:7.5rem;overflow-y:auto'), 'a legend of more than 12 series scrolls');

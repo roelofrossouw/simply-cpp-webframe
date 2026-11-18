@@ -49,6 +49,10 @@
     private ?string $Message = null;
     // Outside the app: whether the hover script (standalone.js) goes with the first chart of the request, and has
     private static bool $HoverScript = true;
+    // Top(): how many series to keep, by what, and the name of the series the rest are folded into
+    private int $TopCount = 0;
+    private string $TopBy = 'max';
+    private string $OthersName = 'Others';
     private static bool $HoverScriptSent = false;
     /** @var array<string, string> ItemAttributes() */
     private array $ItemAttributes = [];
@@ -249,8 +253,69 @@
     }
 
     /**
-     * Outside the app the first chart of a request brings a small script (Chart/standalone.js: the hover box, the
-     * crosshair and the dots, as app.js gives them in the app). Off for what no browser runs, e.g. an email or a PDF.
+     * Only the $Count series that rank highest $By 'max' (their highest value), 'mean' or 'last' (their last value),
+     * the rest added up into one more series, "Others (n)": for many series (100 job names), so the legend stays usable
+     */
+    public function Top(int $Count, string $By = 'max', string $Others = 'Others'): static
+    {
+      if (!in_array($By, ['max', 'mean', 'last'], true))
+      {
+        throw new \InvalidArgumentException("Top(): rank by max, mean or last, not '$By'");
+      }
+      $this->TopCount = max(1, $Count);
+      $this->TopBy = $By;
+      $this->OthersName = $Others;
+      return $this;
+    }
+
+    // Top(): the series beyond the first TopCount, by their rank, added up into "Others (n)"
+    private function FoldSeries(): void
+    {
+      if ($this->TopCount < 1 || count($this->Series) <= $this->TopCount + 1)
+      {
+        return;
+      }
+      $Rank = [];
+      foreach ($this->Series as $Number => $Series)
+      {
+        $Values = array_filter($Series->Values, fn($Value) => $Value !== null);
+        $Rank[$Number] = empty($Values) ? -INF : match ($this->TopBy)
+        {
+          'max' => max($Values),
+          'mean' => array_sum($Values) / count($Values),
+          'last' => $Series->Values[array_key_last($Values)],
+        };
+      }
+      arsort($Rank);
+      $Keep = array_slice(array_keys($Rank), 0, $this->TopCount);
+      sort($Keep);
+      $Others = new Series($this->OthersName . ' (' . (count($this->Series) - count($Keep)) . ')', '#adb5bd');
+      foreach ($this->Series as $Number => $Series)
+      {
+        if (in_array($Number, $Keep, true))
+        {
+          continue;
+        }
+        foreach ($Series->Values as $Index => $Value)
+        {
+          if ($Value !== null)
+          {
+            $Others->Values[$Index] = ($Others->Values[$Index] ?? 0.0) + $Value;
+          }
+        }
+      }
+      $Kept = array_map(fn(int $Number) => $this->Series[$Number], $Keep);
+      // The kept series keep their colours
+      foreach ($Keep as $Position => $Number)
+      {
+        $Kept[$Position]->Color ??= self::PALETTE[$Number % count(self::PALETTE)];
+      }
+      $this->Series = [...$Kept, $Others];
+    }
+
+    /**
+     * The first chart of a request brings a small script (Chart/standalone.js: the hover box, the crosshair and the
+     * dots; in the app and outside it, e.g. One Web). Off for what no browser runs, e.g. an email or a PDF.
      */
     public static function HoverScript(bool $On): void
     {
@@ -291,6 +356,7 @@
     {
       $this->Children = [];
       $this->InTimeOrder();
+      $this->FoldSeries();
       if ($this->Title !== '')
       {
         $Caption = (new \HTML\FigureCaption())->AddClass('sc-chart-title');
@@ -306,7 +372,7 @@
       {
         $this->AddChild(new \HTML\Raw($this->Legend()));
       }
-      if (self::$HoverScript && !self::$HoverScriptSent && !self::InApp())
+      if (self::$HoverScript && !self::$HoverScriptSent)
       {
         self::$HoverScriptSent = true;
         $this->AddChild(new \HTML\Raw('<script>' . file_get_contents(__DIR__ . '/standalone.js') . '</script>'));
@@ -389,7 +455,9 @@
           self::Escape("if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}") . '"';
         $Items .= '<span class="sc-legend-item" data-series="' . $Index . '" role="button" tabindex="0" aria-pressed="true"' . $Toggle . '>' . $Swatch . '</span>';
       }
-      return '<div class="sc-chart-legend" style="' . self::LEGEND . '">' . $Items . '</div>';
+      // Many series: the legend scrolls rather than pushing the page down
+      $Scroll = count($this->Series) > 12 ? ';max-height:7.5rem;overflow-y:auto' : '';
+      return '<div class="sc-chart-legend" style="' . self::LEGEND . $Scroll . '">' . $Items . '</div>';
     }
 
     protected function ColorOf(int $Series): string
@@ -508,6 +576,45 @@
         $Rows[] = $Row;
       }
       return ['data-head' => $this->LabelText($Label), 'data-rows' => json_encode($Rows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)];
+    }
+
+    /**
+     * A label's page (Open()), its placeholders filled in; null without Open()
+     */
+    protected function LabelHref(int $Label): ?string
+    {
+      return $this->Href($Label, null);
+    }
+
+    /**
+     * ItemAttributes() for a label alone (no series), those whose placeholders all have values
+     *
+     * @return array<string, string>
+     */
+    protected function LabelItemAttributes(int $Label): array
+    {
+      $Attributes = [];
+      foreach ($this->ItemAttributes as $Name => $Template)
+      {
+        $Value = $this->Fill($Template, $Label, null, false);
+        if (!preg_match('/\{\w+}/', $Value))
+        {
+          $Attributes[$Name] = $Value;
+        }
+      }
+      return $Attributes;
+    }
+
+    // The class that says where Open()'s pages open, for app.js (modal-link, oc-link), or null for the page
+    protected function OpenClass(): ?string
+    {
+      return $this->In->LinkClass();
+    }
+
+    // Whether Format() writes the values (then a chart sends them written out; else app.js writes them as Value() does)
+    protected function Formatted(): bool
+    {
+      return $this->Formatter !== null;
     }
 
     /**

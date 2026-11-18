@@ -2309,130 +2309,12 @@ function init() {
 // Run when all scripts are loaded and ready
 $(document).ready(init);
 
-// Charts drawn by php/Chart: an item with data-tip shows it beside the pointer; one with data-href opens its page when
-// clicked or on Enter (in the place its class says, as buttons do: modal-link, oc-link, else the page); a series'
+// Charts drawn by php/Chart: an item with data-href opens its page when clicked or on Enter (in the place its class says, as buttons do: modal-link, oc-link, else the page); a series'
 // legend item hides or shows that series. Bound once on the document, so charts loaded later work too.
 function setupCharts() {
-  let tip = null;
-  const svg = 'http://www.w3.org/2000/svg';
-  // The hover box: a header (the label, e.g. the time) and a row per value with its colour, name and value, the series
-  // hidden in the legend left out, a line chart's sorted from the highest; plain text where an item has no rows
-  const fillTip = function (item) {
-    const rows = item.getAttribute('data-rows');
-    tip.replaceChildren();
-    if (!rows)
-    {
-      tip.classList.remove('sc-chart-tip-rows');
-      tip.textContent = item.getAttribute('data-tip');
-      return true;
-    }
-    const chart = item.closest('.sc-chart');
-    const hidden = new Set($(chart).find('.sc-legend-item.sc-off[data-series]').map(function () {
-      return this.getAttribute('data-series');
-    }).get());
-    let shown = JSON.parse(rows).filter(row => row.s === undefined || !hidden.has(String(row.s)));
-    if (item.getAttribute('data-sort') === 'desc')
-    {
-      shown = shown.slice().sort((a, b) => (b.r ?? -Infinity) - (a.r ?? -Infinity));
-    }
-    if (!shown.length) return false;
-    tip.classList.add('sc-chart-tip-rows');
-    const head = item.getAttribute('data-head');
-    if (head)
-    {
-      const header = document.createElement('div');
-      header.className = 'sc-chart-tip-head';
-      header.textContent = head;
-      tip.appendChild(header);
-    }
-    const table = document.createElement('table');
-    for (const row of shown) {
-      const line = table.insertRow();
-      const swatch = line.insertCell();
-      const mark = document.createElement('i');
-      mark.style.background = row.c;
-      swatch.appendChild(mark);
-      line.insertCell().textContent = row.n;
-      const value = line.insertCell();
-      value.className = 'sc-chart-tip-value';
-      value.textContent = row.v;
-    }
-    tip.appendChild(table);
-    return true;
-  };
-  // A line chart's strip: a dashed line down the chart at its time, and a dot on each line shown there
-  const crosshair = function (band) {
-    const drawing = band.ownerSVGElement;
-    let layer = drawing.querySelector('g.sc-hover');
-    if (!layer)
-    {
-      layer = document.createElementNS(svg, 'g');
-      layer.setAttribute('class', 'sc-hover');
-      layer.setAttribute('pointer-events', 'none');
-      drawing.appendChild(layer);
-    }
-    layer.replaceChildren();
-    const x = band.getAttribute('data-x');
-    const top = parseFloat(band.getAttribute('y'));
-    const line = document.createElementNS(svg, 'line');
-    for (const [name, value] of [['x1', x], ['x2', x], ['y1', top], ['y2', top + parseFloat(band.getAttribute('height'))]]) {
-      line.setAttribute(name, value);
-    }
-    line.setAttribute('class', 'sc-crosshair');
-    layer.appendChild(line);
-    const hidden = new Set($(band.closest('.sc-chart')).find('.sc-legend-item.sc-off[data-series]').map(function () {
-      return this.getAttribute('data-series');
-    }).get());
-    for (const row of JSON.parse(band.getAttribute('data-rows') || '[]')) {
-      if (row.y === undefined || hidden.has(String(row.s))) continue;
-      const dot = document.createElementNS(svg, 'circle');
-      dot.setAttribute('cx', x);
-      dot.setAttribute('cy', row.y);
-      dot.setAttribute('r', 4);
-      dot.setAttribute('fill', row.c);
-      dot.setAttribute('class', 'sc-hover-dot');
-      layer.appendChild(dot);
-    }
-  };
-  const showTip = function (event) {
-    if (!this.getAttribute('data-tip')) return;
-    if (!tip)
-    {
-      tip = document.createElement('div');
-      tip.className = 'sc-chart-tip';
-      tip.setAttribute('role', 'tooltip');
-      document.body.appendChild(tip);
-    }
-    if (this.matches('.sc-band[data-x]'))
-    {
-      crosshair(this);
-    }
-    if (!fillTip(this))
-    {
-      hideTip();
-      return;
-    }
-    tip.style.display = 'block';
-    moveTip(event);
-  };
-  const moveTip = function (event) {
-    if (!tip || tip.style.display !== 'block') return;
-    const gap = 16;
-    let x = event.clientX + gap;
-    let y = event.clientY + gap;
-    if (x + tip.offsetWidth > window.innerWidth - 4) x = event.clientX - tip.offsetWidth - gap;
-    if (y + tip.offsetHeight > window.innerHeight - 4) y = event.clientY - tip.offsetHeight - gap;
-    tip.style.left = Math.max(4, x) + 'px';
-    tip.style.top = Math.max(4, y) + 'px';
-  };
+  // The hover (the box, a line chart's crosshair and dots) is php/Chart/standalone.js, which charts bring with them
   const hideTip = function () {
-    if (tip) tip.style.display = 'none';
-  };
-  // Leaving the drawing takes the crosshair and dots with it
-  const clearHover = function () {
-    hideTip();
-    const layer = this.querySelector('g.sc-hover');
-    if (layer) layer.replaceChildren();
+    $('.sc-chart-tip').hide();
   };
   const open = function (event) {
     event.preventDefault();
@@ -2440,10 +2322,6 @@ function setupCharts() {
     loadPage.call(this, this.getAttribute('data-href'));
   };
   $(document)
-    .on('mouseenter', '.sc-chart [data-tip]', showTip)
-    .on('mousemove', '.sc-chart [data-tip]', moveTip)
-    .on('mouseleave', '.sc-chart [data-tip]', hideTip)
-    .on('mouseleave', '.sc-chart svg', clearHover)
     .on('click', '.sc-chart [data-href], .sc-stat[data-href], .sc-bargauge[data-href]', open)
     .on('keydown', '.sc-chart [data-href], .sc-stat[data-href], .sc-bargauge[data-href]', function (event) {
       if (event.key === 'Enter' || event.key === ' ') open.call(this, event);

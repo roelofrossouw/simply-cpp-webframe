@@ -113,3 +113,25 @@
     $Jobs->OpenSeries("$Popup?what={job}", Open::Popup);
     $Card->AddChild($Jobs);
   }
+
+  // Many series (a job queue's 125 job names, 6 hours in 90-second steps): one path per line and one block of data
+  // for the hover, so it stays a few hundred KB; Top(10) keeps the ten highest and adds the rest up as Others
+  Page::AddContent($Card = new Card());
+  $Card->AddHeader('Many series');
+  $Card->AddParagraph('125 series of 240 points each. The pointer shows the 25 highest at that time (and how many more). Top(10, \'max\') keeps the ten highest and adds the rest up as "Others".');
+  $Start = intdiv(time(), 90) * 90 - 239 * 90;
+  $Jobs = (new LineChart('All 125 jobs'))->Time();
+  $Ten = (new LineChart('Top(10): the ten busiest, the rest as Others'))->Time();
+  for ($Job = 0; $Job < 125; $Job++)
+  {
+    $Points = [];
+    for ($Point = 0; $Point < 240; $Point++)
+    {
+      $Points[$Start + 90 * $Point] = round(abs(sin($Point / 20 + $Job)) * (1 + $Job % 13) * 6, 2);
+    }
+    $Jobs->AddSeries(sprintf('job_%03d', $Job), $Points)->Labels = ['name' => sprintf('job_%03d', $Job)];
+    $Ten->AddSeries(sprintf('job_%03d', $Job), $Points);
+  }
+  $Jobs->OpenSeries("$Popup?what={name}", Open::Popup);
+  $Card->AddChild($Jobs);
+  $Card->AddChild($Ten->Top(10));

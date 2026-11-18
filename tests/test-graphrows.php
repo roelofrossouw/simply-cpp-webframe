@@ -50,7 +50,7 @@
     "each bar carries its category and series, as One Web's drill-down reads them");
   Check(str_contains($Html, '>Oct 2026</text>'), 'the categories as text');
   Check(str_contains($Html, '<title>Nov 2026' . "\n" . 'Claims: 45</title>'), "the browser's own tooltip");
-  Check(!str_contains($Html, 'data-href') && !str_contains($Html, 'role="link"'), 'no sc-webframe links outside its app');
+  Check(!str_contains(preg_replace('/<script\b.*?<\/script>/s', '', $Html), 'data-href') && !str_contains($Html, 'role="link"'), 'no sc-webframe links outside its app');
   Check(str_contains($Html, 'style="max-width:100%;height:auto"'), 'the drawing scales without style.css');
   Check(str_contains($Html, 'display:flex') && str_contains($Html, 'display:inline-block;width:.75em'), 'the legend is laid out without style.css');
   Check(str_contains($Html, '>Premium</span>') && str_contains($Html, '>Claims</span>'), 'the series named');
@@ -66,12 +66,14 @@
     'the first chart of a request brings the hover script, later ones don\'t');
   // Only the series the rows have; unnamed ones numbered
   $Html = (string)(new Chart\LineChart())->FromGraphRows([['category1' => 1, '_graph_value' => 5], ['category1' => 2, '_graph_value' => 6]]);
-  Check(substr_count($Html, '<polyline') === 1 && !str_contains($Html, 'sc-chart-legend'), 'one series: one line, no legend');
+  Check(substr_count($Html, '<path d="M') === 1 && !str_contains($Html, 'sc-chart-legend'), 'one series: one line, no legend');
   $Pie = (string)Chart\Chart::ForGraphType(1)->FromGraphRows($Rows, ['Premium'])->ItemAttributes(['value' => '{category1}']);
   Check(substr_count($Pie, 'class="sc-slice"') === 3 && str_contains($Pie, 'value="202609"'), 'a pie: a slice per category, from the first value');
   $Line = (string)Chart\Chart::ForGraphType(3)->FromGraphRows($Rows, ['Premium', 'Claims'])->ItemAttributes(['value' => '{category1}', 'data' => 'bar{number}']);
-  Check(str_contains($Line, 'class="sc-band" x=') && preg_match('/class="sc-band"[^>]*value="202609"/', $Line) && !str_contains($Line, '{number}'),
-    "a line chart's strips carry their category, and no unfilled placeholder");
+  preg_match('/<script type="application\/json" class="sc-chart-data">(.*?)<\/script>/s', $Line, $Found);
+  $Data = json_decode($Found[1] ?? 'null', true);
+  Check(($Data['attrs']['value'] ?? null) === ['202609', '202610', '202611'] && !isset($Data['attrs']['data']) && !str_contains($Line, '{number}'),
+    "a line chart's times carry their category for the drill-down (the script puts it on the area), and no unfilled placeholder");
   // Open() still works outside the app: SVG links
   $Html = (string)(new Chart\BarChart())->FromGraphRows($Rows, ['Premium'])->Open('/report.php?month={category1}&broker={broker}');
   Check(str_contains($Html, '<a href="/report.php?month=202609&amp;broker=A">'), 'Open() gives SVG links, with the row\'s columns');

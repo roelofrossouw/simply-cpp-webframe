@@ -48,64 +48,94 @@
     protected function Plot(): string
     {
       $Count = count($this->Labels);
-      $Dots = $this->Dots ?? $Count <= 40;
+      // Dots only where they stay few: on a short line, and not on a hundred of them
+      $Dots = $this->Dots ?? ($Count <= 40 && $Count * count($this->Series) <= 400);
       $Gap = $this->GapAfter();
-      $Bottom = self::Coordinate($this->Y(max($this->Scale->Low, min(0.0, $this->Scale->High))));
+      $Bottom = (int)round($this->Y(max($this->Scale->Low, min(0.0, $this->Scale->High))));
+      $Xs = [];
+      for ($Index = 0; $Index < $Count; $Index++)
+      {
+        $Xs[$Index] = (int)round($this->X($Index));
+      }
       $Svg = '';
+      $Hits = [];
+      // With OpenSeries() each line is also a wide see-through stroke to click: its shape then goes in <defs> once and
+      // both draw it (<use>), rather than the shape twice
+      $Linked = !empty($this->LinkAttributes(null, 0, ''));
+      $Prefix = 'sc' . bin2hex(random_bytes(4)) . '-';
+      $Shapes = '';
       foreach ($this->Series as $Number => $Series)
       {
         $Color = self::Escape($this->ColorOf($Number));
-        // A run of values without gaps is a line of its own
-        $Runs = [];
-        $Run = [];
-        for ($Index = 0; $Index < $Count; $Index++)
+        // A run of values without gaps is a line of its own: one path, whole pixels, each point a step from the last
+        $Paths = [];
+        $Path = '';
+        $Last = null;
+        $First = null;
+        $Points = 0;
+        $Circles = '';
+        for ($Index = 0; $Index <= $Count; $Index++)
         {
-          $Value = $Series->Values[$Index] ?? null;
+          $Value = $Index < $Count ? ($Series->Values[$Index] ?? null) : null;
+          $Break = $Value === null || ($Last !== null && $Gap !== null && $this->Times[$Index] - $this->Times[$Index - 1] > $Gap);
+          if ($Break && $Path !== '')
+          {
+            $Paths[] = [$Path, $First, $Last, $Points];
+            $Path = '';
+            $Last = null;
+            $Points = 0;
+          }
           if ($Value === null)
           {
-            if ($Run)
-            {
-              $Runs[] = $Run;
-            }
-            $Run = [];
             continue;
           }
-          // With Time(): no line across a stretch without samples
-          if ($Run && $Gap !== null && $this->Times[$Index] - $this->Times[$Index - 1] > $Gap)
+          $Point = [$Xs[$Index], (int)round($this->Y($Value))];
+          if ($Last === null)
           {
-            $Runs[] = $Run;
-            $Run = [];
+            $Path = 'M' . $Point[0] . ' ' . $Point[1] . 'l';
+            $First = $Point;
           }
-          $Run[] = [$this->X($Index), $this->Y($Value)];
-        }
-        if ($Run)
-        {
-          $Runs[] = $Run;
+          else
+          {
+            $Path .= ($Points > 1 ? ' ' : '') . ($Point[0] - $Last[0]) . ' ' . ($Point[1] - $Last[1]);
+          }
+          $Last = $Point;
+          $Points++;
+          if ($Dots)
+          {
+            $Circles .= '<circle cx="' . $Point[0] . '" cy="' . $Point[1] . '" r="2.5" fill="' . $Color . '"/>';
+          }
         }
         $Svg .= '<g data-series="' . $Number . '">';
         $Lines = [];
-        foreach ($Runs as $Points)
+        foreach ($Paths as [$Line, $Start, $End, $Many])
         {
-          $Line = implode(' ', array_map(fn(array $Point) => self::Coordinate($Point[0]) . ',' . self::Coordinate($Point[1]), $Points));
-          if ($this->Area && count($Points) > 1)
+          $Line = $Many > 1 ? $Line : rtrim($Line, 'l');
+          if ($this->Area && $Many > 1)
           {
-            $Svg .= '<polygon points="' . self::Coordinate($Points[0][0]) . ',' . $Bottom . ' ' . $Line . ' ' .
-              self::Coordinate(end($Points)[0]) . ',' . $Bottom . '" fill="' . $Color . '" fill-opacity="0.12" stroke="none"/>';
+            $Svg .= '<path d="' . $Line . 'L' . $End[0] . ' ' . $Bottom . 'L' . $Start[0] . ' ' . $Bottom . 'Z" fill="' . $Color . '" fill-opacity="0.12" stroke="none"/>';
           }
-          $Svg .= '<polyline points="' . $Line . '" fill="none" stroke="' . $Color . '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
-          $Lines[] = $Line;
-          if ($Dots || count($Points) == 1)
+          if ($Many > 1 && $Linked)
           {
-            foreach ($Points as [$X, $Y])
-            {
-              $Svg .= '<circle cx="' . self::Coordinate($X) . '" cy="' . self::Coordinate($Y) . '" r="2.5" fill="' . $Color . '"/>';
-            }
+            $Id = $Prefix . $Number . '-' . count($Lines);
+            $Shapes .= '<path id="' . $Id . '" d="' . $Line . '"/>';
+            $Svg .= '<use href="#' . $Id . '" fill="none" stroke="' . $Color . '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+            $Lines[] = '#' . $Id;
+          }
+          elseif ($Many > 1)
+          {
+            $Svg .= '<path d="' . $Line . '" fill="none" stroke="' . $Color . '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+          }
+          elseif (!$Dots)
+          {
+            // A point on its own shows as a dot
+            $Svg .= '<circle cx="' . $Start[0] . '" cy="' . $Start[1] . '" r="2.5" fill="' . $Color . '"/>';
           }
         }
-        $Svg .= '</g>';
+        $Svg .= $Circles . '</g>';
         $Hits[$Number] = $Lines;
       }
-      return $Svg . $this->Bands() . $this->SeriesLinks($Hits ?? []);
+      return ($Shapes !== '' ? '<defs>' . $Shapes . '</defs>' : '') . $Svg . $this->SeriesLinks($Hits) . $this->HoverArea($Xs);
     }
 
     // With Time(): how long between samples counts as a gap: more than twice the usual step (the median)
@@ -136,39 +166,75 @@
       {
         foreach ($Lines as $Line)
         {
-          $Svg .= $this->Item('polyline', ['class' => 'sc-series-link', 'points' => $Line, 'fill' => 'none', 'stroke' => '#888',
+          $Svg .= $this->Item('use', ['class' => 'sc-series-link', 'href' => $Line, 'fill' => 'none', 'stroke' => '#888',
             'stroke-opacity' => '0', 'stroke-width' => '10', 'pointer-events' => 'stroke'], $this->Series[$Number]->Name, null, $Number);
         }
       }
       return $Svg . '</g>';
     }
 
-    // A see-through strip over each label, for its tooltip and link: from halfway to the label before to halfway to the
-    // one after
-    private function Bands(): string
+    // One see-through area over the plot for the hover (Chart/standalone.js), and one block of data for it: where each
+    // label lies across, its text, each series' name, colour and value per label (written as Value() writes them, by
+    // the script unless Format() is set), the scale (for the dots), and per label its page (Open()) and the attributes
+    // an app's click reads (ItemAttributes()), which the script puts on the area as the pointer moves
+    private function HoverArea(array $Xs): string
     {
       $Count = count($this->Labels);
-      $Svg = '<g class="sc-bands">';
+      $Data = ['x' => array_values($Xs), 'head' => [], 'series' => [], 'v' => [],
+        'y' => ['low' => $this->Scale->Low, 'high' => $this->Scale->High, 'top' => self::TOP, 'bottom' => $this->Height - self::BOTTOM]];
       for ($Index = 0; $Index < $Count; $Index++)
       {
-        $X = $this->X($Index);
-        $Left = $Index > 0 ? ($this->X($Index - 1) + $X) / 2 : $this->Left;
-        $Right = $Index < $Count - 1 ? ($X + $this->X($Index + 1)) / 2 : $this->Left + $this->PlotWidth();
-        // For the hover: where the label lies across (the crosshair), and each series' value and point (the box, the dots)
+        $Data['head'][] = $this->LabelText($Index);
+      }
+      foreach ($this->Series as $Number => $Series)
+      {
+        $Data['series'][] = ['n' => $Series->Name, 'c' => $this->ColorOf($Number)];
         $Values = [];
-        $Ys = [];
-        foreach ($this->Series as $Number => $Series)
+        $Texts = [];
+        for ($Index = 0; $Index < $Count; $Index++)
         {
-          $Values[$Number] = $Series->Values[$Index] ?? null;
-          if ($Values[$Number] !== null)
+          $Value = $Series->Values[$Index] ?? null;
+          // Rounded as the box shows them: two decimals under 10, one under 1000, none above
+          $Values[] = $Value === null ? null : round($Value, abs($Value) < 10 ? 2 : (abs($Value) < 1000 ? 1 : 0));
+          if ($this->Formatted())
           {
-            $Ys[$Number] = $this->Y($Values[$Number]);
+            $Texts[] = $this->Value($Value);
           }
         }
-        $Svg .= $this->Item('rect', ['class' => 'sc-band', 'x' => $Left, 'y' => self::TOP, 'width' => max(1.0, $Right - $Left),
-          'height' => $this->Height - self::TOP - self::BOTTOM, 'fill' => '#888', 'fill-opacity' => '0', 'data-x' => round($X, 1),
-          'data-sort' => 'desc'] + $this->HoverAttributes($Index, $Values, $Ys), $this->LabelTip($Index), $Index);
+        $Data['v'][] = $Values;
+        if ($this->Formatted())
+        {
+          $Data['f'][] = $Texts;
+        }
       }
-      return $Svg . '</g>';
+      $Hrefs = [];
+      $Attributes = [];
+      for ($Index = 0; $Index < $Count; $Index++)
+      {
+        if (($Href = $this->LabelHref($Index)) !== null)
+        {
+          $Hrefs[$Index] = $Href;
+        }
+        foreach ($this->LabelItemAttributes($Index) as $Name => $Value)
+        {
+          $Attributes[$Name][$Index] = $Value;
+        }
+      }
+      if ($Hrefs)
+      {
+        $Data['href'] = array_replace(array_fill(0, $Count, null), $Hrefs);
+      }
+      foreach ($Attributes as $Name => $Values)
+      {
+        $Data['attrs'][$Name] = array_replace(array_fill(0, $Count, null), $Values);
+      }
+      $Class = 'sc-hover-area' . ($Hrefs && self::InApp() && ($In = $this->OpenClass()) !== null ? ' ' . $In : '');
+      // <, > and & as \u escapes: inside an SVG in HTML a script element's text is read as markup
+      $Json = json_encode($Data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP);
+      return '<rect class="' . $Class . '" x="' . (int)floor($this->Left) . '" y="' . self::TOP . '" width="' . (int)ceil($this->PlotWidth()) . '" height="' .
+        ($this->Height - self::TOP - self::BOTTOM) . '" fill="#888" fill-opacity="0" tabindex="0" role="img" aria-label="' .
+        self::Escape('Values at each time: point at the chart, or use the arrow keys') . '"/>' .
+        // In the SVG, as a script element of its own type: no browser runs it, and it travels with the drawing
+        '<script type="application/json" class="sc-chart-data">' . $Json . '</script>';
     }
   }
