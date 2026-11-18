@@ -187,6 +187,125 @@
     }
 
     /**
+     * A figure over a whole period, from a range query in buckets rather than one instant query over the period: the
+     * query is asked for each $Bucket ('1h', '5m') with its window [$__interval] (one bucket), and each series' buckets
+     * are combined in PHP: 'sum' (counts, totals), 'max', 'min', or 'last'. Results as Instant() gives them, highest
+     * first. For an average, divide a sum by a count (PeriodRows() does it).
+     *
+     *   $Loki->PeriodValues('sum by (name) (count_over_time({job="oneweb"} | json [$__interval]))', $Week, 'sum');
+     *
+     * @return array<int, array{labels: array<string, string>, value: float|null}>
+     */
+    public function PeriodValues(string $Query, TimeRange $Range, string $How = 'sum', string $Bucket = '1h'): array
+    {
+      $Values = $this->PeriodValuesMany([$Query => [$Query, $How]], $Range, $Bucket)[$Query];
+      if ($Values instanceof \RuntimeException)
+      {
+        throw $Values;
+      }
+      return $Values;
+    }
+
+    /**
+     * Table rows of figures over a period, each from bucketed range queries (see PeriodValues()), run in parallel and
+     * joined by labels: $Columns are column => [query, how], or column => ['avg', sum column, count column] for an
+     * average of two others (the sum's total divided by the count's). The first column decides the rows and their
+     * order (highest first); $Top keeps that many. One query that fails throws.
+     *
+     *   $Rows = $Loki->PeriodRows([
+     *     'requests' => ['sum by (name) (count_over_time({job="oneweb"} | json [$__interval]))', 'sum'],
+     *     'total_ms' => ['sum by (name) (sum_over_time({job="oneweb"} | json | unwrap ms [$__interval]))', 'sum'],
+     *     'max_ms' => ['max by (name) (max_over_time({job="oneweb"} | json | unwrap ms [$__interval]))', 'max'],
+     *     'avg_ms' => ['avg', 'total_ms', 'requests'],
+     *   ], $Week, Top: 10);
+     *
+     * @param array<string, array{0: string, 1?: string, 2?: string}> $Columns
+     * @return array<int, array<string, mixed>>
+     */
+    public function PeriodRows(array $Columns, TimeRange $Range, string $Bucket = '1h', ?int $Top = null): array
+    {
+      $Queries = array_filter($Columns, fn(array $Column) => $Column[0] !== 'avg');
+      $Rows = [];
+      $First = true;
+      foreach ($this->PeriodValuesMany($Queries, $Range, $Bucket) as $Column => $Values)
+      {
+        if ($Values instanceof \RuntimeException)
+        {
+          throw $Values;
+        }
+        foreach ($Values as $Value)
+        {
+          $Labels = $Value['labels'];
+          unset($Labels['__name__']);
+          ksort($Labels);
+          $Key = json_encode($Labels);
+          if (!isset($Rows[$Key]))
+          {
+            if (!$First)
+            {
+              continue;
+            }
+            $Rows[$Key] = $Labels;
+          }
+          $Rows[$Key][$Column] = $Value['value'];
+        }
+        $First = false;
+      }
+      foreach ($Rows as &$Row)
+      {
+        foreach ($Columns as $Column => $Spec)
+        {
+          if ($Spec[0] === 'avg')
+          {
+            $Sum = $Row[$Spec[1] ?? ''] ?? null;
+            $Count = $Row[$Spec[2] ?? ''] ?? null;
+            $Row[$Column] = $Sum !== null && $Count ? $Sum / $Count : null;
+          }
+          $Row[$Column] ??= null;
+        }
+      }
+      unset($Row);
+      $Rows = array_values($Rows);
+      $Order = (string)array_key_first($Columns);
+      usort($Rows, fn(array $A, array $B) => ($B[$Order] ?? -INF) <=> ($A[$Order] ?? -INF));
+      return $Top !== null ? array_slice($Rows, 0, max(0, $Top)) : $Rows;
+    }
+
+    // Bucketed period figures for several queries at once: key => values or the RuntimeException
+    private function PeriodValuesMany(array $Queries, TimeRange $Range, string $Bucket): array
+    {
+      $Step = TimeRange::Seconds($Bucket);
+      // A bucket's point at t counts (t - step, t]: the first at the period's start plus a step covers it from its start
+      $Buckets = TimeRange::Steps($Range->Start + $Step, max($Range->Start + $Step, $Range->End), $Step);
+      $Answers = $this->Ranges(array_map(fn(array $Spec) => $Spec[0], $Queries), $Buckets);
+      $Results = [];
+      foreach ($Answers as $Key => $Series)
+      {
+        if ($Series instanceof \RuntimeException)
+        {
+          $Results[$Key] = $Series;
+          continue;
+        }
+        $How = $Queries[$Key][1] ?? 'sum';
+        $Values = [];
+        foreach ($Series as $One)
+        {
+          $Points = array_values(array_filter($One['points'], fn($Value) => $Value !== null));
+          $Values[] = ['labels' => $One['labels'], 'value' => $Points ? match ($How)
+          {
+            'max' => max($Points),
+            'min' => min($Points),
+            'last' => end($Points),
+            default => array_sum($Points),
+          } : null];
+        }
+        usort($Values, fn(array $A, array $B) => ($B['value'] ?? -INF) <=> ($A['value'] ?? -INF));
+        $Results[$Key] = $Values;
+      }
+      return $Results;
+    }
+
+    /**
      * A range query's results as the chart's series, its labels the times (the chart is switched to Time()), each named
      * by $Legend: Grafana's {{label}} form ('{{instance}} {{route}}'), or by default the result's labels. A series
      * keeps its labels for OpenSeries()'s and Open()'s placeholders. When the query fails, the chart says why. A range

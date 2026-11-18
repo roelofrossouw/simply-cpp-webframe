@@ -41,6 +41,18 @@
     'Instants(): side by side, one failing doesn\'t stop the other');
   Same(['apache1', 'apache2', 'apache10'], $Loki->LabelValues('host', '{job="oneweb"}'), 'LabelValues(), in natural order');
 
+  // Totals over a period from buckets (the stand-in answers every range query with points 1 and 2 for host apache1)
+  Same([['labels' => ['host' => 'apache1'], 'value' => 3.0]], $Loki->PeriodValues('sum by (host) (count_over_time({job="oneweb"}[$__interval]))', $Day),
+    'PeriodValues(): the buckets summed');
+  Same(2.0, $Loki->PeriodValues('max by (host) (max_over_time({job="oneweb"} | unwrap ms [$__interval]))', $Day, 'max')[0]['value'], 'max: the largest bucket');
+  Same([['host' => 'apache1', 'requests' => 3.0, 'total' => 3.0, 'avg' => 1.0]], $Loki->PeriodRows([
+    'requests' => ['sum by (host) (count_over_time({job="oneweb"}[$__interval]))', 'sum'],
+    'total' => ['sum by (host) (sum_over_time({job="oneweb"} | unwrap ms [$__interval]))', 'sum'],
+    'avg' => ['avg', 'total', 'requests'],
+  ], $Day, '1h', 10), 'PeriodRows(): columns from buckets, an average of two of them');
+  $Steps = TimeRange::Steps(100, 3700, 3600);
+  Check($Steps->Start === 100 && $Steps->End === 3700 && $Steps->Step === 3600, 'TimeRange::Steps(): exact, not rounded');
+
   // A chart from a range query, and a failure said on it
   $Chart = new LineChart();
   $Loki->AddTo($Chart, 'sum by (host) (count_over_time({job="oneweb"}[$__interval]))', $Day, '{{host}}');

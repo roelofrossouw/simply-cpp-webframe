@@ -49,6 +49,18 @@
     }
 
     /**
+     * From $Start to $End in steps of exactly $Step seconds (not rounded; the ends as given): e.g. buckets for totals
+     */
+    public static function Steps(int $Start, int $End, int $Step): self
+    {
+      if ($Step < 1 || $End < $Start)
+      {
+        throw new \InvalidArgumentException('a time range needs a step and an end not before its start');
+      }
+      return new self($Start, $End, $Step);
+    }
+
+    /**
      * A duration in seconds: a number with s, m, h, d or w ('15m', '6h'), as Prometheus writes them
      */
     public static function Seconds(string $Duration): int
