@@ -188,7 +188,9 @@
 
     /**
      * A figure over a whole period, from a range query in buckets rather than one instant query over the period: the
-     * query is asked for each $Bucket ('1h', '5m') with its window [$__interval] (one bucket), and each series' buckets
+     * query is asked for each $Bucket ('1h', '5m'; by default about 96 to the period) with its window [$__interval] (one
+     * bucket, on multiples of the bucket as Loki aligns them; the part-buckets at the period's ends asked as instant
+     * queries over just their seconds, so a sum is exact), and each series' buckets
      * are combined in PHP: 'sum' (counts, totals), 'max', 'min', or 'last'. Results as Instant() gives them, highest
      * first. For an average, divide a sum by a count (PeriodRows() does it).
      *
@@ -196,7 +198,7 @@
      *
      * @return array<int, array{labels: array<string, string>, value: float|null}>
      */
-    public function PeriodValues(string $Query, TimeRange $Range, string $How = 'sum', string $Bucket = '1h'): array
+    public function PeriodValues(string $Query, TimeRange $Range, string $How = 'sum', ?string $Bucket = null): array
     {
       $Values = $this->PeriodValuesMany([$Query => [$Query, $How]], $Range, $Bucket)[$Query];
       if ($Values instanceof \RuntimeException)
@@ -222,7 +224,7 @@
      * @param array<string, array{0: string, 1?: string, 2?: string}> $Columns
      * @return array<int, array<string, mixed>>
      */
-    public function PeriodRows(array $Columns, TimeRange $Range, string $Bucket = '1h', ?int $Top = null): array
+    public function PeriodRows(array $Columns, TimeRange $Range, ?string $Bucket = null, ?int $Top = null): array
     {
       $Queries = array_filter($Columns, fn(array $Column) => $Column[0] !== 'avg');
       $Rows = [];
@@ -272,26 +274,76 @@
     }
 
     // Bucketed period figures for several queries at once: key => values or the RuntimeException
-    private function PeriodValuesMany(array $Queries, TimeRange $Range, string $Bucket): array
+    private function PeriodValuesMany(array $Queries, TimeRange $Range, ?string $Bucket): array
     {
-      $Step = TimeRange::Seconds($Bucket);
-      // A bucket's point at t counts (t - step, t]: the first at the period's start plus a step covers it from its start
-      $Buckets = TimeRange::Steps($Range->Start + $Step, max($Range->Start + $Step, $Range->End), $Step);
-      $Answers = $this->Ranges(array_map(fn(array $Spec) => $Spec[0], $Queries), $Buckets);
-      $Results = [];
-      foreach ($Answers as $Key => $Series)
+      // By default about 96 buckets, rounded as time ranges' steps are (1m, 5m, 15m, 1h, ...)
+      $Step = $Bucket !== null ? TimeRange::Seconds($Bucket) : max(60, TimeRange::Between($Range->Start, max($Range->Start + 1, $Range->End), 96)->Step);
+      // A bucket's point at t counts (t - step, t]. Loki puts a range's points on multiples of its step, so the whole
+      // buckets inside the period end from $First to $Last; the part-buckets left at its ends, (Start, $From] and
+      // ($Last, End], are each asked as an instant query over just those seconds, so a sum is exact
+      $From = (int)ceil($Range->Start / $Step) * $Step;
+      $First = $From + $Step;
+      $Last = intdiv($Range->End, $Step) * $Step;
+      $Whole = $Last >= $First;
+      $Requests = [];
+      foreach ($Queries as $Key => $Spec)
       {
-        if ($Series instanceof \RuntimeException)
+        if ($Whole)
         {
-          $Results[$Key] = $Series;
-          continue;
+          $Requests["$Key\0range"] = $this->RangeRequest($Spec[0], TimeRange::Steps($First, $Last, $Step));
         }
-        $How = $Queries[$Key][1] ?? 'sum';
-        $Values = [];
-        foreach ($Series as $One)
+        // The ends (the whole period when it holds no whole bucket)
+        $Edges = $Whole ? ['head' => [$Range->Start, $From], 'tail' => [$Last, $Range->End]] : ['head' => [$Range->Start, $Range->End]];
+        foreach ($Edges as $Edge => [$Since, $Until])
         {
-          $Points = array_values(array_filter($One['points'], fn($Value) => $Value !== null));
-          $Values[] = ['labels' => $One['labels'], 'value' => $Points ? match ($How)
+          if ($Until > $Since)
+          {
+            $Requests["$Key\0$Edge"] = ['query', ['query' => strtr($Spec[0], ['$__interval' => ($Until - $Since) . 's']), 'time' => $Until]];
+          }
+        }
+      }
+      $Answers = $this->CallMany($Requests);
+      $Results = [];
+      foreach ($Queries as $Key => $Spec)
+      {
+        $How = $Spec[1] ?? 'sum';
+        $Parts = [];   // label set => its values, in time order
+        $Labels = [];
+        foreach (['head', 'range', 'tail'] as $Part)
+        {
+          $Answer = $Answers["$Key\0$Part"] ?? null;
+          if ($Answer === null)
+          {
+            continue;
+          }
+          if ($Answer instanceof \RuntimeException)
+          {
+            $Results[$Key] = $Answer;
+            continue 2;
+          }
+          $Series = $Part === 'range' ? self::Matrix($Answer) : array_map(fn(array $One) => ['labels' => $One['labels'], 'points' => [$One['value']]],
+            self::Vector($Answer));
+          foreach ($Series as $One)
+          {
+            $Name = $One['labels'];
+            unset($Name['__name__']);
+            ksort($Name);
+            $Id = json_encode($Name);
+            $Labels[$Id] ??= $One['labels'];
+            foreach ($One['points'] as $Time => $Value)
+            {
+              if ($Value !== null && ($Part !== 'range' || ($Time >= $First && $Time <= $Last)))
+              {
+                $Parts[$Id][] = $Value;
+              }
+            }
+          }
+        }
+        $Values = [];
+        foreach ($Labels as $Id => $Set)
+        {
+          $Points = $Parts[$Id] ?? [];
+          $Values[] = ['labels' => $Set, 'value' => $Points ? match ($How)
           {
             'max' => max($Points),
             'min' => min($Points),

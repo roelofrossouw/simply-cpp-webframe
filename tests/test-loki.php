@@ -29,7 +29,7 @@
   Same(4512.0, $Loki->Value('sum(count_over_time({job="oneweb"}[$__range]))', null, $Day), 'Value()');
   Same(4512, $Loki->LineCount('{job="oneweb"}', $Day), 'LineCount(): sum(count_over_time()) over the range');
   $Series = $Loki->Range('sum by (host) (count_over_time({job="oneweb"}[$__interval]))', $Day);
-  Same([1700000000 => 1.0, 1700000060 => 2.0], $Series[0]['points'], 'Range(): a matrix, as Prometheus gives');
+  Same([$Day->Start => 1.0, $Day->Start + $Day->Step => 2.0], $Series[0]['points'], 'Range(): a matrix, as Prometheus gives');
   $Rows = $Loki->JoinedRows([
     'requests' => 'topk(10, sum by (name) (count_over_time({job="oneweb"} | json [$__range])))',
     'ms' => 'sum by (name) (sum_over_time({job="oneweb"} | json | unwrap ms [$__range]))',
@@ -41,15 +41,20 @@
     'Instants(): side by side, one failing doesn\'t stop the other');
   Same(['apache1', 'apache2', 'apache10'], $Loki->LabelValues('host', '{job="oneweb"}'), 'LabelValues(), in natural order');
 
-  // Totals over a period from buckets (the stand-in answers every range query with points 1 and 2 for host apache1)
-  Same([['labels' => ['host' => 'apache1'], 'value' => 3.0]], $Loki->PeriodValues('sum by (host) (count_over_time({job="oneweb"}[$__interval]))', $Day),
-    'PeriodValues(): the buckets summed');
-  Same(2.0, $Loki->PeriodValues('max by (host) (max_over_time({job="oneweb"} | unwrap ms [$__interval]))', $Day, 'max')[0]['value'], 'max: the largest bucket');
+  // Totals over a period from buckets (the stand-in answers a range query with points 1 and 2, an edge with 10)
+  $Hours = TimeRange::Steps(1_699_999_200, 1_700_006_400, 60);   // on whole hours: buckets only
+  Same([['labels' => ['host' => 'apache1'], 'value' => 3.0]], $Loki->PeriodValues('sum by (host) (count_over_time({job="oneweb"}[$__interval]))', $Hours, 'sum', '1h'),
+    'PeriodValues(): whole buckets summed');
+  $Unaligned = TimeRange::Steps(1_699_999_200 + 600, 1_700_006_400 + 300, 60);
+  Same(21.0, $Loki->PeriodValues('sum by (host) (count_over_time({job="oneweb"}[$__interval]))', $Unaligned, 'sum', '1h')[0]['value'],
+    'the one whole bucket inside (1; the point after it left out) and the part-buckets at both ends (10 each) as instant queries');
+  Same(10.0, $Loki->PeriodValues('max by (host) (max_over_time({job="oneweb"} | unwrap ms by (host) [$__interval]))', $Unaligned, 'max', '1h')[0]['value'],
+    'max: the largest of the buckets and the ends');
   Same([['host' => 'apache1', 'requests' => 3.0, 'total' => 3.0, 'avg' => 1.0]], $Loki->PeriodRows([
     'requests' => ['sum by (host) (count_over_time({job="oneweb"}[$__interval]))', 'sum'],
-    'total' => ['sum by (host) (sum_over_time({job="oneweb"} | unwrap ms [$__interval]))', 'sum'],
+    'total' => ['sum by (host) (sum_over_time({job="oneweb"} | unwrap ms by (host) [$__interval]))', 'sum'],
     'avg' => ['avg', 'total', 'requests'],
-  ], $Day, '1h', 10), 'PeriodRows(): columns from buckets, an average of two of them');
+  ], $Hours, '1h', 10), 'PeriodRows(): columns from buckets, an average of two of them');
   $Steps = TimeRange::Steps(100, 3700, 3600);
   Check($Steps->Start === 100 && $Steps->End === 3700 && $Steps->Step === 3600, 'TimeRange::Steps(): exact, not rounded');
 

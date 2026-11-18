@@ -18,6 +18,11 @@
     {
       $Result = [['metric' => ['name' => 'B'], 'value' => [1, '30']], ['metric' => ['name' => 'A'], 'value' => [1, '50']]];
     }
+    elseif (str_contains($Q, 'by (host)'))
+    {
+      // An edge of a bucketed period: 10, whatever its window
+      $Result = [['metric' => ['host' => 'apache1'], 'value' => [1, '10']]];
+    }
     elseif (str_contains($Q, 'unwrap ms'))
     {
       $Result = [['metric' => ['name' => 'A'], 'value' => [1, '1200.5']], ['metric' => ['name' => 'B'], 'value' => [1, '900']], ['metric' => ['name' => 'C'], 'value' => [1, '5']]];
@@ -41,7 +46,8 @@
       return;
     }
     echo json_encode(['status' => 'success', 'data' => ['resultType' => 'matrix', 'result' => [
-      ['metric' => ['host' => 'apache1'], 'values' => [[1700000000, '1'], [1700000060, '2']]]]]] + $Echo);
+      // Two points from the start asked for, a step apart, as Loki places them
+      ['metric' => ['host' => 'apache1'], 'values' => [[(int)($Query['start'] ?? 0), '1'], [(int)($Query['start'] ?? 0) + (int)($Query['step'] ?? 60), '2']]]]]] + $Echo);
     return;
   }
   if (preg_match('#^/loki/api/v1/label/(\w+)/values$#', $Path, $Match))

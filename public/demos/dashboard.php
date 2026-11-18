@@ -1,13 +1,14 @@
 <?php
   require_once __DIR__ . '/_demo.php';
 
-  use Chart\{BarChart, BarGauge, Dashboard, Heatmap, LineChart, Open, PieChart, Prometheus, Stat, StateTimeline, Table};
+  use Chart\{BarChart, BarGauge, Dashboard, Heatmap, LineChart, Logs, Loki, Open, PieChart, Prometheus, Stat, StateTimeline, Table};
 
   Config::Init(Access: Config::FrameworkURL(DEMOS));
 
   // A dashboard (Chart\Dashboard): a bar with a variable, the time range and the refresh, then rows of panels. The
   // made-up figures follow the range and the server chosen; with the site's settings naming a Prometheus
-  // (prometheus.url) a row of its metrics follows, its server list from Prometheus. Every item opens chart-item.php.
+  // (prometheus.url) a row of its metrics follows, its server list from Prometheus; with a Loki (loki.url) a row of
+  // a log's figures and latest lines follows, the log chosen by its job. Every item opens chart-item.php.
   $Popup = Demo('chart-item.php');
   $Dashboard = new Dashboard('Mail servers', Range: '24h', Refresh: 0);
   $Server = $Dashboard->Variable('server', 'Server', ['smtp1' => 'smtp1', 'smtp2' => 'smtp2', 'mail1' => 'mail1'], All: true);
@@ -154,6 +155,71 @@
     $Prometheus->AddTo($Up, "sum by (job) (up{{$Matcher}})", $Dashboard->Range(), '{{job}}');
     $Up->OpenSeries("$Popup?what={job}", Open::Popup);
     $Dashboard->Add($Up, 6);
+  }
+
+  // Loki, when the site names one: a log chosen by its job label, its lines per minute by level (Loki's detected_level,
+  // so nothing needs parsing), the range's figures from buckets added up, and its latest lines
+  if (!empty(Config::Get('loki.url')))
+  {
+    $Loki = new Loki();
+    try
+    {
+      $Jobs = $Loki->LabelValues('job', null, '24h');
+    }
+    catch (RuntimeException)
+    {
+      $Jobs = [];
+    }
+    $Job = $Dashboard->Variable('job', 'Log', $Jobs);
+    $Dashboard->Row('From Loki');
+    if ($Job === '')
+    {
+      $Dashboard->Add(new Stat('Loki', $Jobs === [] ? 'not answering' : 'no logs'), 6);
+    }
+    else
+    {
+      $Selector = '{job="' . addcslashes($Job, '"\\') . '"}';
+      $Range = $Dashboard->Range();
+      // Figures over the range from buckets added up: hours for a long range, five minutes for a short one
+      $Bucket = $Range->End - $Range->Start > 6 * 3600 ? '1h' : '5m';
+      try
+      {
+        $Levels = $Loki->PeriodValues("sum by (detected_level) (count_over_time($Selector [\$__interval]))", $Range, 'sum', $Bucket);
+        $Now = $Loki->Value("sum(count_over_time($Selector [5m]))");
+        $Dashboard->Add((new Stat('Lines, ' . $Dashboard->RangeName(), array_sum(array_column($Levels, 'value'))))
+          ->Open("$Popup?what=" . rawurlencode($Job), Open::Popup), 3);
+        $Dashboard->Add(new Stat('Lines, last 5 minutes', $Now ?? 0), 3);
+        $ByLevel = (new PieChart('Lines by level'))->FromRows(array_map(fn(array $Value) => ['level' => $Value['labels']['detected_level'] ?? 'unknown',
+          'lines' => $Value['value']], $Levels), 'level', 'lines')->Open("$Popup?what={level}", Open::Popup);
+      }
+      catch (RuntimeException $Problem)
+      {
+        $Dashboard->Add(new Stat('Loki', 'not answering'), 6);
+        $ByLevel = null;
+      }
+      $PerMinute = new LineChart('Lines per minute, by level');
+      $Loki->AddTo($PerMinute, "sum by (detected_level) (count_over_time($Selector [\$__interval])) * 60 / " . max(1, $Range->Step), $Range,
+        '{{detected_level}}');
+      $PerMinute->Open("$Popup?what=" . rawurlencode($Job) . '&label={iso}', Open::Popup);
+      $Dashboard->Add($PerMinute, $ByLevel !== null ? 8 : 12);
+      if ($ByLevel !== null)
+      {
+        $Dashboard->Add($ByLevel, 4);
+      }
+      // The latest lines, newest first; a row expands to all its fields
+      $Lines = new Logs('Latest lines');
+      try
+      {
+        // The total from the figures above (the levels' lines added up): no second count of the whole range
+        $Lines->Lines($Loki->Lines($Selector, $Range, 100))->Total(isset($Levels) ? (int)array_sum(array_column($Levels, 'value')) : null);
+      }
+      catch (RuntimeException $Problem)
+      {
+        $Lines->Lines([]);
+      }
+      $Lines->Filter()->Open("$Popup?what=" . rawurlencode($Job) . '&label={time}', Open::Popup);
+      $Dashboard->Add($Lines, 12);
+    }
   }
 
   Page::AddContent($Dashboard);
