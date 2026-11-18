@@ -397,11 +397,7 @@
   // drawing as before, as the margins and label spacing were laid out for that size. Each chart is measured when it
   // appears (also loaded later, by AJAX) and when its width changes. Lines don't need it: they're drawn non-scaling.
   const nominal = new WeakMap();
-  const fit = function (drawing) {
-    const view = drawing.viewBox && drawing.viewBox.baseVal;
-    const width = drawing.getBoundingClientRect().width;
-    if (!view || !view.width || !width) return;
-    const stretch = Math.max(1, width / view.width);
+  const sizeText = function (drawing, stretch) {
     drawing.querySelectorAll('text').forEach(function (text) {
       if (!nominal.has(text))
       {
@@ -410,6 +406,99 @@
       }
       text.style.fontSize = (nominal.get(text) / stretch).toFixed(2) + 'px';
     });
+  };
+
+  // A chart with axes (data-plot: its plot's left, top, right and bottom) also gets the space around its labels in
+  // screen pixels, as Grafana draws it: the x labels a few pixels under the plot (under the annotation markers, drawn at
+  // their own size), the y labels a few pixels left of it, and the drawing trimmed to them and a two-pixel edge. The
+  // positions are worked out from those the server drew, so this can run again (a resize) and comes back to them when
+  // the chart isn't stretched.
+  const drawn = new WeakMap();
+  const placeLabels = function (drawing, saved, plot, stretch) {
+    const [left, top, right, bottom] = plot;
+    const px = function (pixels) { return pixels / stretch; };
+    const markers = drawing.querySelectorAll('.sc-annotation-marker');
+    markers.forEach(function (marker) {
+      const tip = (marker.getAttribute('points') || '').trim().split(/\s+/)[2];
+      const x = tip ? parseFloat(tip.split(',')[0]) : 0;
+      marker.setAttribute('transform', 'translate(' + x + ' ' + bottom + ') scale(' + (1 / stretch).toFixed(4) + ') translate(' + -x + ' ' + -bottom + ')');
+    });
+    const under = markers.length ? 12 : 3;
+    let minX = left, maxX = right, minY = top, maxY = bottom + px(markers.length ? 10 : 0);
+    drawing.querySelectorAll('.sc-x-label').forEach(function (text) {
+      // Its top `under` pixels below the plot: placed, then moved by what its box says (fonts' ascents differ)
+      text.setAttribute('y', (bottom + px(under + (nominal.get(text) || 11))).toFixed(2));
+      const box = text.getBBox();
+      if (box.height) text.setAttribute('y', (parseFloat(text.getAttribute('y')) + bottom + px(under) - box.y).toFixed(2));
+    });
+    drawing.querySelectorAll('.sc-y-label').forEach(function (text) {
+      const at = saved.at.get(text);
+      if (!at) return;
+      text.setAttribute('x', (left - px(5)).toFixed(2));
+      text.setAttribute('y', (at.y - 4 + px(0.35 * (nominal.get(text) || 11))).toFixed(2));
+    });
+    drawing.querySelectorAll('.sc-x-label, .sc-y-label').forEach(function (text) {
+      const box = text.getBBox();
+      if (!box.width) return;
+      minX = Math.min(minX, box.x);
+      maxX = Math.max(maxX, box.x + box.width);
+      minY = Math.min(minY, box.y);
+      maxY = Math.max(maxY, box.y + box.height);
+    });
+    const [x0, y0, w0, h0] = saved.view;
+    const edge = px(2);
+    const x = Math.max(x0, minX - edge), y = Math.max(y0, minY - edge);
+    return [x, y, Math.min(x0 + w0, maxX + edge) - x, Math.min(y0 + h0, maxY + edge) - y];
+  };
+  const restore = function (drawing, saved) {
+    drawing.setAttribute('viewBox', saved.view.join(' '));
+    drawing.setAttribute('height', saved.height);
+    saved.at.forEach(function (at, element) {
+      if (at.x !== null) element.setAttribute('x', at.x);
+      if (at.y !== null) element.setAttribute('y', at.y);
+    });
+    drawing.querySelectorAll('.sc-annotation-marker').forEach(function (marker) {
+      marker.removeAttribute('transform');
+    });
+  };
+  const fit = function (drawing) {
+    const width = drawing.getBoundingClientRect().width;
+    if (!width) return;
+    let saved = drawn.get(drawing);
+    if (!saved)
+    {
+      const view = drawing.viewBox && drawing.viewBox.baseVal;
+      if (!view || !view.width) return;
+      // The height attribute too: with height:auto the browser takes the shape from width and height, not the viewBox
+      saved = {view: [view.x, view.y, view.width, view.height], height: drawing.getAttribute('height'), at: new Map()};
+      drawing.querySelectorAll('.sc-x-label, .sc-y-label').forEach(function (element) {
+        saved.at.set(element, {x: element.hasAttribute('x') ? parseFloat(element.getAttribute('x')) : null,
+          y: element.hasAttribute('y') ? parseFloat(element.getAttribute('y')) : null});
+      });
+      drawn.set(drawing, saved);
+    }
+    const plot = (drawing.getAttribute('data-plot') || '').split(' ').map(Number);
+    let stretch = Math.max(1, width / saved.view[2]);
+    if (stretch === 1 || plot.length !== 4 || plot.some(isNaN))
+    {
+      if (plot.length === 4) restore(drawing, saved);
+      sizeText(drawing, stretch);
+      return;
+    }
+    // Trimming the drawing stretches it further, which makes the text smaller in it again: settle in a few rounds
+    let view = saved.view;
+    for (let round = 0; round < 4; round++)
+    {
+      sizeText(drawing, stretch);
+      view = placeLabels(drawing, saved, plot, stretch);
+      const next = Math.max(1, width / view[2]);
+      if (Math.abs(next - stretch) < 0.005) break;
+      stretch = next;
+    }
+    drawing.setAttribute('viewBox', view.map(function (n) { return n.toFixed(2); }).join(' '));
+    // The trimmed shape, so the drawing isn't letterboxed into the old one
+    const across = parseFloat(drawing.getAttribute('width')) || saved.view[2];
+    drawing.setAttribute('height', (across * view[3] / view[2]).toFixed(2));
   };
   const resized = typeof ResizeObserver === 'function' ? new ResizeObserver(function (entries) {
     entries.forEach(function (entry) {

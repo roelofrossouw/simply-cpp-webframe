@@ -88,7 +88,7 @@
       $Svg .= '</g><g class="sc-axis" fill="#666">';
       foreach ($Ticks as $Tick)
       {
-        $Svg .= '<text x="' . self::Coordinate($this->Left - 6) . '" y="' . self::Coordinate($this->Y($Tick) + 4) . '" text-anchor="end">' .
+        $Svg .= '<text class="sc-y-label" x="' . self::Coordinate($this->Left - 6) . '" y="' . self::Coordinate($this->Y($Tick) + 4) . '" text-anchor="end">' .
           self::Escape($this->Tick($Tick)) . '</text>';
       }
       if ($this->Times !== null && $this->TimeAxis())
@@ -103,10 +103,15 @@
       $Every = max(1, (int)ceil($Count / $Fit));
       for ($Index = 0; $Index < $Count; $Index += $Every)
       {
-        $Svg .= '<text x="' . self::Coordinate($this->X($Index)) . '" y="' . self::Coordinate($this->Height - 8) . '" text-anchor="middle">' .
+        $Svg .= '<text class="sc-x-label" x="' . self::Coordinate($this->X($Index)) . '" y="' . self::Coordinate($this->Height - 8) . '" text-anchor="middle">' .
           self::Escape($Texts[$Index]) . '</text>';
       }
       return $Svg . '</g>';
+    }
+
+    protected function PlotBox(): ?array
+    {
+      return [$this->Left, self::TOP, $this->Width - self::RIGHT, $this->Height - self::BOTTOM];
     }
 
     /**
@@ -156,7 +161,7 @@
       $Svg = '';
       foreach (TimeTicks::Between($First, $Last, max(2, (int)floor($this->PlotWidth() / 70))) as [$Time, $Text])
       {
-        $Svg .= '<text x="' . self::Coordinate($this->TimeX($Time)) . '" y="' . self::Coordinate($this->Height - 8) . '" text-anchor="middle">' .
+        $Svg .= '<text class="sc-x-label" x="' . self::Coordinate($this->TimeX($Time)) . '" y="' . self::Coordinate($this->Height - 8) . '" text-anchor="middle">' .
           self::Escape($Text) . '</text>';
       }
       return $Svg;

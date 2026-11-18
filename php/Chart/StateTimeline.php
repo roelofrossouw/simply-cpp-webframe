@@ -86,6 +86,11 @@
       return $this->States[self::Key($Value)] ?? [$this->Value($Value), '#adb5bd'];
     }
 
+    protected function PlotBox(): ?array
+    {
+      return [$this->Left, self::TOP, $this->Left + $this->PlotWidth(), $this->Height - self::BOTTOM];
+    }
+
     private function PlotWidth(): float
     {
       return $this->Width - $this->Left - 12;
@@ -138,7 +143,7 @@
         // The row's name, a link to the series' page with OpenSeries()
         $Name = $this->LinkAttributes(null, $Number, $Series->Name);
         $Name['class'] = trim('sc-row-name ' . ($Name['class'] ?? ''));
-        $Svg .= '<text x="' . self::Coordinate($this->Left - 8) . '" y="' . self::Coordinate($Y + self::ROW / 2 + 4) .
+        $Svg .= '<text class="sc-y-label" x="' . self::Coordinate($this->Left - 8) . '" y="' . self::Coordinate($Y + self::ROW / 2 + 4) .
           '" text-anchor="end" fill="#444"' . self::Attributes($Name) . '>' . self::Escape(self::Fit($Series->Name, $Fits)) . '</text>';
         // Stretches: neighbours in the same state, until a gap (no value, or more than twice the usual step)
         $From = null;
@@ -165,7 +170,7 @@
       $Svg .= '<g class="sc-axis" fill="#666">';
       foreach (TimeTicks::Between(min($this->Times), $this->End(), max(2, (int)floor($this->PlotWidth() / 70))) as [$Time, $Text])
       {
-        $Svg .= '<text x="' . self::Coordinate($this->X($Time)) . '" y="' . self::Coordinate($this->Height - 8) . '" text-anchor="middle">' . self::Escape($Text) . '</text>';
+        $Svg .= '<text class="sc-x-label" x="' . self::Coordinate($this->X($Time)) . '" y="' . self::Coordinate($this->Height - 8) . '" text-anchor="middle">' . self::Escape($Text) . '</text>';
       }
       return $Svg . '</g>';
     }

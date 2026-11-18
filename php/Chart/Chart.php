@@ -427,6 +427,17 @@
     }
 
     /**
+     * The plot's edges inside the drawing, [left, top, right, bottom], for a chart with axis labels around its plot;
+     * null for one without (a pie)
+     *
+     * @return float[]|null
+     */
+    protected function PlotBox(): ?array
+    {
+      return null;
+    }
+
+    /**
      * The SVG's contents, inside a viewBox of Width x Height
      */
     abstract protected function Draw(): string;
@@ -445,10 +456,13 @@
         $this->AddChild($Caption);
       }
       $Label = $this->Title !== '' ? $this->Title : 'Chart';
+      $Body = $this->Message !== null || empty($this->Labels) ? $this->Empty() : $this->Draw();
+      // Where the plot is (drawn now: Draw() sets the margins), for the hover script's layout of the labels around it
+      $Plot = $Body !== '' && $this->Message === null && !empty($this->Labels) ? $this->PlotBox() : null;
+      $PlotAttribute = $Plot !== null ? ' data-plot="' . implode(' ', array_map(fn($Edge) => self::Coordinate((float)$Edge), $Plot)) . '"' : '';
       $this->AddChild(new \HTML\Raw('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' . $this->Width . ' ' . $this->Height .
         '" width="' . $this->Width . '" height="' . $this->Height . '" style="max-width:100%;height:auto" role="img" aria-label="' . self::Escape($Label) .
-        '" font-family="system-ui, -apple-system, sans-serif" font-size="11">' . ($this->Message !== null || empty($this->Labels) ? $this->Empty() : $this->Draw()) .
-        '</svg>'));
+        '"' . $PlotAttribute . ' font-family="system-ui, -apple-system, sans-serif" font-size="11">' . $Body . '</svg>'));
       if ($this->ShowLegend && !empty($this->Labels) && $this->Message === null)
       {
         $this->AddChild(new \HTML\Raw($this->Legend()));

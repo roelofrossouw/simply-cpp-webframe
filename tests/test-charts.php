@@ -320,12 +320,17 @@
   $Codes->Override('/^2/', Color: '#56a64b')->Override('/^5/', Color: '#f2495c', Dashed: true)->Override('other', Width: 1);
   $Data = HoverData($Html = (string)$Codes);
   Same(['#56a64b', '#20c997', '#f2495c'], array_slice(array_column($Data['series'], 'c'), 0, 3), 'Override(): colours by name or pattern');
-  Check(str_contains($Html, 'stroke="#f2495c" stroke-width="1.5" vector-effect="non-scaling-stroke" stroke-dasharray="6 4"')
+  Check(str_contains($Html, 'stroke="#f2495c" stroke-width="1" vector-effect="non-scaling-stroke" stroke-dasharray="6 4"')
     && str_contains($Html, 'stroke-width="1" vector-effect="non-scaling-stroke" stroke-linejoin'), 'dashed, and a width (on screen, non-scaling)');
   Check(str_contains($Html, '<line vector-effect="non-scaling-stroke" x1='), 'grid lines keep their width on screen');
+  Check(preg_match('/<svg [^>]*data-plot="[\d.]+ 10 628 214"/', $Html) === 1, 'the svg names its plot box for the hover script\'s layout');
+  Check(str_contains($Html, '<text class="sc-x-label"') && str_contains($Html, '<text class="sc-y-label"'), 'x and y labels are marked');
+  Check(!str_contains((string)(new PieChart())->FromRows([['d' => 'a', 'n' => 1]], 'd', 'n'), 'data-plot'), 'a pie has no plot box');
   $Js = file_get_contents(__DIR__ . '/../php/Chart/standalone.js');
-  Check(str_contains($Js, 'const stretch = Math.max(1, width / view.width);') && str_contains($Js, 'new MutationObserver(')
+  Check(str_contains($Js, 'let stretch = Math.max(1, width / saved.view[2]);') && str_contains($Js, 'new MutationObserver(')
     && str_contains($Js, 'resized.observe(drawing)'), 'the hover script keeps chart text at its size on screen, for charts loaded later too');
+  Check(str_contains($Js, 'const placeLabels = function (drawing, saved, plot, stretch)') && str_contains($Js, "drawing.setAttribute('height', (across * view[3] / view[2]).toFixed(2));"),
+    'and lays the labels out in screen pixels around the plot, trimming the drawing');
   $Cpu = new LineChart();
   $Cpu->AddSeries('cpu', [20, 95]);
   Same(2, substr_count((string)(clone $Cpu)->Thresholds([0 => 'green', 80 => 'orange', 90 => 'red']), 'class="sc-threshold"'), 'threshold lines at 80 and 90, none at the lowest');

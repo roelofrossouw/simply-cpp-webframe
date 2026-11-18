@@ -99,6 +99,11 @@
       $this->Height = (int)ceil(self::TOP + max(1, count($this->Series)) * self::ROW + self::BOTTOM);
     }
 
+    protected function PlotBox(): ?array
+    {
+      return [$this->Left, self::TOP, $this->Left + $this->PlotWidth(), $this->Height - self::BOTTOM];
+    }
+
     private function PlotWidth(): float
     {
       return $this->Width - $this->Left - 12;
@@ -161,7 +166,7 @@
       foreach ($this->Series as $Number => $Series)
       {
         $Y = self::TOP + $Number * self::ROW;
-        $Svg .= '<text x="' . self::Coordinate($this->Left - 6) . '" y="' . self::Coordinate($Y + self::ROW / 2 + 4) . '" text-anchor="end" fill="#444" font-size="10">' .
+        $Svg .= '<text class="sc-y-label" x="' . self::Coordinate($this->Left - 6) . '" y="' . self::Coordinate($Y + self::ROW / 2 + 4) . '" text-anchor="end" fill="#444" font-size="10">' .
           self::Escape(self::Fit($Series->Name, (int)floor($Fits * 11 / 10))) . '</text>';
         // A run of neighbours in the same shade is one rectangle
         $Run = null;
@@ -186,7 +191,7 @@
       $Svg .= '<g class="sc-axis" fill="#666">';
       foreach (TimeTicks::Between($First, $End, max(2, (int)floor($this->PlotWidth() / 70))) as [$Time, $Text])
       {
-        $Svg .= '<text x="' . self::Coordinate($this->Left + $this->PlotWidth() * ($Time - $First) / max(1, $End - $First)) . '" y="' .
+        $Svg .= '<text class="sc-x-label" x="' . self::Coordinate($this->Left + $this->PlotWidth() * ($Time - $First) / max(1, $End - $First)) . '" y="' .
           self::Coordinate($this->Height - 8) . '" text-anchor="middle">' . self::Escape($Text) . '</text>';
       }
       $Svg .= '</g>';
