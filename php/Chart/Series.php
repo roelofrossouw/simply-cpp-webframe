@@ -15,8 +15,8 @@
     public bool $Negative = false;
     // A dashed line (a limit, a target, last week)
     public bool $Dashed = false;
-    // The line's width in pixels (2 by default)
-    public float $Width = 2;
+    // The line's width in screen pixels, however far the chart is stretched (1.5 by default, as Grafana draws)
+    public float $Width = 1.5;
 
     public function __construct(public string $Name, public ?string $Color = null)
     {
@@ -51,7 +51,7 @@
     }
 
     /**
-     * The line's width in pixels (2 by default)
+     * The line's width in screen pixels, however far the chart is stretched (1.5 by default)
      */
     public function Width(float $Width): static
     {

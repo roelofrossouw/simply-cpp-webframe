@@ -197,6 +197,7 @@
     line.setAttribute('y1', chart.y.top);
     line.setAttribute('y2', chart.y.bottom);
     line.setAttribute('class', 'sc-crosshair');
+    line.setAttribute('vector-effect', 'non-scaling-stroke');
     layer.appendChild(line);
     const hidden = hiddenIn(area.closest('.sc-chart'));
     const rows = [];
@@ -389,6 +390,54 @@
   };
   document.addEventListener('click', toggle, true);
   document.addEventListener('keydown', toggle, true);
+
+  // Text at its own size on screen. A chart is drawn at its Size() and scales to its container's width, so a wide panel
+  // would draw its labels (axis ticks, row names, annotations, a pie's total, messages) larger, and a narrow one smaller.
+  // Stretched wider, each text gets the size that shows it at its nominal pixels; squeezed narrower it shrinks with the
+  // drawing as before, as the margins and label spacing were laid out for that size. Each chart is measured when it
+  // appears (also loaded later, by AJAX) and when its width changes. Lines don't need it: they're drawn non-scaling.
+  const nominal = new WeakMap();
+  const fit = function (drawing) {
+    const view = drawing.viewBox && drawing.viewBox.baseVal;
+    const width = drawing.getBoundingClientRect().width;
+    if (!view || !view.width || !width) return;
+    const stretch = Math.max(1, width / view.width);
+    drawing.querySelectorAll('text').forEach(function (text) {
+      if (!nominal.has(text))
+      {
+        const own = text.closest('[font-size]');
+        nominal.set(text, parseFloat(own ? own.getAttribute('font-size') : '') || 11);
+      }
+      text.style.fontSize = (nominal.get(text) / stretch).toFixed(2) + 'px';
+    });
+  };
+  const resized = typeof ResizeObserver === 'function' ? new ResizeObserver(function (entries) {
+    entries.forEach(function (entry) {
+      fit(entry.target);
+    });
+  }) : null;
+  const watched = new WeakSet();
+  const watch = function (root) {
+    if (!root.querySelectorAll) return;
+    const found = root.matches && root.matches('.sc-chart svg[viewBox]') ? [root] : root.querySelectorAll('.sc-chart svg[viewBox]');
+    found.forEach(function (drawing) {
+      if (watched.has(drawing)) return;
+      watched.add(drawing);
+      resized ? resized.observe(drawing) : fit(drawing);
+    });
+  };
+  watch(document);
+  if (typeof MutationObserver === 'function')
+  {
+    new MutationObserver(function (changes) {
+      changes.forEach(function (change) {
+        change.addedNodes.forEach(watch);
+      });
+    }).observe(document.documentElement, {childList: true, subtree: true});
+  }
+  window.addEventListener('resize', function () {
+    if (!resized) document.querySelectorAll('.sc-chart svg[viewBox]').forEach(fit);
+  });
 
   // A click takes the box away; outside sc-webframe's app a time's link is followed here (app.js follows it in the app)
   document.addEventListener('click', function (event) {

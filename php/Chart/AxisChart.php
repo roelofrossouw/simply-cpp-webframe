@@ -83,7 +83,7 @@
       foreach ($Ticks as $Tick)
       {
         $Y = self::Coordinate($this->Y($Tick));
-        $Svg .= '<line x1="' . self::Coordinate($this->Left) . '" x2="' . self::Coordinate($this->Width - self::RIGHT) . '" y1="' . $Y . '" y2="' . $Y . '"/>';
+        $Svg .= '<line vector-effect="non-scaling-stroke" x1="' . self::Coordinate($this->Left) . '" x2="' . self::Coordinate($this->Width - self::RIGHT) . '" y1="' . $Y . '" y2="' . $Y . '"/>';
       }
       $Svg .= '</g><g class="sc-axis" fill="#666">';
       foreach ($Ticks as $Tick)

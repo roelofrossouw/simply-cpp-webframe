@@ -135,7 +135,7 @@
           $Svg .= '<rect class="sc-annotation" x="' . $X . '" y="' . $Top . '" width="' . max(1, $Until - $X) . '" height="' . ($Bottom - $Top) . '" fill="' . $Color .
             '" fill-opacity="0.1" pointer-events="none"/>';
         }
-        $Svg .= '<line class="sc-annotation" x1="' . $X . '" x2="' . $X . '" y1="' . $Top . '" y2="' . $Bottom . '" stroke="' . $Color . '" stroke-width="1" stroke-dasharray="4 3" pointer-events="none"/>';
+        $Svg .= '<line class="sc-annotation" vector-effect="non-scaling-stroke" x1="' . $X . '" x2="' . $X . '" y1="' . $Top . '" y2="' . $Bottom . '" stroke="' . $Color . '" stroke-width="1" stroke-dasharray="4 3" pointer-events="none"/>';
         $When = date('D j M H:i', $Mark['time']) . ($Mark['until'] !== null ? ' – ' . date(date('Ymd', $Mark['time']) === date('Ymd', $Mark['until']) ? 'H:i' : 'D j M H:i', $Mark['until']) : '');
         $Attributes = ['class' => 'sc-annotation-marker', 'points' => ($X - 5) . ',' . ($Bottom + 9) . ' ' . ($X + 5) . ',' . ($Bottom + 9) . ' ' . $X . ',' . ($Bottom + 2),
           'fill' => $Mark['color'], 'data-tip' => $Mark['text'] . "
@@ -256,7 +256,7 @@
         elseif ($At > 0 && (float)$From >= $this->Scale->Low && (float)$From <= $this->Scale->High)
         {
           $Y = (int)round($this->Y((float)$From));
-          $Svg .= '<line class="sc-threshold" x1="' . $Left . '" x2="' . $Right . '" y1="' . $Y . '" y2="' . $Y . '" stroke="' . $Color .
+          $Svg .= '<line class="sc-threshold" vector-effect="non-scaling-stroke" x1="' . $Left . '" x2="' . $Right . '" y1="' . $Y . '" y2="' . $Y . '" stroke="' . $Color .
             '" stroke-width="1.5" stroke-dasharray="6 4"/>';
         }
       }
@@ -305,7 +305,8 @@
         $Run = [];
         $RunIndexes = [];
         $Circles = '';
-        $Stroke = '" stroke-width="' . self::Coordinate($Series->Width) . '"' . ($Series->Dashed ? ' stroke-dasharray="6 4"' : '');
+        // At its width on screen however far the chart is stretched (ignored where unsupported: drawn as before)
+        $Stroke = '" stroke-width="' . self::Coordinate($Series->Width) . '" vector-effect="non-scaling-stroke"' . ($Series->Dashed ? ' stroke-dasharray="6 4"' : '');
         for ($Index = 0; $Index <= $Count; $Index++)
         {
           $Value = $Index < $Count ? ($this->Tops[$Number][$Index] ?? null) : null;
