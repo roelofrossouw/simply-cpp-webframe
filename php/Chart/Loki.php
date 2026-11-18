@@ -60,7 +60,10 @@
     public function Lines(string $Query, TimeRange $Range, int $Limit = 100, string $Direction = 'backward'): array
     {
       $Forward = $Direction === 'forward';
-      $Data = $this->Call('query_range', ['query' => $this->Variables($Query, $Range->Step), 'start' => $Range->Start, 'end' => $Range->End,
+      // A range ending within a step of now (a dashboard's, its end rounded down to the step) ends now: the newest lines
+      // aren't left out
+      $End = $Range->End + $Range->Step >= time() ? max($Range->End, time()) : $Range->End;
+      $Data = $this->Call('query_range', ['query' => $this->Variables($Query, $Range->Step), 'start' => $Range->Start, 'end' => $End,
         'limit' => max(1, $Limit), 'direction' => $Forward ? 'forward' : 'backward']);
       if (($Data['resultType'] ?? '') !== 'streams')
       {

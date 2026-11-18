@@ -12,7 +12,7 @@
    *   $Query = '{job="oneweb",env="production"} | json | code >= 500';
    *   $Logs = new Chart\Logs('Errors');
    *   $Logs->Lines($Loki->Lines($Query, $Range, 200))->Total($Loki->LineCount($Query, $Range))
-   *     ->Fields(['name' => 'User', 'page' => 'Page', 'code' => 'Code', 'ms' => 'ms'])
+   *     ->Fields(['name' => 'User', 'page' => 'Page', 'code' => 'Code', 'ms' => 'ms'])   // also 'line' and 'message' (below)
    *     ->Level(fn(array $Line) => ($Line['fields']['code'] ?? 0) >= 500 ? 'error' : 'info')
    *     ->Filter()->Open('/users/view.php?name={name}', Chart\Open::SidePanel);
    *
@@ -56,7 +56,10 @@
     }
 
     /**
-     * Columns from the lines' fields (their JSON) or labels: [name => heading]; without them a row shows the line's text
+     * Columns from the lines' fields (their JSON) or labels: [name => heading]; without them a row shows the line's text.
+     * 'line' is the line as it is, 'message' its free text (a logfmt line's key=value pairs taken out, a JSON line's msg
+     * or message), unless the lines have a field or label of that name. With | logfmt in the query, a logfmt line's
+     * pairs are labels (context-instance as context_instance) and so columns too.
      *
      * @param array<string, string> $Fields
      */
@@ -110,10 +113,19 @@
       return htmlspecialchars($Text, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8');
     }
 
-    // A field's or label's value as text
+    // A field's or label's value as text; 'line' (the line as it is) and 'message' (its free text: a logfmt line's
+    // key=value pairs taken out) when the line has no field or label of that name
     private static function Text(array $Line, string $Name): string
     {
       $Value = $Line['fields'][$Name] ?? $Line['labels'][$Name] ?? null;
+      if ($Value === null && $Name === 'line')
+      {
+        return (string)($Line['line'] ?? '');
+      }
+      if ($Value === null && $Name === 'message')
+      {
+        return self::Message((string)($Line['line'] ?? ''), $Line['fields'] ?? null);
+      }
       return match (true)
       {
         $Value === null => '',
@@ -121,6 +133,17 @@
         is_array($Value) => (string)json_encode($Value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         default => (string)$Value,
       };
+    }
+
+    // A line's free text: a JSON line's msg or message field, else the line without its key=value and key="value" pairs
+    private static function Message(string $Line, ?array $Fields): string
+    {
+      if ($Fields !== null)
+      {
+        return (string)($Fields['msg'] ?? $Fields['message'] ?? $Line);
+      }
+      $Text = trim(preg_replace('/(?:^|\s)[\w.-]+=(?:"(?:[^"\\\\]|\\\\.)*"|\S*)/', ' ', $Line));
+      return $Text !== '' ? preg_replace('/\s+/', ' ', $Text) : $Line;
     }
 
     // A line's level colour

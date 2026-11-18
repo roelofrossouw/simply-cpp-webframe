@@ -116,6 +116,14 @@
   (new ReflectionProperty(Config::class, 'AppPage'))->setValue(null, false);
   Check(str_contains((string)(new Logs())->Lines([['time' => 1, 'line' => 'x', 'labels' => ['level' => 'debug']]]), '#5794f2'), 'the level from a label by default');
   Check(str_contains((string)new Logs(), 'No lines'), 'no lines: says so');
+  $Logfmt = [['time' => 1, 'labels' => ['location' => 'hv2', 'detected_level' => 'warn', 'context_instance' => 'apache3'],
+    'line' => 'context-address="hv:8443" level="warning" Cluster member info not found', 'fields' => null]];
+  $Html = (string)(new Logs())->Lines($Logfmt)->Fields(['location' => 'Host', 'context_instance' => 'Instance', 'message' => 'Message', 'line' => 'Line']);
+  Check(str_contains($Html, '>Cluster member info not found</span>'), "'message': a logfmt line's free text, its pairs taken out");
+  Check(str_contains($Html, '>context-address=&quot;hv:8443&quot; level=&quot;warning&quot; Cluster member info not found</span>'), "'line': the line as it is");
+  Check(str_contains($Html, '>apache3</span>') && str_contains($Html, '#ff9830'), 'labels from | logfmt as columns; the level from detected_level');
+  Check(str_contains((string)(new Logs())->Lines([['time' => 1, 'line' => '{"msg":"started"}', 'fields' => ['msg' => 'started'], 'labels' => []]])->Fields(['message' => 'M']),
+    '>started</span>'), "'message' of a JSON line: its msg");
   Check(str_contains((string)(new Logs())->Lines([['time' => 1, 'line' => 'plain', 'labels' => []]]), '>plain</span>'), 'without fields: the line\'s text');
 
   // Prometheus through the shared base: its own path, its own name in messages
