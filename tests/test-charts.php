@@ -126,7 +126,7 @@
 
   // The browser's part
   $Js = file_get_contents(__DIR__ . '/../public/js/app.js');
-  Check(str_contains($Js, 'setupCharts();') && str_contains($Js, "'.sc-chart [data-href], .sc-stat[data-href], .sc-bargauge[data-href]'"), 'app.js opens chart items and tiles');
+  Check(str_contains($Js, 'setupCharts();') && str_contains($Js, "'.sc-chart [data-href], .sc-stat[data-href], .sc-bargauge[data-href], .sc-table tr[data-href]'"), 'app.js opens chart items and tiles');
   Check(str_contains($Js, "loadPage.call(this, this.getAttribute('data-href'))"), 'chart links load like buttons (modal-link, oc-link)');
   $Css = file_get_contents(__DIR__ . '/../public/css/style.css');
   Check(str_contains($Css, '.sc-chart svg .sc-off') && str_contains($Css, '.sc-chart-tip'), 'style.css hides series and styles the tooltip');
