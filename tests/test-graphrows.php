@@ -60,6 +60,10 @@
   Check(str_contains($Html, 'querySelectorAll(&apos;svg [data-series=&quot;&apos;+this.getAttribute(&apos;data-series&apos;)+&apos;&quot;]&apos;)')
     || str_contains($Html, "querySelectorAll('svg [data-series=") || str_contains($Html, 'querySelectorAll(&#039;svg [data-series=&quot;&#039;'),
     "it hides the series' items in its own chart");
+  (new ReflectionProperty(Chart\Chart::class, 'HoverScriptSent'))->setValue(null, false);
+  Check(substr_count((string)(new Chart\BarChart())->FromGraphRows($Rows, ['Premium']) . (string)(new Chart\BarChart())->FromGraphRows($Rows, ['Premium']),
+    'window.scChartHover = true') === 1,
+    'the first chart of a request brings the hover script, later ones don\'t');
   // Only the series the rows have; unnamed ones numbered
   $Html = (string)(new Chart\LineChart())->FromGraphRows([['category1' => 1, '_graph_value' => 5], ['category1' => 2, '_graph_value' => 6]]);
   Check(substr_count($Html, '<polyline') === 1 && !str_contains($Html, 'sc-chart-legend'), 'one series: one line, no legend');
@@ -71,6 +75,10 @@
   // Open() still works outside the app: SVG links
   $Html = (string)(new Chart\BarChart())->FromGraphRows($Rows, ['Premium'])->Open('/report.php?month={category1}&broker={broker}');
   Check(str_contains($Html, '<a href="/report.php?month=202609&amp;broker=A">'), 'Open() gives SVG links, with the row\'s columns');
+
+  $Script = file_get_contents(__DIR__ . '/../php/Chart/standalone.js');
+  Check(str_contains($Script, 'if (window.scChartHover) return;') && str_contains($Script, "title.remove()"),
+    'the script runs once per page, and replaces the browser\'s own tooltip');
 
   echo "$Checks checks, $Failures failed\n";
   exit($Failures > 0 ? 1 : 0);

@@ -131,7 +131,7 @@
 
     /**
      * A panel in the current row, $Width twelfths of the page wide on wide screens (half or all of it on smaller ones),
-     * on a card; $Title above it, for what has no title of its own. A Stat tile stands on its own, without a card.
+     * on a card; $Title above it, for what has no title of its own. A Stat tile or BarGauge stands on its own, without a card.
      */
     public function Add(\HTML\Element|string $Panel, int $Width = 6, string $Title = ''): static
     {
@@ -212,11 +212,12 @@
         {
           $Width = $Panel['width'];
           $Element = $Panel['element'];
-          $Classes = $Element instanceof Stat ? 'col-6 col-md-' . max(3, $Width) . ' col-xl-' . $Width
+          $Tile = $Element instanceof Stat || $Element instanceof BarGauge;
+          $Classes = $Tile ? 'col-6 col-md-' . max(3, $Width) . ' col-xl-' . $Width
             : 'col-12 col-md-' . max(6, $Width) . ' col-xl-' . $Width;
           $Inside = $Panel['title'] !== '' ? '<h4 class="h6 mb-2">' . self::Escape($Panel['title']) . '</h4>' : '';
           $Inside .= (string)$Element;
-          $Html .= '<div class="' . $Classes . '">' . ($Element instanceof Stat ? $Inside :
+          $Html .= '<div class="' . $Classes . '">' . ($Tile ? $Inside :
               '<div class="card h-100 sc-panel"><div class="card-body">' . $Inside . '</div></div>') . '</div>';
         }
         $Html .= '</div>';

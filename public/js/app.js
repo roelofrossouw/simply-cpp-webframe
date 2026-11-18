@@ -2444,8 +2444,8 @@ function setupCharts() {
     .on('mousemove', '.sc-chart [data-tip]', moveTip)
     .on('mouseleave', '.sc-chart [data-tip]', hideTip)
     .on('mouseleave', '.sc-chart svg', clearHover)
-    .on('click', '.sc-chart [data-href], .sc-stat[data-href]', open)
-    .on('keydown', '.sc-chart [data-href], .sc-stat[data-href]', function (event) {
+    .on('click', '.sc-chart [data-href], .sc-stat[data-href], .sc-bargauge[data-href]', open)
+    .on('keydown', '.sc-chart [data-href], .sc-stat[data-href], .sc-bargauge[data-href]', function (event) {
       if (event.key === 'Enter' || event.key === ' ') open.call(this, event);
     })
     .on('click keydown', '.sc-chart-legend .sc-legend-item[data-series]', function (event) {

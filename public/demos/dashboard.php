@@ -1,7 +1,7 @@
 <?php
   require_once __DIR__ . '/_demo.php';
 
-  use Chart\{BarChart, Dashboard, LineChart, Open, PieChart, Prometheus, Stat};
+  use Chart\{BarChart, BarGauge, Dashboard, LineChart, Open, PieChart, Prometheus, Stat};
 
   Config::Init(Access: Config::FrameworkURL(DEMOS));
 
@@ -32,6 +32,12 @@
   $Dashboard->Add((new Stat('Queued', 12 * count($Servers)))->Change(-3, 'since the last hour', UpIsGood: false), 3);
   $Dashboard->Add((new Stat('Bounced today', 37))->Change(5, 'since yesterday', UpIsGood: false)->Open("$Popup?what=Bounced&in=panel", Open::SidePanel), 3);
   $Dashboard->Add(new Stat('Servers', count($Servers) . ' of 3'), 3);
+
+  $Dashboard->Row('Load');
+  $Dashboard->Add((new BarGauge('smtp1 CPU', 29.0))->Unit('%')->Info('CPU busy, the last 5 minutes')->Open("$Popup?what=smtp1+CPU&in=panel", Open::SidePanel), 4);
+  $Dashboard->Add((new BarGauge('smtp2 disk', 84.6))->Unit('%')->Info('/var/spool used'), 4);
+  $Dashboard->Add((new BarGauge('Queue age', 41))->Range(0, 60)->Thresholds([0 => BarGauge::GREEN, 30 => BarGauge::ORANGE, 50 => BarGauge::RED])
+    ->Unit(' min', 0)->Info('The oldest mail waiting, in minutes'), 4);
 
   $Dashboard->Row('Traffic');
   $Traffic = (new LineChart('Mails per minute'))->Time();
@@ -77,6 +83,14 @@
     catch (RuntimeException $Problem)
     {
       $Dashboard->Add(new Stat('Prometheus', 'not answering'), 6);
+    }
+    try
+    {
+      $Busy = $Prometheus->Value('100 * (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])))');
+      $Dashboard->Add((new BarGauge('CPU, all nodes', $Busy))->Unit('%')->Info('Average CPU busy of every node Prometheus scrapes, the last 5 minutes'), 6);
+    }
+    catch (RuntimeException)
+    {
     }
     $Up = new LineChart('Targets up, by job');
     $Prometheus->AddTo($Up, "sum by (job) (up{{$Matcher}})", $Dashboard->Range(), '{{job}}');

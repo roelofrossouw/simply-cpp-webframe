@@ -47,6 +47,9 @@
     private ?string $SeriesTemplate = null;
     private Open $SeriesIn = Open::Page;
     private ?string $Message = null;
+    // Outside the app: whether the hover script (standalone.js) goes with the first chart of the request, and has
+    private static bool $HoverScript = true;
+    private static bool $HoverScriptSent = false;
     /** @var array<string, string> ItemAttributes() */
     private array $ItemAttributes = [];
     /** @var callable|null */
@@ -246,6 +249,15 @@
     }
 
     /**
+     * Outside the app the first chart of a request brings a small script (Chart/standalone.js: the hover box, the
+     * crosshair and the dots, as app.js gives them in the app). Off for what no browser runs, e.g. an email or a PDF.
+     */
+    public static function HoverScript(bool $On): void
+    {
+      self::$HoverScript = $On;
+    }
+
+    /**
      * The drawing's size in pixels; it scales to the width it's given, keeping this shape
      */
     public function Size(int $Width, int $Height): static
@@ -293,6 +305,11 @@
       if ($this->ShowLegend && !empty($this->Labels) && $this->Message === null)
       {
         $this->AddChild(new \HTML\Raw($this->Legend()));
+      }
+      if (self::$HoverScript && !self::$HoverScriptSent && !self::InApp())
+      {
+        self::$HoverScriptSent = true;
+        $this->AddChild(new \HTML\Raw('<script>' . file_get_contents(__DIR__ . '/standalone.js') . '</script>'));
       }
       return parent::OwnString();
     }

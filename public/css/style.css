@@ -1060,6 +1060,14 @@ a.stepper-content:hover .stepper-label {
   cursor: pointer;
 }
 
+.sc-bargauge[data-href] {
+  cursor: pointer;
+}
+
+.sc-bargauge[data-href]:hover {
+  border-color: var(--bs-primary) !important;
+}
+
 .sc-stat[data-href]:hover {
   border-color: var(--bs-primary);
 }
