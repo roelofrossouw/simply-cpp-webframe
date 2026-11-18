@@ -355,6 +355,19 @@
     }
 
     /**
+     * The hover script (Chart/standalone.js) as JavaScript source, for an app that runs it its own way: one that loads
+     * pages by AJAX and puts them in with innerHTML, where a chart's inline <script> never runs (One Web). Call
+     * HoverScript(false) so charts don't bring it too, and run this once per page; it does nothing a second time.
+     *
+     *   Chart\Chart::HoverScript(false);
+     *   EndScript('(0, eval)(' . json_encode(Chart\Chart::HoverScriptSource()) . ')');
+     */
+    public static function HoverScriptSource(): string
+    {
+      return (string)file_get_contents(__DIR__ . '/standalone.js');
+    }
+
+    /**
      * The first chart of a request brings a small script (Chart/standalone.js: the hover box, the crosshair and the
      * dots; in the app and outside it, e.g. One Web). Off for what no browser runs, e.g. an email or a PDF.
      */
@@ -443,7 +456,7 @@
       if (self::$HoverScript && !self::$HoverScriptSent)
       {
         self::$HoverScriptSent = true;
-        $this->AddChild(new \HTML\Raw('<script>' . file_get_contents(__DIR__ . '/standalone.js') . '</script>'));
+        $this->AddChild(new \HTML\Raw('<script>' . self::HoverScriptSource() . '</script>'));
       }
       return parent::OwnString();
     }

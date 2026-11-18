@@ -76,5 +76,10 @@
   Check(str_contains($Script, 'if (window.scChartHover) return;') && str_contains($Script, "title.remove()"),
     'the script runs once per page, and replaces the browser\'s own tooltip');
 
+  Check(Chart\Chart::HoverScriptSource() === $Script, 'HoverScriptSource(): the hover script, for an app to run its own way');
+  Chart\Chart::HoverScript(false);
+  (new ReflectionProperty(Chart\Chart::class, 'HoverScriptSent'))->setValue(null, false);
+  Check(!str_contains((string)(new Chart\BarChart())->FromGraphRows($Rows, ['Premium']), 'window.scChartHover'), 'HoverScript(false): charts leave it out');
+
   echo "$Checks checks, $Failures failed\n";
   exit($Failures > 0 ? 1 : 0);
