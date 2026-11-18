@@ -16,6 +16,7 @@
    *   menu      editor: the page that manages the menu, which admins must always keep (optional)
    *   prometheus  url (e.g. http://prometheus.example.com:9090), timeout (seconds, 10), scrape_interval (seconds, 15): where
    *             Chart\Prometheus reads metrics
+   *   loki      url (e.g. http://loki.example.com:3100), timeout (seconds, 30): where Chart\Loki reads logs (server-side only)
    *
    * Where the file is, the first that is set: the WEBFRAME_CONFIG constant (define it before including autoload.php), the
    * WEBFRAME_CONFIG environment variable (Apache: SetEnv, which PHP-FPM gets too), the webframe.config php.ini setting, or
