@@ -73,6 +73,43 @@
     }
 
     /**
+     * An instant query's results as table rows (Chart\Table): each result's labels as columns, its value as 'value'; with
+     * $Sparkline a range query whose results match by labels (the same set, or those the instant results have) adds
+     * each row's points as 'trend', for a sparkline column
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function TableRows(string $Query, ?string $Sparkline = null, ?TimeRange $Range = null, int $Points = 60): array
+    {
+      $Rows = [];
+      foreach ($this->Instant($Query) as $Result)
+      {
+        $Rows[] = $Result['labels'] + ['value' => $Result['value']];
+      }
+      if ($Sparkline !== null && $Rows)
+      {
+        $Range ??= TimeRange::Last('6h', $Points);
+        $Range = TimeRange::Between($Range->Start, $Range->End, $Points);
+        $Trends = [];
+        foreach ($this->Range($Sparkline, $Range) as $Series)
+        {
+          $Labels = $Series['labels'];
+          unset($Labels['__name__']);
+          ksort($Labels);
+          $Trends[json_encode($Labels)] = array_values($Series['points']);
+        }
+        foreach ($Rows as &$Row)
+        {
+          $Labels = array_diff_key($Row, ['value' => 1, '__name__' => 1]);
+          ksort($Labels);
+          $Row['trend'] = $Trends[json_encode($Labels)] ?? null;
+        }
+        unset($Row);
+      }
+      return $Rows;
+    }
+
+    /**
      * A label's values, sorted (e.g. every instance, for a Dashboard variable); with $Match only those of series it
      * selects ('up{job="oneapi"}'), and of the last $Within ('6h') only, as Prometheus keeps a label's values for as long
      * as it keeps the series

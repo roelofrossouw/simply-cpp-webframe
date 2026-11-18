@@ -1,7 +1,7 @@
 <?php
   require_once __DIR__ . '/_demo.php';
 
-  use Chart\{BarChart, BarGauge, Dashboard, LineChart, Open, PieChart, Prometheus, Stat};
+  use Chart\{BarChart, BarGauge, Dashboard, LineChart, Open, PieChart, Prometheus, Stat, StateTimeline, Table};
 
   Config::Init(Access: Config::FrameworkURL(DEMOS));
 
@@ -60,6 +60,28 @@
   $Dashboard->Add((new BarChart('Today, every 3 hours'))->FromRows($Hours, 'hour', ['delivered' => 'Delivered', 'deferred' => 'Deferred', 'bounced' => 'Bounced'])
     ->Stacked()->Open("$Popup?label={hour}&what={series}&value={value}", Open::Popup), 12);
 
+  // Up and down over the range, and a table of the servers with a bar and a sparkline each
+  $Dashboard->Row('Servers');
+  $Timeline = new StateTimeline('Up');
+  foreach ($Servers as $Number => $Name)
+  {
+    $States = [];
+    for ($Time = $Range->Start, $Step = 0; $Time <= $Range->End; $Time += $Range->Step, $Step++)
+    {
+      $States[$Time] = ($Step + 17 * $Number) % 53 < 3 ? 0 : 1;
+    }
+    $Timeline->AddSeries($Name, $States)->Labels = ['server' => $Name];
+  }
+  $Timeline->OpenSeries("$Popup?what={server}&in=panel", Open::SidePanel);
+  $Dashboard->Add($Timeline, 6);
+  $Table = new Table();
+  $Table->Column('server', 'Server');
+  $Table->Column('rate', 'Mails per minute')->Thresholds([0 => BarGauge::GREEN, 60 => BarGauge::ORANGE, 70 => BarGauge::RED])->Show('bar', 80);
+  $Table->Column('trend', 'Trend')->Sparkline();
+  $Table->Rows(array_map(fn(string $Name) => ['server' => $Name, 'rate' => end($Rates[$Name]), 'trend' => array_values($Rates[$Name])], $Servers))
+    ->Sort('rate')->Open("$Popup?what={server}", Open::Popup);
+  $Dashboard->Add($Table, 6, 'Servers now');
+
   // Prometheus, when the site names one
   if (!empty(Config::Get('prometheus.url')))
   {
@@ -92,6 +114,22 @@
     catch (RuntimeException)
     {
     }
+    $Targets = new StateTimeline('Every target, up or down');
+    $Prometheus->AddTo($Targets, "up{{$Matcher}}", $Dashboard->Range(), '{{job}} {{instance}}');
+    $Dashboard->Add($Targets, 12);
+    $Slowest = new Table('Slowest scrapes');
+    $Slowest->Column('job', 'Job');
+    $Slowest->Column('instance', 'Instance');
+    $Slowest->Column('value', 'Scrape time')->Unit(' ms', 0)->Thresholds([0 => BarGauge::GREEN, 100 => BarGauge::ORANGE, 500 => BarGauge::RED])->Show('bar');
+    $Slowest->Column('trend', 'Over the range')->Sparkline();
+    try
+    {
+      $Slowest->Rows($Prometheus->TableRows("topk(8, 1000 * scrape_duration_seconds{{$Matcher}})", "1000 * scrape_duration_seconds{{$Matcher}}", $Dashboard->Range()))->Sort('value');
+    }
+    catch (RuntimeException)
+    {
+    }
+    $Dashboard->Add($Slowest, 12);
     $Up = new LineChart('Targets up, by job');
     $Prometheus->AddTo($Up, "sum by (job) (up{{$Matcher}})", $Dashboard->Range(), '{{job}}');
     $Up->OpenSeries("$Popup?what={job}", Open::Popup);

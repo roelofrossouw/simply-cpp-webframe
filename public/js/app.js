@@ -2322,8 +2322,8 @@ function setupCharts() {
     loadPage.call(this, this.getAttribute('data-href'));
   };
   $(document)
-    .on('click', '.sc-chart [data-href], .sc-stat[data-href], .sc-bargauge[data-href]', open)
-    .on('keydown', '.sc-chart [data-href], .sc-stat[data-href], .sc-bargauge[data-href]', function (event) {
+    .on('click', '.sc-chart [data-href], .sc-stat[data-href], .sc-bargauge[data-href], .sc-table tr[data-href]', open)
+    .on('keydown', '.sc-chart [data-href], .sc-stat[data-href], .sc-bargauge[data-href], .sc-table tr[data-href]', function (event) {
       if (event.key === 'Enter' || event.key === ' ') open.call(this, event);
     })
     .on('click keydown', '.sc-chart-legend .sc-legend-item[data-series]', function (event) {
