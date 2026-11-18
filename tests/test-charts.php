@@ -185,3 +185,25 @@
     $Threw = true;
   }
   Check($Threw, 'Value() throws when Prometheus does not answer');
+
+  // The hover box's data (app.js draws the crosshair, the dots and the box from it)
+  InApp(true);
+  $Hover = (new LineChart())->Time();
+  $Hover->AddSeries('Submitted', [$Base => 1603, $Base + 60 => 1610]);
+  $Hover->AddSeries('Approved', [$Base => 1535, $Base + 60 => null]);
+  $Html = (string)$Hover;
+  Check(preg_match('/class="sc-band" [^>]*data-x="([\d.]+)"/', $Html, $Found) === 1, "a strip says where its time lies across");
+  Check(str_contains($Html, 'data-sort="desc"'), "a line chart's box is sorted from the highest");
+  Check(str_contains($Html, 'data-head="Tue 17 Nov 12:00"'), 'the box\'s header: the time written out');
+  Check(preg_match('/data-rows="(\[[^"]*\])"/', $Html, $Rows) === 1, 'the rows, as JSON');
+  $Decoded = json_decode(html_entity_decode($Rows[1], ENT_QUOTES | ENT_HTML5), true);
+  Same(['n' => 'Submitted', 'c' => '#0d6efd', 'v' => '1 603', 'r' => 1603, 's' => 0], array_diff_key($Decoded[0], ['y' => 1]), 'a row: name, colour, value, number, series');
+  Check(isset($Decoded[0]['y']) && isset($Decoded[1]['y']), "each line's point, for the dots");
+  Check(preg_match_all('/data-rows="(\[[^"]*\])"/', $Html, $All) === 2 && !str_contains(html_entity_decode($All[1][1]), '"s":1,"y"'),
+    'a missing value has no dot');
+  $Bars = (string)(new BarChart())->FromRows($Rows2 = [['m' => 'Jan', 'a' => 3]], 'm', ['a' => 'Sent']);
+  Check(str_contains(html_entity_decode($Bars), 'data-rows="[{"n":"Sent","c":"#0d6efd","v":"3","r":3,"s":0}]"') && str_contains($Bars, 'data-head="Jan"'), 'a bar\'s box: its own value');
+  $Slice = (string)(new PieChart())->FromRows([['d' => 'a', 'n' => 3], ['d' => 'b', 'n' => 1]], 'd', 'n');
+  Check(str_contains(html_entity_decode($Slice), '"n":"a","c":"#0d6efd","v":"3 (75%)"'), "a slice's box: its name, value and share");
+  $Js = file_get_contents(__DIR__ . '/../public/js/app.js');
+  Check(str_contains($Js, 'const crosshair = function (band)') && str_contains($Js, "tip.classList.add('sc-chart-tip-rows')"), 'app.js draws the crosshair and the box');

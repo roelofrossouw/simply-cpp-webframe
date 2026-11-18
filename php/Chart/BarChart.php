@@ -86,7 +86,8 @@
           }
           $Tip = $this->LabelText($Index) . "\n" . $Series->Name . ': ' . $this->Value($Value);
           $Svg .= $this->Item('rect', ['class' => 'sc-bar', 'x' => $X, 'y' => $Top, 'width' => $Width,
-            'height' => max(0.5, $Bottom - $Top), 'rx' => min(2.0, $Width / 4), 'fill' => $this->ColorOf($Number)], $Tip, $Index, $Number);
+            'height' => max(0.5, $Bottom - $Top), 'rx' => min(2.0, $Width / 4), 'fill' => $this->ColorOf($Number)] +
+            $this->HoverAttributes($Index, [$Number => $Value]), $Tip, $Index, $Number);
         }
       }
       return $Svg;

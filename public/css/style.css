@@ -994,6 +994,61 @@ a.stepper-content:hover .stepper-label {
   pointer-events: none;
 }
 
+/* The hover box with rows (a line chart's time, a bar, a slice): header, then colour, name and value per row */
+.sc-chart-tip.sc-chart-tip-rows {
+  max-width: none;
+  padding: .5rem .75rem;
+  border-radius: var(--bs-border-radius-lg);
+  box-shadow: var(--bs-box-shadow);
+  white-space: nowrap;
+}
+
+.sc-chart-tip-head {
+  margin: -.125rem 0 .375rem;
+  padding-bottom: .375rem;
+  border-bottom: 1px solid var(--bs-border-color);
+  font-weight: 600;
+}
+
+.sc-chart-tip table td {
+  padding: .125rem 0;
+}
+
+.sc-chart-tip table td:nth-child(2) {
+  padding: .125rem 1.25rem .125rem .5rem;
+  color: var(--bs-secondary-color);
+}
+
+.sc-chart-tip table i {
+  display: inline-block;
+  width: 1rem;
+  height: .25rem;
+  border-radius: .125rem;
+  vertical-align: middle;
+}
+
+.sc-chart-tip-value {
+  text-align: right;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.sc-chart .sc-crosshair {
+  stroke: var(--bs-secondary-color);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.sc-chart .sc-hover-dot {
+  stroke: var(--bs-body-bg);
+  stroke-width: 2;
+}
+
+/* With the crosshair, the strip itself stays see-through */
+.sc-chart .sc-band[data-x]:hover {
+  fill-opacity: 0;
+}
+
 .sc-stat {
   padding: .75rem 1rem;
   border: 1px solid var(--bs-border-color);

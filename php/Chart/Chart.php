@@ -470,6 +470,30 @@
     }
 
     /**
+     * The hover box's contents for app.js, as attributes: data-head (the label, written out) and data-rows (JSON, a row
+     * per value: n name, c colour, v the value written out, r the value, s the series' number, y where a line's point
+     * is). app.js draws them as a table with colour swatches, without the series hidden in the legend.
+     *
+     * @param array<int, float|null> $Values by series
+     * @param array<int, float> $Ys by series: where each line's point lies (LineChart), for the dots on hover
+     * @return array<string, string>
+     */
+    protected function HoverAttributes(int $Label, array $Values, array $Ys = []): array
+    {
+      $Rows = [];
+      foreach ($Values as $Series => $Value)
+      {
+        $Row = ['n' => $this->Series[$Series]->Name ?? (string)$Series, 'c' => $this->ColorOf($Series), 'v' => $this->Value($Value), 'r' => $Value, 's' => $Series];
+        if (isset($Ys[$Series]))
+        {
+          $Row['y'] = round($Ys[$Series], 1);
+        }
+        $Rows[] = $Row;
+      }
+      return ['data-head' => $this->LabelText($Label), 'data-rows' => json_encode($Rows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)];
+    }
+
+    /**
      * A value as tooltips show it: Format()'s, else grouped thousands and up to two decimals
      */
     protected function Value(?float $Value): string

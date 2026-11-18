@@ -154,8 +154,20 @@
         $X = $this->X($Index);
         $Left = $Index > 0 ? ($this->X($Index - 1) + $X) / 2 : $this->Left;
         $Right = $Index < $Count - 1 ? ($X + $this->X($Index + 1)) / 2 : $this->Left + $this->PlotWidth();
+        // For the hover: where the label lies across (the crosshair), and each series' value and point (the box, the dots)
+        $Values = [];
+        $Ys = [];
+        foreach ($this->Series as $Number => $Series)
+        {
+          $Values[$Number] = $Series->Values[$Index] ?? null;
+          if ($Values[$Number] !== null)
+          {
+            $Ys[$Number] = $this->Y($Values[$Number]);
+          }
+        }
         $Svg .= $this->Item('rect', ['class' => 'sc-band', 'x' => $Left, 'y' => self::TOP, 'width' => max(1.0, $Right - $Left),
-          'height' => $this->Height - self::TOP - self::BOTTOM, 'fill' => '#888', 'fill-opacity' => '0'], $this->LabelTip($Index), $Index);
+          'height' => $this->Height - self::TOP - self::BOTTOM, 'fill' => '#888', 'fill-opacity' => '0', 'data-x' => round($X, 1),
+          'data-sort' => 'desc'] + $this->HoverAttributes($Index, $Values, $Ys), $this->LabelTip($Index), $Index);
       }
       return $Svg . '</g>';
     }

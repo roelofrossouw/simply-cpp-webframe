@@ -74,7 +74,10 @@
         $Sweep = 2 * M_PI * $Value / $Total;
         $Tip = $this->LabelText($Index) . "\n" . $this->Value($Value) . ' (' . $this->Share($Value, $Total) . ')';
         $Svg .= $this->Item('path', ['class' => 'sc-slice', 'd' => $this->Slice($CX, $CY, $Outer, $Inner, $Angle, $Sweep),
-          'fill' => $this->ColorOf($Index), 'stroke' => '#fff', 'stroke-width' => '1'], $Tip, $Index, 0);
+          'fill' => $this->ColorOf($Index), 'stroke' => '#fff', 'stroke-width' => '1', 'data-head' => '',
+          'data-rows' => json_encode([['n' => $this->LabelText($Index), 'c' => $this->ColorOf($Index),
+            'v' => $this->Value($Value) . ' (' . $this->Share($Value, $Total) . ')', 'r' => $Value]], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)],
+          $Tip, $Index, 0);
         $Angle += $Sweep;
       }
       if ($Inner > 20)
