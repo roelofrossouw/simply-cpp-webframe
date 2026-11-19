@@ -34,7 +34,8 @@
     {
       parent::__construct($Title, $ID);
       $this->Time();
-      $this->ShowLegend = false;
+      $this->LegendMode = 'none';
+      $this->TableLegend = false;
     }
 
     /**

@@ -2387,12 +2387,20 @@ function reloadDashboard(dashboard) {
       const hidden = $(dashboard).find('.sc-chart').map(function () {
         return [$(this).find('.sc-legend-item.sc-off').map(function () { return this.getAttribute('data-series'); }).get()];
       }).get();
+      // And how their table legends are sorted
+      const sorts = $(dashboard).find('.sc-chart').map(function () {
+        const head = this.querySelector('.sc-legend-table th[aria-sort="ascending"], .sc-legend-table th[aria-sort="descending"]');
+        return [head ? [head.getAttribute('data-sort'), head.getAttribute('aria-sort') === 'descending'] : false];
+      }).get();
       $(dashboard).html(fresh.html());
       dashboard.setAttribute('data-refresh', fresh.attr('data-refresh') || '0');
       dashboard.setAttribute('data-url', fresh.attr('data-url') || dashboard.getAttribute('data-url'));
       $(dashboard).find('.sc-chart').each(function (index) {
         for (const series of hidden[index] || []) {
           $(this).find('.sc-legend-item[data-series="' + series + '"]').trigger('click');
+        }
+        if (sorts[index] && typeof window.scChartSortLegend === 'function') {
+          window.scChartSortLegend(this.querySelector('.sc-legend-table table'), sorts[index][0], sorts[index][1]);
         }
       });
       initComponents(dashboard);

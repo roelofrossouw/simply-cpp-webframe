@@ -32,6 +32,7 @@
     public function __construct(?string $Title = null, ?string $ID = null)
     {
       parent::__construct($Title, $ID);
+      $this->TableLegend = false;
       $this->Time();
     }
 
@@ -199,7 +200,7 @@
     /**
      * The legend: the states and their colours (not the series: each is a row of its own)
      */
-    protected function Legend(): string
+    protected function DrawLegend(): string
     {
       if ($this->Thresholds)
       {

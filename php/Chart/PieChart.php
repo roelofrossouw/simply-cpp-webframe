@@ -16,6 +16,7 @@
     public function __construct(?string $Title = null, ?string $ID = null)
     {
       parent::__construct($Title, $ID);
+      $this->TableLegend = false;
       $this->AddClass('sc-pie');
       $this->Width = 240;
       $this->Height = 240;
@@ -115,7 +116,7 @@
     /**
      * The slices with their shares; a slice's item opens its page (Open()) like the slice
      */
-    protected function Legend(): string
+    protected function DrawLegend(): string
     {
       $Slices = empty($this->Series) ? [] : $this->Slices();
       $Total = array_sum($Slices);

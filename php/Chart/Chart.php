@@ -27,6 +27,15 @@
     // A legend item's colour swatch, styled inline so it shows without sc-webframe's style.css (another app, an email)
     protected const string LEGEND = 'display:flex;flex-wrap:wrap;justify-content:center;gap:.25rem 1rem;margin-top:.5rem;font-size:.875rem';
     protected const string SWATCH = 'display:inline-block;width:.75em;height:.75em;margin-right:.35em;border-radius:2px;background:';
+    // Legend('table'): the calculations it can show, with their headers, and its styles (inline, as the list's)
+    protected const array CALCULATIONS = ['last' => 'Last *', 'min' => 'Min', 'mean' => 'Mean', 'max' => 'Max', 'sum' => 'Total'];
+    private const string LINE_SWATCH = 'display:inline-block;width:14px;height:3px;border-radius:1.5px;margin-right:.5em;vertical-align:middle;background:';
+    private const string TABLE_HEAD = 'position:sticky;top:0;z-index:1;padding:.25rem .5rem;background:var(--bs-body-bg,#fff);' .
+      'color:var(--bs-secondary-color,#6c757d);font-weight:500;white-space:nowrap;cursor:pointer;user-select:none;' .
+      'border-bottom:1px solid var(--bs-border-color,#dee2e6)';
+    private const string TABLE_CELL = 'padding:.2rem .5rem;white-space:nowrap;border-bottom:1px solid var(--bs-border-color-translucent,rgba(0,0,0,.08))';
+    // Legend(Placement: 'right'): the drawing's share of the chart's width, the legend beside it taking the rest
+    private const float DRAWING_SHARE = 0.58;
 
     /** @var string[] the labels, in order */
     protected array $Labels = [];
@@ -36,7 +45,15 @@
     protected array $Series = [];
     protected int $Width = 640;
     protected int $Height = 240;
-    protected bool $ShowLegend = true;
+    // Legend(): 'list', 'table' or 'none'; a table's calculations, where it goes and how it's sorted first
+    protected string $LegendMode = 'list';
+    // Whether Legend('table') suits the chart (not a pie, a heatmap or a state timeline)
+    protected bool $TableLegend = true;
+    /** @var string[] */
+    private array $LegendValues = [];
+    private string $LegendPlacement = 'bottom';
+    private ?string $LegendSort = null;
+    private bool $LegendDesc = true;
     /** @var array<int, int>|null each label's time (Unix seconds) when the labels are times (Time()) */
     protected ?array $Times = null;
     private string $Title;
@@ -53,6 +70,8 @@
     private int $TopCount = 0;
     private string $TopBy = 'max';
     private string $OthersName = 'Others';
+    // Top(): the folded series' number, once folded
+    private ?int $OthersAt = null;
     private static bool $HoverScriptSent = false;
     /** @var array<string, string> ItemAttributes() */
     private array $ItemAttributes = [];
@@ -316,6 +335,7 @@
     // Top(): the series beyond the first TopCount, by their rank, added up into "Others (n)"
     private function FoldSeries(): void
     {
+      $this->OthersAt = null;
       if ($this->TopCount < 1 || count($this->Series) <= $this->TopCount + 1)
       {
         return;
@@ -356,6 +376,7 @@
         $Kept[$Position]->Color ??= self::PALETTE[$Number % count(self::PALETTE)];
       }
       $this->Series = [...$Kept, $Others];
+      $this->OthersAt = count($this->Series) - 1;
     }
 
     /**
@@ -386,7 +407,13 @@
      */
     public function Resolution(): int
     {
-      return max(20, intdiv($this->Width - 60, 2));
+      return max(20, intdiv($this->DrawingWidth() - 60, 2));
+    }
+
+    // The drawing's width: Size()'s, less the legend's share when a table legend goes on its right
+    private function DrawingWidth(): int
+    {
+      return $this->LegendMode === 'table' && $this->LegendPlacement === 'right' ? (int)round($this->Width * self::DRAWING_SHARE) : $this->Width;
     }
 
     /**
@@ -408,10 +435,61 @@
       return $this;
     }
 
+    /**
+     * Which legend, as Grafana's: 'list' (the series' names under the drawing, the default), 'none', or 'table': a row
+     * per series with its $Values over the chart's points, in the order given: 'last' (the last value, "Last *"),
+     * 'min', 'mean', 'max' and 'sum' ("Total"), written as Format() writes them. A table goes under the drawing
+     * ('bottom', at most 40% of the chart's height) or beside it ('right', 42% of Size()'s width, as tall as the
+     * drawing); either scrolls inside. Its rows are sorted by $SortBy ('name' or one of $Values; highest first with
+     * $Desc), else in the series' order, and clicking a header sorts again. Pointing at a row brings its series forward
+     * and dims the rest; clicking it hides or shows the series (or opens its page with OpenSeries()). Top()'s "Others"
+     * row stays last, in grey. Colours follow the series' order, however the rows are sorted.
+     *
+     *   $Chart->Legend('table', ['last', 'max'], Placement: 'right', SortBy: 'last');
+     */
+    public function Legend(string $Mode, array $Values = [], string $Placement = 'bottom', ?string $SortBy = null, bool $Desc = true): static
+    {
+      if (!in_array($Mode, ['list', 'table', 'none'], true))
+      {
+        throw new \InvalidArgumentException("Legend(): 'list', 'table' or 'none', not '$Mode'");
+      }
+      if ($Mode === 'table' && !$this->TableLegend)
+      {
+        throw new \InvalidArgumentException('Legend(): no table legend for a ' . (new \ReflectionClass($this))->getShortName());
+      }
+      foreach ($Values as $Value)
+      {
+        if (!isset(self::CALCULATIONS[$Value]))
+        {
+          throw new \InvalidArgumentException("Legend(): a table shows " . implode(', ', array_keys(self::CALCULATIONS)) . ", not '$Value'");
+        }
+      }
+      if ($Mode !== 'table' && ($Values || $Placement !== 'bottom' || $SortBy !== null))
+      {
+        throw new \InvalidArgumentException('Legend(): values, a placement and a sort are for a table');
+      }
+      if (!in_array($Placement, ['bottom', 'right'], true))
+      {
+        throw new \InvalidArgumentException("Legend(): placed 'bottom' or 'right', not '$Placement'");
+      }
+      if ($SortBy !== null && $SortBy !== 'name' && !in_array($SortBy, $Values, true))
+      {
+        throw new \InvalidArgumentException("Legend(): sorted by 'name' or one of its values, not '$SortBy'");
+      }
+      $this->LegendMode = $Mode;
+      $this->LegendValues = array_values(array_unique($Values));
+      $this->LegendPlacement = $Placement;
+      $this->LegendSort = $SortBy;
+      $this->LegendDesc = $Desc;
+      return $this;
+    }
+
+    /**
+     * No legend: Legend('none')
+     */
     public function NoLegend(): static
     {
-      $this->ShowLegend = false;
-      return $this;
+      return $this->Legend('none');
     }
 
     /**
@@ -460,16 +538,40 @@
         $this->AddChild($Caption);
       }
       $Label = $this->Title !== '' ? $this->Title : 'Chart';
-      $Body = $this->Message !== null || empty($this->Labels) ? $this->Empty() : $this->Draw();
-      // Where the plot is (drawn now: Draw() sets the margins), for the hover script's layout of the labels around it
-      $Plot = $Body !== '' && $this->Message === null && !empty($this->Labels) ? $this->PlotBox() : null;
-      $PlotAttribute = $Plot !== null ? ' data-plot="' . implode(' ', array_map(fn($Edge) => self::Coordinate((float)$Edge), $Plot)) . '"' : '';
-      $this->AddChild(new \HTML\Raw('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' . $this->Width . ' ' . $this->Height .
-        '" width="' . $this->Width . '" height="' . $this->Height . '" style="max-width:100%;height:auto" role="img" aria-label="' . self::Escape($Label) .
-        '"' . $PlotAttribute . ' font-family="system-ui, -apple-system, sans-serif" font-size="11">' . $Body . '</svg>'));
-      if ($this->ShowLegend && !empty($this->Labels) && $this->Message === null)
+      $HasLegend = $this->LegendMode !== 'none' && !empty($this->Labels) && $this->Message === null;
+      // A table on the right: the drawing in its share of the width, so the chart keeps its height
+      $Width = $this->Width;
+      if ($HasLegend)
       {
-        $this->AddChild(new \HTML\Raw($this->Legend()));
+        $this->Width = $this->DrawingWidth();
+      }
+      try
+      {
+        $Body = $this->Message !== null || empty($this->Labels) ? $this->Empty() : $this->Draw();
+        // Where the plot is (drawn now: Draw() sets the margins), for the hover script's layout of the labels around it
+        $Plot = $Body !== '' && $this->Message === null && !empty($this->Labels) ? $this->PlotBox() : null;
+      }
+      finally
+      {
+        $Drawn = $this->Width;
+        $this->Width = $Width;
+      }
+      $PlotAttribute = $Plot !== null ? ' data-plot="' . implode(' ', array_map(fn($Edge) => self::Coordinate((float)$Edge), $Plot)) . '"' : '';
+      $Svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' . $Drawn . ' ' . $this->Height .
+        '" width="' . $Drawn . '" height="' . $this->Height . '" style="max-width:100%;height:auto" role="img" aria-label="' . self::Escape($Label) .
+        '"' . $PlotAttribute . ' font-family="system-ui, -apple-system, sans-serif" font-size="11">' . $Body . '</svg>';
+      $Legend = $HasLegend ? $this->DrawLegend() : '';
+      if ($Legend !== '' && $this->LegendMode === 'table' && $this->LegendPlacement === 'right')
+      {
+        // Side by side, the legend as tall as the drawing (its own content doesn't stretch the row: it scrolls)
+        $Svg = '<div class="sc-chart-body sc-legend-right" style="display:flex;align-items:stretch;gap:.75rem">' .
+          '<div style="flex:1 1 0;min-width:0">' . $Svg . '</div>' . $Legend . '</div>';
+        $Legend = '';
+      }
+      $this->AddChild(new \HTML\Raw($Svg));
+      if ($Legend !== '')
+      {
+        $this->AddChild(new \HTML\Raw($Legend));
       }
       if (self::$HoverScript && !self::$HoverScriptSent)
       {
@@ -528,10 +630,15 @@
     }
 
     /**
-     * The legend under the drawing: a series per item, which hides or shows it when clicked
+     * The legend (Legend()): a list under the drawing, a series per item, which hides or shows it when clicked; or a
+     * table
      */
-    protected function Legend(): string
+    protected function DrawLegend(): string
     {
+      if ($this->LegendMode === 'table')
+      {
+        return empty($this->Series) ? '' : $this->LegendTable();
+      }
       if (count($this->Series) < 2)
       {
         return '';
@@ -556,6 +663,128 @@
       // Many series: the legend scrolls rather than pushing the page down
       $Scroll = count($this->Series) > 12 ? ';max-height:7.5rem;overflow-y:auto' : '';
       return '<div class="sc-chart-legend" style="' . self::LEGEND . $Scroll . '">' . $Items . '</div>';
+    }
+
+    /**
+     * A calculation over a series' values (null where it has none): 'last', 'min', 'mean', 'max' or 'sum'
+     */
+    protected static function Calculate(Series $Series, string $Calculation): ?float
+    {
+      $Values = $Series->Values;
+      ksort($Values);
+      $Values = array_values(array_filter($Values, fn($Value) => $Value !== null));
+      if (!$Values)
+      {
+        return null;
+      }
+      return (float)match ($Calculation)
+      {
+        'last' => $Values[count($Values) - 1],
+        'min' => min($Values),
+        'max' => max($Values),
+        'sum' => array_sum($Values),
+        'mean' => array_sum($Values) / count($Values),
+      };
+    }
+
+    // Legend('table'): a row per series, its calculations right-aligned; the sort and the highlight are standalone.js's
+    private function LegendTable(): string
+    {
+      $Others = $this->OthersAt;
+      $Rows = [];
+      foreach ($this->Series as $Number => $Series)
+      {
+        $Calculated = [];
+        foreach ($this->LegendValues as $Calculation)
+        {
+          $Calculated[$Calculation] = self::Calculate($Series, $Calculation);
+        }
+        $Rows[$Number] = $Calculated;
+      }
+      $Order = array_keys($Rows);
+      if ($this->LegendSort !== null)
+      {
+        $Key = $this->LegendSort;
+        usort($Order, function (int $A, int $B) use ($Rows, $Key)
+        {
+          if ($Key === 'name')
+          {
+            $By = strnatcasecmp($this->Series[$A]->Name, $this->Series[$B]->Name);
+            return ($this->LegendDesc ? -$By : $By) ?: $A <=> $B;
+          }
+          // Without a value: last either way
+          [$X, $Y] = [$Rows[$A][$Key], $Rows[$B][$Key]];
+          if ($X === null || $Y === null)
+          {
+            return ($X === null) <=> ($Y === null) ?: $A <=> $B;
+          }
+          return ($this->LegendDesc ? $Y <=> $X : $X <=> $Y) ?: $A <=> $B;
+        });
+      }
+      if ($Others !== null)
+      {
+        // Others last, whatever the sort
+        $Order = [...array_values(array_diff($Order, [$Others])), $Others];
+      }
+      // Headers in the order given: Name first, then the calculations as Legend() lists them
+      $Head = '';
+      foreach (['name', ...$this->LegendValues] as $Key)
+      {
+        $Text = $Key === 'name' ? 'Name' : self::CALCULATIONS[$Key];
+        $Sorted = $this->LegendSort === $Key;
+        $Head .= '<th scope="col" data-sort="' . $Key . '" tabindex="0" aria-sort="' . ($Sorted ? ($this->LegendDesc ? 'descending' : 'ascending') : 'none') .
+          '" style="' . self::TABLE_HEAD . ';text-align:' . ($Key === 'name' ? 'left' : 'right') . '">' . self::Escape($Text) .
+          '<span class="sc-sort-arrow">' . ($Sorted ? ($this->LegendDesc ? ' ↓' : ' ↑') : '') . '</span></th>';
+      }
+      $Body = '';
+      foreach ($Order as $Number)
+      {
+        $Series = $this->Series[$Number];
+        $Grey = $Number === $Others;
+        $Cells = '<td style="' . self::TABLE_CELL . ';width:100%;max-width:0;overflow:hidden;text-overflow:ellipsis" title="' . self::Escape($Series->Name) . '">' .
+          '<i style="' . self::LINE_SWATCH . self::Escape($Grey ? self::OTHERS : $this->ColorOf($Number)) . '"></i>' . self::Escape($Series->Name) . '</td>';
+        foreach ($this->LegendValues as $Calculation)
+        {
+          $Value = $Rows[$Number][$Calculation];
+          $Cells .= '<td style="' . self::TABLE_CELL . ';text-align:right" data-value="' . ($Value === null ? '' : self::Escape((string)$Value)) . '">' .
+            self::Escape($this->Value($Value)) . '</td>';
+        }
+        $Attributes = ['data-row' => $Number];
+        if ($Grey)
+        {
+          $Attributes['data-others'] = '';
+        }
+        $Style = $Grey ? 'color:var(--bs-secondary-color,#6c757d)' : '';
+        $Link = $this->LinkAttributes(null, $Number, $Series->Name);
+        if ($Link)
+        {
+          // OpenSeries(): the row opens the series' page
+          $Attributes['class'] = trim('sc-legend-item ' . ($Link['class'] ?? ''));
+          unset($Link['class']);
+          $Attributes += $Link;
+        }
+        else
+        {
+          $Attributes += ['class' => 'sc-legend-item', 'data-series' => $Number, 'role' => 'button', 'tabindex' => 0, 'aria-pressed' => 'true'];
+          // In the app, app.js hides and shows the series; elsewhere (One Web) the hover script does (Chart/standalone.js)
+          $Style .= ($Style !== '' ? ';' : '') . (self::InApp() ? '' : 'cursor:pointer');
+        }
+        if (trim($Style, ';') !== '')
+        {
+          $Attributes['style'] = trim($Style, ';');
+        }
+        $Body .= '<tr' . self::Attributes($Attributes) . '>' . $Cells . '</tr>';
+      }
+      $Table = '<table style="width:100%;border-collapse:separate;border-spacing:0;font-variant-numeric:tabular-nums">' .
+        '<thead><tr>' . $Head . '</tr></thead><tbody>' . $Body . '</tbody></table>';
+      if ($this->LegendPlacement === 'right')
+      {
+        return '<div class="sc-chart-legend sc-legend-table" style="display:block;flex:0 0 ' . round(100 * (1 - self::DRAWING_SHARE) - 1) .
+          '%;position:relative;min-width:0;margin:0;font-size:.8125rem"><div class="sc-legend-scroll" style="position:absolute;inset:0;overflow:auto">' .
+          $Table . '</div></div>';
+      }
+      return '<div class="sc-chart-legend sc-legend-table" style="display:block;margin-top:.5rem;font-size:.8125rem;overflow:auto;max-height:' .
+        max(96, (int)round(0.4 * $this->Height)) . 'px">' . $Table . '</div>';
     }
 
     protected function ColorOf(int $Series): string

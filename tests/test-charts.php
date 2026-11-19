@@ -353,3 +353,91 @@
   $Cpu->AddSeries('cpu', [20, 95]);
   Same(2, substr_count((string)(clone $Cpu)->Thresholds([0 => 'green', 80 => 'orange', 90 => 'red']), 'class="sc-threshold"'), 'threshold lines at 80 and 90, none at the lowest');
   Same(3, substr_count((string)$Cpu->Thresholds([0 => 'green', 80 => 'orange', 90 => 'red'], 'area'), 'class="sc-threshold"'), 'threshold bands: one per threshold');
+
+  // Legend('table'): a row per series with its calculations, sorted, beside or under the drawing
+  $Jobs = new LineChart();
+  $Jobs->AddSeries('beta', [1, 5, 3]);
+  $Jobs->AddSeries('alpha', [2, 2, 9]);
+  $Jobs->AddSeries('gamma', [4, null, null]);
+  $Jobs->AddSeries('empty', [null, null, null]);
+  $Html = (string)$Jobs->Legend('table', ['last', 'max', 'mean', 'min', 'sum'], SortBy: 'last');
+  Check(str_contains($Html, 'class="sc-chart-legend sc-legend-table"') && !str_contains($Html, 'sc-legend-right'), 'a table legend, under the drawing by default');
+  preg_match_all('/<th scope="col" data-sort="(\w+)"[^>]*>([^<]*)</', $Html, $Heads);
+  Same(['name', 'last', 'max', 'mean', 'min', 'sum'], $Heads[1], 'columns in the order given');
+  Same(['Name', 'Last *', 'Max', 'Mean', 'Min', 'Total'], $Heads[2], "Grafana's headers");
+  preg_match_all('/<tr data-row="(\d+)"/', $Html, $Order);
+  Same(['1', '2', '0', '3'], $Order[1], 'sorted by the last value, highest first; a series without values last');
+  Check(str_contains($Html, 'data-sort="last" tabindex="0" aria-sort="descending"') && str_contains($Html, '<span class="sc-sort-arrow"> ↓</span>'), 'the sorted column marked');
+  Check(preg_match('/<tr data-row="1"[^>]*><td[^>]*><i style="[^"]*background:#eb6834"><\/i>alpha<\/td><td[^>]*data-value="9">9<\/td><td[^>]*data-value="9">9<\/td>' .
+    '<td[^>]*data-value="4.3333333333333">4.33<\/td><td[^>]*data-value="2">2<\/td><td[^>]*data-value="13">13<\/td><\/tr>/', $Html) === 1,
+    "a row: a line swatch in its series' colour (by position, not by the sort), last, max, mean, min and total");
+  Check(preg_match('/<tr data-row="2"[^>]*>.*?data-value="4">4<\/td>/', $Html) === 1, 'last: the last value there is');
+  Check(preg_match('/<tr data-row="3"[^>]*><td[^>]*>.*?empty<\/td><td[^>]*data-value="">–<\/td>/', $Html) === 1, 'no values: a dash');
+  Check(str_contains($Html, 'class="sc-legend-item" data-series="0" role="button" tabindex="0" aria-pressed="true"'), 'a row hides or shows its series');
+  Check(str_contains($Html, 'text-align:right" data-value') && str_contains($Html, 'font-variant-numeric:tabular-nums') && str_contains($Html, 'position:sticky;top:0'),
+    'values right-aligned in tabular figures, the header staying on top');
+  Check(str_contains($Html, 'overflow:auto;max-height:96px'), 'under the drawing: at most 40% of its height, scrolling');
+  preg_match_all('/<tr data-row="(\d+)"/', (string)(clone $Jobs)->Legend('table', ['max'], SortBy: 'name', Desc: false), $Order);
+  Same(['1', '0', '3', '2'], $Order[1], 'by name, A to Z');
+  preg_match_all('/<tr data-row="(\d+)"/', (string)(clone $Jobs)->Legend('table', ['max']), $Order);
+  Same(['0', '1', '2', '3'], $Order[1], 'no sort: the series\' order');
+  Check(str_contains((string)(clone $Jobs)->Legend('table', ['last'])->Format(fn(float $V) => $V . ' ms'), '>3 ms</td>'), 'values as Format() writes them');
+
+  // Beside the drawing: it takes 58% of the width, the legend the rest, as tall as the drawing
+  $Right = (clone $Jobs)->Legend('table', ['last'], Placement: 'right');
+  $Html = (string)$Right;
+  Check(str_contains($Html, '<div class="sc-chart-body sc-legend-right" style="display:flex;align-items:stretch;gap:.75rem"><div style="flex:1 1 0;min-width:0"><svg')
+    && str_contains($Html, 'viewBox="0 0 371 240" width="371"'), 'right: the drawing in its share of the width, at the chart\'s height');
+  Check(preg_match('/data-plot="[\d.]+ 10 359 214"/', $Html) === 1, 'its plot box in the narrower drawing, for the hover script');
+  Check(str_contains($Html, 'flex:0 0 41%;position:relative') && str_contains($Html, '<div class="sc-legend-scroll" style="position:absolute;inset:0;overflow:auto">'),
+    'and the legend beside it, scrolling inside the drawing\'s height');
+  Same(155, $Right->Resolution(), 'fewer points to fetch for the narrower drawing');
+
+  // Top(): Others last, whatever the sort, in grey, with the summed values
+  $Many = new LineChart();
+  foreach ([1, 2, 30, 40] as $Number => $Value)
+  {
+    $Many->AddSeries("s$Number", [$Value, $Value]);
+  }
+  $Html = (string)$Many->Top(1)->Legend('table', ['last', 'sum'], SortBy: 'last');
+  preg_match_all('/<tr data-row="(\d+)"( data-others="")?/', $Html, $Order);
+  Same(['0', '1'], $Order[1], 'the kept series, then Others');
+  Check(str_contains($Html, '<tr data-row="1" data-others=""') && preg_match('/data-others=""[^>]*color:var\(--bs-secondary-color[^>]*><td[^>]*><i style="[^"]*background:#9a9aa0"><\/i>Others \(3\)<\/td><td[^>]*data-value="33">33<\/td><td[^>]*data-value="66">66</', $Html) === 1,
+    'Others (3): grey, its values summed');
+
+  // Bars over time, OpenSeries() rows, list and none
+  $Bars = (new BarChart())->FromRows([['m' => 'Jan', 'a' => 1, 'b' => 2], ['m' => 'Feb', 'a' => 3, 'b' => 1]], 'm', ['a' => 'A', 'b' => 'B']);
+  Check(str_contains((string)(clone $Bars)->Legend('table', ['sum']), '<td style="padding:.2rem .5rem;white-space:nowrap;border-bottom:1px solid var(--bs-border-color-translucent,rgba(0,0,0,.08));text-align:right" data-value="4">4</td>'),
+    'a bar chart: the same table');
+  InApp(true);
+  $Html = (string)(clone $Bars)->Legend('table', ['sum'])->OpenSeries('/s.php?s={series}', Open::SidePanel);
+  InApp(false);
+  Check(str_contains($Html, '<tr data-row="0" class="sc-legend-item oc-link" data-href="/s.php?s=A"') && !str_contains($Html, 'data-series="0" role="button"'),
+    "with OpenSeries() a row opens the series' page instead of hiding it");
+  Check(str_contains((string)(clone $Bars)->Legend('list'), 'class="sc-chart-legend" style="display:flex'), "Legend('list'): the list, as before");
+  Check(!str_contains((string)(clone $Bars)->Legend('none'), 'sc-chart-legend') && !str_contains((string)(clone $Bars)->NoLegend(), 'sc-chart-legend'), "Legend('none') and NoLegend(): none");
+  foreach ([
+    'an unknown mode' => fn() => (new LineChart())->Legend('grid'),
+    'an unknown calculation' => fn() => (new LineChart())->Legend('table', ['median']),
+    'a sort by a column not shown' => fn() => (new LineChart())->Legend('table', ['last'], SortBy: 'max'),
+    'values on a list' => fn() => (new LineChart())->Legend('list', ['last']),
+    'a placement on a list' => fn() => (new LineChart())->Legend('list', Placement: 'right'),
+    'an unknown placement' => fn() => (new LineChart())->Legend('table', Placement: 'left'),
+    'a table on a pie' => fn() => (new PieChart())->Legend('table', ['sum']),
+  ] as $What => $Call)
+  {
+    try
+    {
+      $Call();
+      $Threw = false;
+    }
+    catch (InvalidArgumentException)
+    {
+      $Threw = true;
+    }
+    Check($Threw, "Legend(): $What is refused");
+  }
+  $Js = file_get_contents(__DIR__ . '/../php/Chart/standalone.js');
+  Check(str_contains($Js, 'window.scChartSortLegend = sortLegend;') && str_contains($Js, ".sc-chart svg.sc-dim [data-series]:not(.sc-lit){opacity:.15}")
+    && str_contains($Js, "row.hasAttribute('data-others')"), 'the script sorts a table legend (Others last) and dims the other series');
+  Check(str_contains(file_get_contents(__DIR__ . '/../public/js/app.js'), 'window.scChartSortLegend(this.querySelector'), 'a refreshed dashboard keeps its legends\' sort');

@@ -26,7 +26,13 @@
     '.sc-chart .sc-crosshair{stroke:var(--bs-secondary-color,#6c757d);stroke-width:1;stroke-dasharray:3 3}' +
     '.sc-chart .sc-hover-dot{stroke:var(--bs-body-bg,#fff);stroke-width:2}' +
     '.sc-chart .sc-hover-area{outline:none}.sc-chart .sc-hover-area[data-href]{cursor:pointer}' +
-    '.sc-chart .sc-bar:hover,.sc-chart .sc-slice:hover{opacity:.8}';
+    '.sc-chart .sc-bar:hover,.sc-chart .sc-slice:hover{opacity:.8}' +
+    // A table legend's row pointed at brings its series forward; on a phone a table on the right goes under the drawing
+    '.sc-chart svg [data-series]{transition:opacity .12s}.sc-chart svg.sc-dim [data-series]:not(.sc-lit){opacity:.15}' +
+    '.sc-legend-table tbody tr[data-row]:hover,.sc-legend-table tbody tr[data-row]:focus-visible{background:var(--bs-tertiary-bg,rgba(0,0,0,.04));outline:none}' +
+    '.sc-legend-table th[data-sort]:hover{color:var(--bs-body-color,#212529)!important}' +
+    '@media (max-width:575.98px){.sc-legend-right{flex-direction:column}.sc-legend-right>.sc-legend-table{flex:none!important}' +
+    '.sc-legend-right .sc-legend-scroll{position:static!important;max-height:12rem}}';
   document.head.appendChild(style);
 
   // The box shows at most this many rows; the rest are counted
@@ -390,6 +396,84 @@
   };
   document.addEventListener('click', toggle, true);
   document.addEventListener('keydown', toggle, true);
+
+  // A table legend (Chart::Legend('table')), in the app and outside it. Its rows sorted again by a column: names A-Z,
+  // numbers highest first, the same column again turning it round; rows without a value last, Others always last.
+  const sortLegend = function (table, key, desc) {
+    const body = table && table.tBodies[0];
+    if (!body) return;
+    const heads = Array.from(table.querySelectorAll('th[data-sort]'));
+    const column = heads.findIndex(function (head) { return head.getAttribute('data-sort') === key; });
+    if (column < 0) return;
+    const rows = Array.from(body.rows);
+    const number = function (row) { return parseInt(row.getAttribute('data-row'), 10) || 0; };
+    const series = rows.filter(function (row) { return !row.hasAttribute('data-others'); });
+    series.sort(function (a, b) {
+      let by;
+      if (key === 'name')
+      {
+        by = a.cells[0].textContent.localeCompare(b.cells[0].textContent, undefined, {numeric: true, sensitivity: 'base'});
+        if (desc) by = -by;
+      }
+      else
+      {
+        const x = a.cells[column].getAttribute('data-value') || '', y = b.cells[column].getAttribute('data-value') || '';
+        by = x === '' || y === '' ? (x === '') - (y === '') : (desc ? parseFloat(y) - parseFloat(x) : parseFloat(x) - parseFloat(y));
+      }
+      return by || number(a) - number(b);
+    });
+    series.concat(rows.filter(function (row) { return row.hasAttribute('data-others'); })).forEach(function (row) {
+      body.appendChild(row);
+    });
+    heads.forEach(function (head) {
+      const on = head.getAttribute('data-sort') === key;
+      head.setAttribute('aria-sort', on ? (desc ? 'descending' : 'ascending') : 'none');
+      const arrow = head.querySelector('.sc-sort-arrow');
+      if (arrow) arrow.textContent = on ? (desc ? ' \u2193' : ' \u2191') : '';
+    });
+  };
+  // For app.js: a dashboard refreshed keeps its legends' sort
+  window.scChartSortLegend = sortLegend;
+  const sortBy = function (event) {
+    const head = event.target instanceof Element ? event.target.closest('.sc-legend-table th[data-sort]') : null;
+    if (!head) return;
+    if (event.type === 'keydown' && event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    event.stopPropagation();
+    const now = head.getAttribute('aria-sort');
+    sortLegend(head.closest('table'), head.getAttribute('data-sort'), now === 'none' ? head.getAttribute('data-sort') !== 'name' : now === 'ascending');
+  };
+  document.addEventListener('click', sortBy, true);
+  document.addEventListener('keydown', sortBy, true);
+  // A row pointed at (or focused): its series at full strength, the others dimmed
+  const light = function (row, on) {
+    const chart = row.closest('.sc-chart');
+    const drawing = chart && chart.querySelector('svg');
+    if (!drawing) return;
+    drawing.querySelectorAll('.sc-lit').forEach(function (element) { element.classList.remove('sc-lit'); });
+    drawing.classList.toggle('sc-dim', on);
+    if (on)
+    {
+      drawing.querySelectorAll('[data-series="' + row.getAttribute('data-row') + '"]').forEach(function (element) {
+        element.classList.add('sc-lit');
+      });
+    }
+  };
+  const rowOf = function (target) {
+    return target instanceof Element ? target.closest('.sc-legend-table tbody tr[data-row]') : null;
+  };
+  ['mouseover', 'focusin'].forEach(function (type) {
+    document.addEventListener(type, function (event) {
+      const row = rowOf(event.target);
+      if (row && rowOf(event.relatedTarget) !== row) light(row, true);
+    });
+  });
+  ['mouseout', 'focusout'].forEach(function (type) {
+    document.addEventListener(type, function (event) {
+      const row = rowOf(event.target);
+      if (row && rowOf(event.relatedTarget) !== row) light(row, false);
+    });
+  });
 
   // Text at its own size on screen. A chart is drawn at its Size() and scales to its container's width, so a wide panel
   // would draw its labels (axis ticks, row names, annotations, a pie's total, messages) larger, and a narrow one smaller.

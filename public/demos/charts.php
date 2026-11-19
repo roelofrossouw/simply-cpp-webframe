@@ -136,6 +136,28 @@
   $Card->AddChild($Jobs);
   $Card->AddChild($Ten->Top(10));
 
+  // Table legends, as Grafana's: values per series, sorted, beside or under the drawing
+  Page::AddContent($Card = new Card());
+  $Card->AddHeader('Table legends');
+  $Card->AddParagraph('Legend(\'table\', [\'last\', \'max\'], Placement: \'right\', SortBy: \'last\'): a row per series with its values over the range. Click a header to sort by it (again to turn it round), point at a row to bring its series forward, click a row to hide or show it. Others stays last, in grey.');
+  $Side = (new LineChart('Top(8), stacked, legend on the right'))->Time()->Area()->Stacked();
+  $Under = (new LineChart('Legend under the drawing'))->Time();
+  for ($Job = 0; $Job < 30; $Job++)
+  {
+    $Points = [];
+    for ($Point = 0; $Point < 240; $Point++)
+    {
+      $Points[$Start + 90 * $Point] = round(abs(sin($Point / 20 + $Job)) * (1 + $Job % 13) * 6, 2);
+    }
+    $Side->AddSeries(sprintf('job_%03d', $Job), $Points);
+    if ($Job < 6)
+    {
+      $Under->AddSeries(sprintf('job_%03d', $Job), $Points);
+    }
+  }
+  $Card->AddChild($Side->Top(8)->Legend('table', ['last', 'max', 'mean'], Placement: 'right', SortBy: 'last'));
+  $Card->AddChild($Under->Area()->Legend('table', ['last', 'min', 'max', 'sum'], SortBy: 'name', Desc: false));
+
   // Stacked, below zero, per-series settings and thresholds
   Page::AddContent($Grid = new Grid());
   $Grid->Columns(2, ScreenSize::Large);
