@@ -115,6 +115,6 @@
       }
       return '<svg class="sc-stat-trend" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' . $Width . ' ' . $Height . '" width="' . $Width .
         '" height="' . $Height . '" preserveAspectRatio="none" aria-hidden="true"><polyline points="' . implode(' ', $Points) .
-        '" fill="none" stroke="#0d6efd" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>';
+        '" fill="none" stroke="#2a78d6" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>';
     }
   }

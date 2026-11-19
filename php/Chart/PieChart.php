@@ -32,6 +32,11 @@
 
     protected function ColorOf(int $Series): string
     {
+      // An "Others" slice (the rest of a top N) in the neutral grey, not a palette colour
+      if (preg_match('/^Others(?: \(\d+\))?$/', $this->Labels[$Series] ?? ''))
+      {
+        return self::OTHERS;
+      }
       return self::PALETTE[$Series % count(self::PALETTE)];
     }
 

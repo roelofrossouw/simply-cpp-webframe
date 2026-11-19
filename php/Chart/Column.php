@@ -185,6 +185,6 @@
         }
       }
       return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 24" width="120" height="24" preserveAspectRatio="none" style="display:block;width:100%;height:24px"' .
-        ' aria-hidden="true"><path d="' . LineChart::PathOf($Points) . '" fill="none" stroke="#0d6efd" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>';
+        ' aria-hidden="true"><path d="' . LineChart::PathOf($Points) . '" fill="none" stroke="#2a78d6" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>';
     }
   }

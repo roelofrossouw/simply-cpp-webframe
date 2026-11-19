@@ -16,9 +16,13 @@
    */
   abstract class Chart extends \HTML\Element
   {
-    // Bootstrap's colours, in an order that keeps neighbours apart
-    protected const array PALETTE = ['#0d6efd', '#20c997', '#fd7e14', '#6f42c1', '#d63384', '#ffc107', '#198754', '#0dcaf0',
-      '#6c757d', '#dc3545'];
+    // 24 colours, by series position (not rank), in an order that keeps neighbours apart; checked for distance (OKLab
+    // ΔE) and colour-blind views, no grey (it reads as "no data"), repeating only past 24 series (Roelof, 2026-11-19)
+    protected const array PALETTE = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948',
+      '#0b4f9b', '#b0461a', '#008056', '#b77900', '#b0587a', '#005700', '#3f2b98', '#a7292b', '#ffacca', '#59a354', '#847fe4',
+      '#f9857d', '#689fe7', '#ff9d78', '#77d0a6', '#ffcd7a'];
+    // "Others" (Top()'s rest, a pie's Others slice): a neutral grey, not a palette colour
+    protected const string OTHERS = '#9a9aa0';
 
     // A legend item's colour swatch, styled inline so it shows without sc-webframe's style.css (another app, an email)
     protected const string LEGEND = 'display:flex;flex-wrap:wrap;justify-content:center;gap:.25rem 1rem;margin-top:.5rem;font-size:.875rem';
@@ -330,7 +334,7 @@
       arsort($Rank);
       $Keep = array_slice(array_keys($Rank), 0, $this->TopCount);
       sort($Keep);
-      $Others = new Series($this->OthersName . ' (' . (count($this->Series) - count($Keep)) . ')', '#adb5bd');
+      $Others = new Series($this->OthersName . ' (' . (count($this->Series) - count($Keep)) . ')', self::OTHERS);
       foreach ($this->Series as $Number => $Series)
       {
         if (in_array($Number, $Keep, true))

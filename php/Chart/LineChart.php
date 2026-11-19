@@ -296,6 +296,7 @@
       // both draw it (<use>), rather than the shape twice
       $Linked = !empty($this->LinkAttributes(null, 0, ''));
       $Prefix = 'sc' . bin2hex(random_bytes(4)) . '-';
+      $Fades = []; // the area gradients drawn
       $Shapes = '';
       foreach ($this->Series as $Number => $Series)
       {
@@ -348,11 +349,21 @@
           {
             // Down to the series below: its top, back from right to left
             $Lower = array_reverse(array_map(fn(int $Index) => [$Xs[$Index], (int)round($this->Y($this->Unders[$Number][$Index]))], $RunIndexes[$RunNumber]));
-            $Svg .= '<path d="' . $Line . 'L' . substr(self::PathOf($Lower), 1) . 'Z" fill="' . $Color . '" fill-opacity="0.35" stroke="none"/>';
+            $Svg .= '<path d="' . $Line . 'L' . substr(self::PathOf($Lower), 1) . 'Z" fill="' . $Color . '" fill-opacity="0.4" stroke="none"/>';
           }
           elseif ($this->Area)
           {
-            $Svg .= '<path d="' . $Line . 'L' . $End[0] . ' ' . $Bottom . 'L' . $Start[0] . ' ' . $Bottom . 'Z" fill="' . $Color . '" fill-opacity="0.12" stroke="none"/>';
+            // Grafana's opacity gradient: the series' colour at 0.35 at the top of the plot down to none at the baseline;
+            // one gradient per series, its id unique to this chart (several charts share a page)
+            $Fade = $Prefix . 'fade' . $Number;
+            if (!isset($Fades[$Fade]))
+            {
+              $Fades[$Fade] = true;
+              $Svg .= '<defs><linearGradient id="' . $Fade . '" gradientUnits="userSpaceOnUse" x1="0" y1="' . self::TOP . '" x2="0" y2="' . $Bottom . '">' .
+                '<stop offset="0" stop-color="' . $Color . '" stop-opacity="0.35"/><stop offset="1" stop-color="' . $Color . '" stop-opacity="0"/>' .
+                '</linearGradient></defs>';
+            }
+            $Svg .= '<path d="' . $Line . 'L' . $End[0] . ' ' . $Bottom . 'L' . $Start[0] . ' ' . $Bottom . 'Z" fill="url(#' . $Fade . ')" stroke="none"/>';
           }
           if ($Linked)
           {

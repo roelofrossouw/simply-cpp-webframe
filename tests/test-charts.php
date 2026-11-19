@@ -96,10 +96,16 @@
   Check(str_contains($Html, 'class="sc-hover-area oc-link"') && count($Data['x']) === 5, 'one hover area over the five labels, opening in the side panel');
   Same('/hour.php?at=02%3A00', $Data['href'][2], "each label's link, its label filled in");
   Same([1, 2, null, 4, 5], $Data['v'][0], 'the values, a missing one null');
-  Same(['n' => 'Rate', 'c' => '#0d6efd'], $Data['series'][0], "the series' name and colour");
+  Same(['n' => 'Rate', 'c' => '#2a78d6'], $Data['series'][0], "the series' name and colour");
   Check(preg_match('/<path d="M\d+ \d+l-?\d+ -?\d+"/', $Html) === 1, 'a line as one path in whole pixels, each point a step from the last');
   Same(0, substr_count((string)(new LineChart())->Dots(false)->FromRows($Rows, 'month', 'sent'), '<circle'), 'Dots(false): no dots');
-  Check(preg_match('/<path d="M[^"]*Z" fill="#0d6efd" fill-opacity="0.12"/', (string)(new LineChart())->Area()->FromRows($Rows, 'month', 'sent')) === 1, 'Area() fills under the line');
+  $Faded = (string)(new LineChart())->Area()->FromRows($Rows, 'month', 'sent');
+  Check(preg_match('/<linearGradient id="(sc[0-9a-f]{8}-fade0)" gradientUnits="userSpaceOnUse" x1="0" y1="10" x2="0" y2="\d+"><stop offset="0" stop-color="#2a78d6" stop-opacity="0.35"\/><stop offset="1" stop-color="#2a78d6" stop-opacity="0"\/>/', $Faded, $Gradient) === 1
+    && str_contains($Faded, 'fill="url(#' . $Gradient[1] . ')"'), 'Area(): a gradient in the series\' colour, 0.35 at the top down to none at the baseline');
+  $Two = (new LineChart())->Area()->FromRows($Rows, 'month', 'sent') . (new LineChart())->Area()->FromRows($Rows, 'month', 'sent');
+  preg_match_all('/<linearGradient id="([^"]+)"/', $Two, $Ids);
+  Check(count(array_unique($Ids[1])) === 2, 'two charts on a page: two different gradient ids');
+  Check(preg_match('/<path d="M[^"]*Z" fill="url\(#/', (string)(new LineChart())->Area()->FromRows($Rows, 'month', 'sent')) === 1, 'Area() fills under the line');
   Same(['R 100', 'R 150', 'R 90'], HoverData((string)(new LineChart())->Format(fn(float $V) => 'R ' . $V)->FromRows($Rows, 'month', 'sent'))['f'][0], 'Format() writes the values');
   Check(!isset(HoverData((string)(new LineChart())->FromRows($Rows, 'month', 'sent'))['f']), 'without Format() the script writes them');
 
@@ -111,6 +117,18 @@
   Check(str_contains($Html, '75%') && str_contains($Html, '25%'), 'the legend gives the shares');
   Check(str_contains($Html, '<span class="sc-legend-item modal-link" data-href="/d.php?d=a.example"'), "a legend item opens its slice's page");
   Check(str_contains((string)(new PieChart())->FromRows([['d' => 'x', 'n' => 5]], 'd', 'n'), ' A'), 'one slice: a whole circle (two arcs)');
+
+  // The palette: 24 colours by position, repeating only past 24; a pie's Others slice in grey
+  $Many = new BarChart();
+  for ($Number = 0; $Number < 26; $Number++)
+  {
+    $Many->AddSeries("s$Number", [1]);
+  }
+  preg_match_all('/<rect class="sc-bar"[^>]* fill="(#[0-9a-f]{6})"/', (string)$Many, $Fills);
+  Same(24, count(array_unique(array_slice($Fills[1], 0, 24))), '24 series: 24 different colours');
+  Check($Fills[1][0] === '#2a78d6' && $Fills[1][23] === '#ffcd7a' && $Fills[1][24] === '#2a78d6', 'in the order given, the 25th starting over');
+  $Pie = (string)(new PieChart())->FromRows([['n' => 'a', 'v' => 3], ['n' => 'Others', 'v' => 2]], 'n', 'v');
+  Check(str_contains($Pie, 'fill="#9a9aa0"') && str_contains($Pie, 'fill="#2a78d6"'), 'a pie: an Others slice in grey, the rest from the palette');
 
   // Nothing to draw
   Check(str_contains((string)new BarChart(), '>No data</text>'), 'a chart without data says so');
@@ -229,7 +247,7 @@
   $Hover->AddSeries('Approved', [$Base => 1535, $Base + 60 => null]);
   $Html = (string)$Hover;
   $Data = HoverData($Html);
-  Same([['n' => 'Submitted', 'c' => '#0d6efd'], ['n' => 'Approved', 'c' => '#20c997']], $Data['series'], 'the series for the box');
+  Same([['n' => 'Submitted', 'c' => '#2a78d6'], ['n' => 'Approved', 'c' => '#eb6834']], $Data['series'], 'the series for the box');
   Same([[1603, 1610], [1535, null]], $Data['v'], 'the values for the box and the dots, a missing one null (no dot)');
   Same(['top', 'bottom', 'low', 'high'], array_values(array_intersect(['top', 'bottom', 'low', 'high'], array_keys($Data['y']))), 'the scale, for the dots');
   Same(1, substr_count($Html, 'class="sc-chart-data"'), 'one data block for the chart');
@@ -241,9 +259,9 @@
   Check(str_contains((string)$Odd, '\u003C/script\u003E\u003Cb\u003E\u0026') && HoverData((string)$Odd)['series'][0]['n'] === '</script><b>&',
     "names with markup characters can't break out of the data block");
   $Bars = (string)(new BarChart())->FromRows($Rows2 = [['m' => 'Jan', 'a' => 3]], 'm', ['a' => 'Sent']);
-  Check(str_contains(html_entity_decode($Bars), 'data-rows="[{"n":"Sent","c":"#0d6efd","v":"3","r":3,"s":0}]"') && str_contains($Bars, 'data-head="Jan"'), 'a bar\'s box: its own value');
+  Check(str_contains(html_entity_decode($Bars), 'data-rows="[{"n":"Sent","c":"#2a78d6","v":"3","r":3,"s":0}]"') && str_contains($Bars, 'data-head="Jan"'), 'a bar\'s box: its own value');
   $Slice = (string)(new PieChart())->FromRows([['d' => 'a', 'n' => 3], ['d' => 'b', 'n' => 1]], 'd', 'n');
-  Check(str_contains(html_entity_decode($Slice), '"n":"a","c":"#0d6efd","v":"3 (75%)"'), "a slice's box: its name, value and share");
+  Check(str_contains(html_entity_decode($Slice), '"n":"a","c":"#2a78d6","v":"3 (75%)"'), "a slice's box: its name, value and share");
   $Js = file_get_contents(__DIR__ . '/../public/js/app.js');
   $Script = file_get_contents(__DIR__ . '/../php/Chart/standalone.js');
   Check(str_contains($Script, 'const showAt = function (area, index, clientX, clientY)') && str_contains($Script, "line.setAttribute('class', 'sc-crosshair')")
@@ -257,7 +275,7 @@
   $Data = HoverData((string)$Top);
   Same(['s6', 's7', 's8', 'Others (5)'], array_column($Data['series'], 'n'), 'Top(3): the three highest, the rest as Others');
   Same([15, 30, 15], $Data['v'][3], 'Others adds the rest up');
-  Same('#adb5bd', $Data['series'][3]['c'], 'Others in grey');
+  Same('#9a9aa0', $Data['series'][3]['c'], 'Others in the neutral grey');
   $Last = new LineChart();
   $Last->AddSeries('early', [9, 1]);
   $Last->AddSeries('late', [1, 5]);
@@ -311,7 +329,7 @@
   $Both->AddSeries('up2', [1]);
   Same([[2.0], [-3.0], [3.0]], Tops($Both->Stacked()), 'stacked: above and below zero apart');
   $Area = (string)(new LineChart())->Area()->Stacked()->FromRows([['m' => 'a', 'x' => 1, 'y' => 2], ['m' => 'b', 'x' => 2, 'y' => 2]], 'm', ['x', 'y']);
-  Same(2, preg_match_all('/<path d="M[^"]*L[^"]*Z" fill="[^"]*" fill-opacity="0.35"/', $Area), 'stacked areas: each fills down to the one below');
+  Same(2, preg_match_all('/<path d="M[^"]*L[^"]*Z" fill="[^"]*" fill-opacity="0.4"/', $Area), 'stacked areas: each fills down to the one below, at 0.4');
   $Codes = new LineChart();
   foreach (['200', '404', '503', 'other'] as $Code)
   {
@@ -319,7 +337,7 @@
   }
   $Codes->Override('/^2/', Color: '#56a64b')->Override('/^5/', Color: '#f2495c', Dashed: true)->Override('other', Width: 1);
   $Data = HoverData($Html = (string)$Codes);
-  Same(['#56a64b', '#20c997', '#f2495c'], array_slice(array_column($Data['series'], 'c'), 0, 3), 'Override(): colours by name or pattern');
+  Same(['#56a64b', '#eb6834', '#f2495c'], array_slice(array_column($Data['series'], 'c'), 0, 3), 'Override(): colours by name or pattern');
   Check(str_contains($Html, 'stroke="#f2495c" stroke-width="1" vector-effect="non-scaling-stroke" stroke-dasharray="6 4"')
     && str_contains($Html, 'stroke-width="1" vector-effect="non-scaling-stroke" stroke-linejoin'), 'dashed, and a width (on screen, non-scaling)');
   Check(str_contains($Html, '<line vector-effect="non-scaling-stroke" x1='), 'grid lines keep their width on screen');
