@@ -5,7 +5,8 @@
   /**
    * A chart drawn as SVG on the server (LineChart, BarChart, PieChart), so it shows the same in a page, an email or a
    * PDF. In the app it's interactive: each point, bar or slice shows its values when the pointer is on it, and opens a
-   * page when clicked (Open()), in the page, a popup or the side panel; clicking a series in the legend hides it.
+   * page when clicked (Open()), in the page, a popup or the side panel; clicking a series in the legend hides it (and in a
+   * stacked chart the others are stacked again without it, by Chart/standalone.js).
    *
    *   $Chart = new Chart\BarChart('Claims per month');
    *   $Chart->FromRows(DB::Rows($Sql), 'month', ['opened' => 'Opened', 'closed' => 'Closed']);

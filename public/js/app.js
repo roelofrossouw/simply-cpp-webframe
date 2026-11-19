@@ -2336,6 +2336,8 @@ function setupCharts() {
       $(this).closest('.sc-chart').find('svg [data-series="' + series + '"]').each(function () {
         this.classList.toggle('sc-off', off);
       });
+      // A stacked chart: the others stacked again without it (Chart/standalone.js)
+      if (typeof window.scChartRestack === 'function') window.scChartRestack(this.closest('.sc-chart'));
     });
   // A page loading in place of the chart takes the tooltip with it
   $(document).on('show.bs.modal show.bs.offcanvas', hideTip);

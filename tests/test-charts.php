@@ -441,3 +441,19 @@
   Check(str_contains($Js, 'window.scChartSortLegend = sortLegend;') && str_contains($Js, ".sc-chart svg.sc-dim [data-series]:not(.sc-lit){opacity:.15}")
     && str_contains($Js, "row.hasAttribute('data-others')"), 'the script sorts a table legend (Others last) and dims the other series');
   Check(str_contains(file_get_contents(__DIR__ . '/../public/js/app.js'), 'window.scChartSortLegend(this.querySelector'), 'a refreshed dashboard keeps its legends\' sort');
+
+  // A hidden series drops out of a stack: the runs, dots and bars say where they are, for standalone.js to stack again
+  $Stack = (new LineChart())->Area()->Stacked();
+  $Stack->AddSeries('a', [1, 2, null, 4]);
+  $Stack->AddSeries('b', [3, 4, 5, 6]);
+  $Html = (string)$Stack;
+  Check(str_contains($Html, 'fill-opacity="0.4" stroke="none" data-run="0 1"/>') && str_contains($Html, 'stroke-linecap="round" data-run="0 1"/>'),
+    'stacked: an area and its line name the labels of their run');
+  Check(preg_match('/<circle cx="\d+" cy="\d+" r="2.5" fill="#2a78d6" data-i="3"\/>/', $Html) === 1, 'and a point on its own its label');
+  Check(!str_contains((string)(new LineChart())->Area()->FromRows([['m' => 'a', 'x' => 1], ['m' => 'b', 'x' => 2]], 'm', 'x'), 'data-run'), 'not stacked: nothing to stack again');
+  $Html = (string)(new BarChart())->Stacked()->FromRows([['m' => 'a', 'x' => 1, 'y' => 2]], 'm', ['x', 'y']);
+  Check(preg_match('/<g class="sc-stack" data-y="0 [\d.]+ \d+ \d+"><\/g>/', $Html) === 1 && str_contains($Html, 'data-i="0" data-v="2"'), 'stacked bars: the scale, and each bar\'s label and value');
+  $Js = file_get_contents(__DIR__ . '/../php/Chart/standalone.js');
+  Check(str_contains($Js, 'window.scChartRestack = restack;') && str_contains($Js, 'const tops = positions(chart, index, hidden);'),
+    'the script stacks again without hidden series, the hover dots too (in a browser: test-browser.php)');
+  Check(str_contains(file_get_contents(__DIR__ . '/../public/js/app.js'), "window.scChartRestack(this.closest('.sc-chart'))"), 'app.js stacks again on a legend click');

@@ -87,8 +87,13 @@
           $Tip = $this->LabelText($Index) . "\n" . $Series->Name . ': ' . $this->Value($Value);
           $Svg .= $this->Item('rect', ['class' => 'sc-bar', 'x' => $X, 'y' => $Top, 'width' => $Width,
             'height' => max(0.5, $Bottom - $Top), 'rx' => min(2.0, $Width / 4), 'fill' => $this->ColorOf($Number)] +
-            $this->HoverAttributes($Index, [$Number => $Value]), $Tip, $Index, $Number);
+            $this->HoverAttributes($Index, [$Number => $Value]) + ($this->Stacked ? ['data-i' => $Index, 'data-v' => $Value] : []), $Tip, $Index, $Number);
         }
+      }
+      if ($this->Stacked && $Svg !== '')
+      {
+        // The scale, for standalone.js to stack the bars again without the series hidden in the legend
+        $Svg = '<g class="sc-stack" data-y="' . $this->Scale->Low . ' ' . $this->Scale->High . ' ' . self::TOP . ' ' . ($this->Height - self::BOTTOM) . '"></g>' . $Svg;
       }
       return $Svg;
     }

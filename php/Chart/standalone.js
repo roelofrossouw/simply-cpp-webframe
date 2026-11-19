@@ -163,18 +163,27 @@
     return Math.abs(xs[low] - x) <= Math.abs(xs[high] - x) ? low : high;
   };
   // Where each series' point is drawn at a label: its value, below zero (neg), stacked (normal, percent), as
-  // LineChart::Position() places them
-  const positions = function (chart, index) {
+  // LineChart::Position() places them; series hidden in the legend left out of the stack (and of percent's total).
+  // What each stands on comes along as tops.unders.
+  const positions = function (chart, index, hidden) {
     const tops = [];
+    const unders = [];
+    const out = number => hidden !== undefined && hidden.has(String(number));
     let up = 0;
     let down = 0;
     let total = 0;
     if (chart.stack === 'percent')
     {
-      chart.series.forEach((series, number) => total += Math.abs(chart.v[number][index] ?? 0));
+      chart.series.forEach((series, number) => total += out(number) ? 0 : Math.abs(chart.v[number][index] ?? 0));
     }
     chart.series.forEach(function (series, number) {
       const value = chart.v[number][index];
+      unders[number] = 0;
+      if (out(number))
+      {
+        tops[number] = null;
+        return;
+      }
       let shown = value === null || value === undefined ? 0 : (series.neg ? -value : value);
       if (chart.stack === 'percent') shown = total > 0 ? 100 * Math.abs(shown) / total : 0;
       if (!chart.stack)
@@ -184,8 +193,10 @@
       }
       const under = shown >= 0 ? up : down;
       shown >= 0 ? up += shown : down += shown;
+      unders[number] = under;
       tops[number] = value === null || value === undefined ? null : under + shown;
     });
+    tops.unders = unders;
     return tops;
   };
   // Show label `index` of a line chart: crosshair, dots, box (near the pointer, or the crosshair for keys), link
@@ -208,7 +219,7 @@
     const hidden = hiddenIn(area.closest('.sc-chart'));
     const rows = [];
     const span = (chart.y.high - chart.y.low) || 1;
-    const tops = positions(chart, index);
+    const tops = positions(chart, index, hidden);
     chart.series.forEach(function (series, number) {
       if (hidden.has(String(number))) return;
       const value = chart.v[number][index];
@@ -393,7 +404,104 @@
     item.closest('.sc-chart').querySelectorAll('svg [data-series="' + item.getAttribute('data-series') + '"]').forEach(function (element) {
       element.style.display = off ? 'none' : '';
     });
+    restack(item.closest('.sc-chart'));
   };
+
+  // A stacked chart without the series hidden in its legend: the others stacked again where they'd be without them, as
+  // LineChart::Position() and BarChart::Plot() stack them (percent: their shares of what's shown); the axis stays as it
+  // is. With nothing hidden the server's drawing comes back. app.js calls it in the app (window.scChartRestack).
+  const drawnAs = new WeakMap();
+  const keepDrawn = function (element, name) {
+    let saved = drawnAs.get(element);
+    if (!saved)
+    {
+      saved = {};
+      drawnAs.set(element, saved);
+    }
+    if (!(name in saved)) saved[name] = element.getAttribute(name);
+  };
+  const putBack = function (element) {
+    const saved = drawnAs.get(element);
+    if (!saved) return;
+    Object.keys(saved).forEach(function (name) {
+      saved[name] === null ? element.removeAttribute(name) : element.setAttribute(name, saved[name]);
+    });
+  };
+  const restackLines = function (drawing, chart, hidden) {
+    const count = chart.x.length;
+    const span = (chart.y.high - chart.y.low) || 1;
+    const y = value => Math.round(chart.y.bottom - (value - chart.y.low) / span * (chart.y.bottom - chart.y.top));
+    const at = [];
+    for (let index = 0; index < count; index++) at[index] = positions(chart, index, hidden);
+    drawing.querySelectorAll('g[data-series]').forEach(function (group) {
+      const number = parseInt(group.getAttribute('data-series'), 10);
+      group.querySelectorAll('[data-run], circle[data-i]').forEach(function (element) {
+        // A line drawn by <use> (OpenSeries()) has its shape in <defs>
+        const href = element.tagName.toLowerCase() === 'use' ? element.getAttribute('href') : null;
+        const shape = href ? drawing.querySelector(href.replace(/[^#\w-]/g, '')) : element;
+        if (!shape) return;
+        keepDrawn(shape, element.tagName.toLowerCase() === 'circle' ? 'cy' : 'd');
+        if (!hidden.size || hidden.has(String(number)))
+        {
+          putBack(shape);
+          return;
+        }
+        if (element.tagName.toLowerCase() === 'circle')
+        {
+          const top = at[parseInt(element.getAttribute('data-i'), 10)][number];
+          if (top !== null) element.setAttribute('cy', y(top));
+          return;
+        }
+        const [from, to] = element.getAttribute('data-run').split(' ').map(Number);
+        const points = [];
+        for (let index = from; index <= to; index++) points.push(chart.x[index] + ' ' + y(at[index][number] ?? 0));
+        let path = 'M' + points.join('L');
+        if (element.getAttribute('stroke') === 'none')
+        {
+          // An area: down to what it stands on, back from right to left
+          const lower = [];
+          for (let index = to; index >= from; index--) lower.push(chart.x[index] + ' ' + y(at[index].unders[number]));
+          path += 'L' + lower.join('L') + 'Z';
+        }
+        shape.setAttribute('d', path);
+      });
+    });
+  };
+  const restackBars = function (drawing, stack, hidden) {
+    const [low, high, top, bottom] = stack.getAttribute('data-y').split(' ').map(Number);
+    const span = (high - low) || 1;
+    const y = value => bottom - (value - low) / span * (bottom - top);
+    const ups = {};
+    const downs = {};
+    // In the document's order: a label's bars in the series' order, as drawn
+    drawing.querySelectorAll('rect.sc-bar[data-i]').forEach(function (bar) {
+      keepDrawn(bar, 'y');
+      keepDrawn(bar, 'height');
+      if (!hidden.size || hidden.has(bar.getAttribute('data-series')))
+      {
+        putBack(bar);
+        return;
+      }
+      const index = bar.getAttribute('data-i');
+      const value = parseFloat(bar.getAttribute('data-v')) || 0;
+      const from = value >= 0 ? ups[index] || 0 : downs[index] || 0;
+      value >= 0 ? ups[index] = from + value : downs[index] = from + value;
+      const upper = y(Math.max(from, from + value));
+      bar.setAttribute('y', upper.toFixed(2));
+      bar.setAttribute('height', Math.max(0.5, y(Math.min(from, from + value)) - upper).toFixed(2));
+    });
+  };
+  const restack = function (chart) {
+    const drawing = chart && chart.querySelector('svg');
+    if (!drawing) return;
+    const hidden = hiddenIn(chart);
+    const area = drawing.querySelector('.sc-hover-area');
+    const lines = area ? dataOf(area) : null;
+    if (lines && lines.stack) restackLines(drawing, lines, hidden);
+    const stack = drawing.querySelector('.sc-stack[data-y]');
+    if (stack) restackBars(drawing, stack, hidden);
+  };
+  window.scChartRestack = restack;
   document.addEventListener('click', toggle, true);
   document.addEventListener('keydown', toggle, true);
 

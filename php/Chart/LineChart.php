@@ -297,6 +297,7 @@
       $Linked = !empty($this->LinkAttributes(null, 0, ''));
       $Prefix = 'sc' . bin2hex(random_bytes(4)) . '-';
       $Fades = []; // the area gradients drawn
+      $Stacked = $this->Stack !== '';
       $Shapes = '';
       foreach ($this->Series as $Number => $Series)
       {
@@ -326,7 +327,7 @@
           $RunIndexes[count($Runs)][] = $Index;
           if ($Dots)
           {
-            $Circles .= '<circle cx="' . $Point[0] . '" cy="' . $Point[1] . '" r="2.5" fill="' . $Color . '"/>';
+            $Circles .= '<circle cx="' . $Point[0] . '" cy="' . $Point[1] . '" r="2.5" fill="' . $Color . '"' . ($Stacked ? ' data-i="' . $Index . '"' : '') . '/>';
           }
         }
         $Svg .= '<g data-series="' . $Number . '">';
@@ -335,12 +336,15 @@
         {
           $Start = $Points[0];
           $End = $Points[count($Points) - 1];
+          // Stacked: the labels the run spans, for standalone.js to stack it again without the series hidden in the legend
+          $Span = $RunIndexes[$RunNumber];
+          $RunOf = $Stacked ? ' data-run="' . $Span[0] . ' ' . $Span[count($Span) - 1] . '"' : '';
           if (count($Points) < 2)
           {
             // A point on its own shows as a dot
             if (!$Dots)
             {
-              $Svg .= '<circle cx="' . $Start[0] . '" cy="' . $Start[1] . '" r="2.5" fill="' . $Color . '"/>';
+              $Svg .= '<circle cx="' . $Start[0] . '" cy="' . $Start[1] . '" r="2.5" fill="' . $Color . '"' . ($Stacked ? ' data-i="' . $Span[0] . '"' : '') . '/>';
             }
             continue;
           }
@@ -349,7 +353,7 @@
           {
             // Down to the series below: its top, back from right to left
             $Lower = array_reverse(array_map(fn(int $Index) => [$Xs[$Index], (int)round($this->Y($this->Unders[$Number][$Index]))], $RunIndexes[$RunNumber]));
-            $Svg .= '<path d="' . $Line . 'L' . substr(self::PathOf($Lower), 1) . 'Z" fill="' . $Color . '" fill-opacity="0.4" stroke="none"/>';
+            $Svg .= '<path d="' . $Line . 'L' . substr(self::PathOf($Lower), 1) . 'Z" fill="' . $Color . '" fill-opacity="0.4" stroke="none"' . $RunOf . '/>';
           }
           elseif ($this->Area)
           {
@@ -369,12 +373,12 @@
           {
             $Id = $Prefix . $Number . '-' . count($Lines);
             $Shapes .= '<path id="' . $Id . '" d="' . $Line . '"/>';
-            $Svg .= '<use href="#' . $Id . '" fill="none" stroke="' . $Color . $Stroke . ' stroke-linejoin="round" stroke-linecap="round"/>';
+            $Svg .= '<use href="#' . $Id . '" fill="none" stroke="' . $Color . $Stroke . ' stroke-linejoin="round" stroke-linecap="round"' . $RunOf . '/>';
             $Lines[] = '#' . $Id;
           }
           else
           {
-            $Svg .= '<path d="' . $Line . '" fill="none" stroke="' . $Color . $Stroke . ' stroke-linejoin="round" stroke-linecap="round"/>';
+            $Svg .= '<path d="' . $Line . '" fill="none" stroke="' . $Color . $Stroke . ' stroke-linejoin="round" stroke-linecap="round"' . $RunOf . '/>';
           }
         }
         $Svg .= $Circles . '</g>';
