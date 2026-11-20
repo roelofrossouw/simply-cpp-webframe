@@ -746,6 +746,60 @@
       };
     }
 
+    /**
+     * The series' numbers in a table legend's order: by $Key ('name' or a calculation: 'last', 'min', 'mean', 'max',
+     * 'sum'; null keeps the series' order), highest (or Z) first with $Desc, those without a value last either way, ties
+     * in the series' order; Top()'s Others last whatever the sort
+     *
+     * @return int[]
+     */
+    protected function SortedSeries(?string $Key, bool $Desc): array
+    {
+      $Order = array_keys($this->Series);
+      if ($Key !== null)
+      {
+        $Values = [];
+        if ($Key !== 'name')
+        {
+          foreach ($this->Series as $Number => $Series)
+          {
+            $Values[$Number] = self::Calculate($Series, $Key);
+          }
+        }
+        usort($Order, function (int $A, int $B) use ($Values, $Key, $Desc)
+        {
+          if ($Key === 'name')
+          {
+            $By = strnatcasecmp($this->Series[$A]->Name, $this->Series[$B]->Name);
+            return ($Desc ? -$By : $By) ?: $A <=> $B;
+          }
+          // Without a value: last either way
+          [$X, $Y] = [$Values[$A], $Values[$B]];
+          if ($X === null || $Y === null)
+          {
+            return ($X === null) <=> ($Y === null) ?: $A <=> $B;
+          }
+          return ($Desc ? $Y <=> $X : $X <=> $Y) ?: $A <=> $B;
+        });
+      }
+      if ($this->OthersAt !== null)
+      {
+        // Others last, whatever the sort
+        $Order = [...array_values(array_diff($Order, [$this->OthersAt])), $this->OthersAt];
+      }
+      return $Order;
+    }
+
+    /**
+     * A table legend's first sort, [key, descending], or null without one (no table legend, or no SortBy)
+     *
+     * @return array{0: string, 1: bool}|null
+     */
+    protected function LegendSorting(): ?array
+    {
+      return $this->LegendMode === 'table' && $this->TableLegend && $this->LegendSort !== null ? [$this->LegendSort, $this->LegendDesc] : null;
+    }
+
     // Legend('table'): a row per series, its calculations right-aligned; the sort and the highlight are standalone.js's
     private function LegendTable(): string
     {
@@ -760,31 +814,7 @@
         }
         $Rows[$Number] = $Calculated;
       }
-      $Order = array_keys($Rows);
-      if ($this->LegendSort !== null)
-      {
-        $Key = $this->LegendSort;
-        usort($Order, function (int $A, int $B) use ($Rows, $Key)
-        {
-          if ($Key === 'name')
-          {
-            $By = strnatcasecmp($this->Series[$A]->Name, $this->Series[$B]->Name);
-            return ($this->LegendDesc ? -$By : $By) ?: $A <=> $B;
-          }
-          // Without a value: last either way
-          [$X, $Y] = [$Rows[$A][$Key], $Rows[$B][$Key]];
-          if ($X === null || $Y === null)
-          {
-            return ($X === null) <=> ($Y === null) ?: $A <=> $B;
-          }
-          return ($this->LegendDesc ? $Y <=> $X : $X <=> $Y) ?: $A <=> $B;
-        });
-      }
-      if ($Others !== null)
-      {
-        // Others last, whatever the sort
-        $Order = [...array_values(array_diff($Order, [$Others])), $Others];
-      }
+      $Order = $this->SortedSeries($this->LegendSort, $this->LegendDesc);
       // Headers in the order given: Name first, then the calculations as Legend() lists them
       $Head = '';
       foreach (['name', ...$this->LegendValues] as $Key)

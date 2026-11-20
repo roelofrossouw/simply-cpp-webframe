@@ -176,7 +176,9 @@
     {
       chart.series.forEach((series, number) => total += out(number) ? 0 : Math.abs(chart.v[number][index] ?? 0));
     }
-    chart.series.forEach(function (series, number) {
+    // Stacked: from the bottom band up, in the server's order (StackOrder() or the table legend's), else the series'
+    (chart.order || chart.series.map((series, number) => number)).forEach(function (number) {
+      const series = chart.series[number];
       const value = chart.v[number][index];
       unders[number] = 0;
       if (out(number))

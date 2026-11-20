@@ -305,7 +305,10 @@
   function Tops(LineChart $Chart): array
   {
     (string)$Chart;
-    return (new ReflectionProperty(LineChart::class, 'Tops'))->getValue($Chart);
+    // By series (a stacked chart fills them in its stack order)
+    $Tops = (new ReflectionProperty(LineChart::class, 'Tops'))->getValue($Chart);
+    ksort($Tops);
+    return $Tops;
   }
   $Stack = new LineChart();
   $Stack->AddSeries('a', [1, 2, null]);
@@ -626,3 +629,67 @@
   Same(1, HoverData($Html)['smooth'] ?? null, 'stacked smooth: the script draws a restacked band as curves too');
   $Js = file_get_contents(__DIR__ . '/../php/Chart/standalone.js');
   Check(str_contains($Js, 'let path = pathOf(points, chart.smooth, false, chart.most);') && str_contains($Js, 'chart.sx'), 'the script restacks smooth bands with the same curve, at the exact places');
+
+  // Stacked in the table legend's order: its first row the top band (biggest last value on top), Others the bottom one
+  $Ordered = (new LineChart())->Area()->Stacked()->Legend('table', ['last'], SortBy: 'last');
+  $Ordered->AddSeries('small', [1, 1]);
+  $Ordered->AddSeries('big', [5, 9]);
+  $Ordered->AddSeries('middle', [3, 4]);
+  Same([[1.0, 1.0], [9.0, 14.0], [4.0, 5.0]], Tops($Ordered), 'stacked by the legend: small at the bottom, middle on it, big on top');
+  $Html = (string)$Ordered;
+  preg_match_all('/<g data-series="(\d)"><path d="[^"]*" (?:fill="[^"]*" fill-opacity="0.4"|fill="none" stroke)/', $Html, $Found);
+  Same(['0', '2', '1', '1', '2', '0'], $Found[1], 'fills bottom-up in the stack order, edges from the top band down');
+  Check(preg_match('/<g data-series="1"><path d="[^"]*" fill="#eb6834" fill-opacity="0.4"/', $Html) === 1, 'colours stay by series: big keeps the second colour');
+  Same([0, 2, 1], HoverData($Html)['order'] ?? null, 'the script gets the stack order (bottom up), to stack again without a hidden series');
+  Check(preg_match_all('/data-row="(\d)"/', $Html, $Rows) && $Rows[1] === ['1', '2', '0'], 'the legend lists them top band first');
+  $Name = (new LineChart())->Stacked()->Legend('table', ['last'], SortBy: 'name', Desc: false);
+  $Name->AddSeries('b', [1]);
+  $Name->AddSeries('a', [1]);
+  Same([[1.0], [2.0]], Tops($Name), "'name' ascending: A on top");
+  $Unsorted = (new LineChart())->Stacked()->Legend('table', ['last']);
+  $Unsorted->AddSeries('small', [1]);
+  $Unsorted->AddSeries('big', [5]);
+  Same([[1.0], [6.0]], Tops($Unsorted), 'a legend without SortBy: the series\' order');
+  Check(!isset(HoverData((string)$Unsorted)['order']), 'and no order for the script (as before)');
+  // Top()'s Others: the last legend row, the bottom band
+  $Many = (new LineChart())->Stacked()->Top(2, 'last')->Legend('table', ['last'], SortBy: 'last');
+  foreach (['a' => 1, 'b' => 7, 'c' => 5, 'd' => 2] as $Name => $Last)
+  {
+    $Many->AddSeries($Name, [$Last]);
+  }
+  // Top() keeps b and c (by their last values), then Others (2): a + d = 3
+  Same([[15.0], [8.0], [3.0]], Tops($Many), 'Others (3) at the bottom, then c (5), then b (7) on top');
+  // StackOrder(): without a table legend, and over it; null keeps the series' order
+  $Explicit = (new LineChart())->Stacked()->StackOrder('max');
+  $Explicit->AddSeries('low', [1, 2]);
+  $Explicit->AddSeries('high', [8, 3]);
+  Same([[1.0, 2.0], [9.0, 5.0]], Tops($Explicit), "StackOrder('max'): the highest max on top");
+  $Kept = (new LineChart())->Stacked()->Legend('table', ['last'], SortBy: 'last')->StackOrder(null);
+  $Kept->AddSeries('small', [1]);
+  $Kept->AddSeries('big', [5]);
+  Same([[1.0], [6.0]], Tops($Kept), 'StackOrder(null): the series\' order, whatever the legend');
+  $Threw = false;
+  try
+  {
+    (new LineChart())->StackOrder('median');
+  }
+  catch (InvalidArgumentException)
+  {
+    $Threw = true;
+  }
+  Check($Threw, 'StackOrder(): only name or a calculation');
+  // Percent and Smooth() in the new order
+  $Shares = (new LineChart())->Stacked('percent')->StackOrder('last');
+  $Shares->AddSeries('a', [1]);
+  $Shares->AddSeries('b', [3]);
+  Same([[25.0], [100.0]], Tops($Shares), 'percent: a (25%) at the bottom, b (75%) on it');
+  $Curved = (new LineChart())->Smooth()->Area()->Stacked()->StackOrder('last', false);
+  $Curved->AddSeries('a', [1, 4, 2, 0, 3]);
+  $Curved->AddSeries('b', [5, 6, 7, 8, 9]);
+  Check(str_contains((string)$Curved, 'C') && HoverData((string)$Curved)['order'] === [1, 0], 'smooth bands stack in the order too (lowest last on top: a over b)');
+  // Stacked bars: the same order, bottom up in the document (standalone.js stacks again in that order)
+  $Bars = (new BarChart())->Stacked()->Legend('table', ['last'], SortBy: 'last')->FromRows([['m' => 'a', 'x' => 5, 'y' => 1]], 'm', ['x', 'y']);
+  $Html = (string)$Bars;
+  Check(preg_match_all('/<rect class="sc-bar"[^>]*fill="(#[0-9a-f]+)"/', $Html, $Fills) && $Fills[1] === ['#eb6834', '#2a78d6'], 'stacked bars: y (1) at the bottom, x (5) on top, colours by series');
+  $Js = file_get_contents(__DIR__ . '/../php/Chart/standalone.js');
+  Check(str_contains($Js, '(chart.order || chart.series.map((series, number) => number)).forEach'), 'the script stacks in the server\'s order');

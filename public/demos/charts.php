@@ -143,7 +143,7 @@
   // Table legends, as Grafana's: values per series, sorted, beside or under the drawing
   Page::AddContent($Card = new Card());
   $Card->AddHeader('Table legends');
-  $Card->AddParagraph('Legend(\'table\', [\'last\', \'max\'], Placement: \'right\', SortBy: \'last\'): a row per series with its values over the range. Click a header to sort by it (again to turn it round), point at a row to bring its series forward, click a row to hide or show it. Others stays last, in grey.');
+  $Card->AddParagraph('Legend(\'table\', [\'last\', \'max\'], Placement: \'right\', SortBy: \'last\'): a row per series with its values over the range. Click a header to sort by it (again to turn it round), point at a row to bring its series forward, click a row to hide or show it. Others stays last, in grey. A stacked chart stacks its bands in the legend\'s first order: the top row is the top band, Others the bottom one (StackOrder() sets an order without a table legend).');
   $Side = (new LineChart('Top(8), stacked, legend on the right'))->Time()->Area()->Stacked();
   $Under = (new LineChart('Legend under the drawing'))->Time();
   for ($Job = 0; $Job < 30; $Job++)

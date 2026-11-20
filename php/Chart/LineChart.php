@@ -189,8 +189,10 @@
           }
         }
       }
-      foreach ($this->Series as $Number => $Series)
+      // Stacked: from the bottom band up (StackOrder(), or the table legend's order: its first row on top)
+      foreach ($this->Stack === '' ? array_keys($this->Series) : $this->StackSequence() as $Number)
       {
+        $Series = $this->Series[$Number];
         for ($Index = 0; $Index < $Count; $Index++)
         {
           $Value = $Series->Values[$Index] ?? null;
@@ -427,13 +429,15 @@
       {
         // Stacked: every fill first, bottom-up; then the edges from the top series down, so where edges coincide (a
         // series above at zero lies on the top of the one below) the lower band's own edge ends up on top
-        foreach ($Fills as $Number => $Fill)
+        // in the order they stack (StackOrder())
+        $Sequence = $this->StackSequence();
+        foreach ($Sequence as $Number)
         {
-          $Svg .= $Fill !== '' ? '<g data-series="' . $Number . '">' . $Fill . '</g>' : '';
+          $Svg .= $Fills[$Number] !== '' ? '<g data-series="' . $Number . '">' . $Fills[$Number] . '</g>' : '';
         }
-        foreach (array_reverse($Edges, true) as $Number => $Edge)
+        foreach (array_reverse($Sequence) as $Number)
         {
-          $Svg .= '<g data-series="' . $Number . '">' . $Edge . '</g>';
+          $Svg .= '<g data-series="' . $Number . '">' . $Edges[$Number] . '</g>';
         }
       }
       $Svg .= $this->ThresholdStyle === 'line' ? $this->ThresholdMarks() : '';
@@ -672,6 +676,11 @@
       if ($this->Stack !== '')
       {
         $Data['stack'] = $this->Stack;
+        if (($Sequence = $this->StackSequence()) !== array_keys($this->Series))
+        {
+          // For standalone.js to stack them again in the same order (bottom up), not the series'
+          $Data['order'] = $Sequence;
+        }
         if ($this->Smooth)
         {
           // For standalone.js to draw a restacked band's curves as the server does

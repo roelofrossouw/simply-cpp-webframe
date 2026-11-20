@@ -61,12 +61,16 @@
       $Width = max(1.0, $Group / $Bars - ($Bars > 1 ? 1 : 0));
       $Zero = $this->Y(0.0);
       $Svg = '';
+      // Stacked: from the bottom up (StackOrder(), or the table legend's order: its first row on top); standalone.js
+      // stacks them again in the document's order, so in the same one
+      $Sequence = $this->Stacked ? $this->StackSequence() : array_keys($this->Series);
       foreach (array_keys($this->Labels) as $Index)
       {
         $Start = $this->X($Index) - $Group / 2;
         $Up = $Down = 0.0;
-        foreach ($this->Series as $Number => $Series)
+        foreach ($Sequence as $Number)
         {
+          $Series = $this->Series[$Number];
           $Value = $Series->Values[$Index] ?? null;
           if ($Value === null)
           {

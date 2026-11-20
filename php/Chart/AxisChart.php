@@ -15,6 +15,39 @@
     protected Scale $Scale;
     protected float $Left = 40;
     protected bool $Zero = false;
+    // StackOrder(): [by, descending] as set (by null: the series' order); null when not set
+    private ?array $StackOrder = null;
+
+    /**
+     * The order a stacked chart stacks its series in, as a table legend sorts its rows: by 'name' or a calculation
+     * ('last', 'min', 'mean', 'max', 'sum'), highest (or Z) first with $Desc; the first in that order is the top band,
+     * Top()'s Others the bottom one. null stacks them in the series' order (the first at the bottom). Without it a
+     * stacked chart follows its table legend's SortBy (the legend's first row on top), or the series' order. Colours
+     * stay by series, whatever the order.
+     *
+     *   $Chart->Stacked()->StackOrder('last');  // the biggest band (by its last value) on top
+     */
+    public function StackOrder(?string $By = 'last', bool $Desc = true): static
+    {
+      if ($By !== null && $By !== 'name' && !isset(self::CALCULATIONS[$By]))
+      {
+        throw new \InvalidArgumentException("StackOrder(): by 'name', " . implode(', ', array_keys(self::CALCULATIONS)) . " or null, not '$By'");
+      }
+      $this->StackOrder = [$By, $Desc];
+      return $this;
+    }
+
+    /**
+     * The series' numbers in the order they stack, from the bottom up: StackOrder()'s, else the table legend's first
+     * sort (its first row on top), else the series' order
+     *
+     * @return int[]
+     */
+    protected function StackSequence(): array
+    {
+      [$By, $Desc] = $this->StackOrder ?? $this->LegendSorting() ?? [null, true];
+      return $By === null ? array_keys($this->Series) : array_reverse($this->SortedSeries($By, $Desc));
+    }
 
     /**
      * Start the value axis at 0, however far the values are from it (bars always do)
