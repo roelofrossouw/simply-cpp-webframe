@@ -427,6 +427,42 @@
       saved[name] === null ? element.removeAttribute(name) : element.setAttribute(name, saved[name]);
     });
   };
+  // A run of [x, y] points as a path: straight, or with Smooth() the monotone cubic curve LineChart::SmoothPathOf()
+  // draws (reversed: from right to left, a band's lower edge)
+  const pathOf = function (points, smooth, reversed) {
+    const count = points.length;
+    let increasing = count >= 3;
+    for (let at = 1; increasing && at < count; at++) increasing = points[at][0] > points[at - 1][0];
+    if (!smooth || !increasing)
+    {
+      const list = reversed ? points.slice().reverse() : points;
+      return 'M' + list.map(point => point[0] + ' ' + point[1]).join('L');
+    }
+    const secants = [];
+    for (let at = 0; at < count - 1; at++) secants[at] = (points[at + 1][1] - points[at][1]) / (points[at + 1][0] - points[at][0]);
+    const tangents = [];
+    for (let at = 1; at < count - 1; at++)
+    {
+      const before = secants[at - 1];
+      const after = secants[at];
+      const left = points[at][0] - points[at - 1][0];
+      const right = points[at + 1][0] - points[at][0];
+      const mean = (before * right + after * left) / (left + right);
+      tangents[at] = (Math.sign(before) + Math.sign(after)) * Math.min(Math.abs(before), Math.abs(after), 0.5 * Math.abs(mean));
+    }
+    tangents[0] = (3 * secants[0] - tangents[1]) / 2;
+    tangents[count - 1] = (3 * secants[count - 2] - tangents[count - 2]) / 2;
+    let segments = [];
+    for (let at = 0; at < count - 1; at++)
+    {
+      const third = (points[at + 1][0] - points[at][0]) / 3;
+      segments.push([points[at], [points[at][0] + third, points[at][1] + third * tangents[at]],
+        [points[at + 1][0] - third, points[at + 1][1] - third * tangents[at + 1]], points[at + 1]]);
+    }
+    if (reversed) segments = segments.reverse().map(segment => segment.slice().reverse());
+    const xy = point => +point[0].toFixed(1) + ' ' + +point[1].toFixed(1);
+    return 'M' + xy(segments[0][0]) + segments.map(segment => 'C' + xy(segment[1]) + ' ' + xy(segment[2]) + ' ' + xy(segment[3])).join('');
+  };
   const restackLines = function (drawing, chart, hidden) {
     const count = chart.x.length;
     const span = (chart.y.high - chart.y.low) || 1;
@@ -454,14 +490,14 @@
         }
         const [from, to] = element.getAttribute('data-run').split(' ').map(Number);
         const points = [];
-        for (let index = from; index <= to; index++) points.push(chart.x[index] + ' ' + y(at[index][number] ?? 0));
-        let path = 'M' + points.join('L');
+        for (let index = from; index <= to; index++) points.push([chart.x[index], y(at[index][number] ?? 0)]);
+        let path = pathOf(points, chart.smooth, false);
         if (element.getAttribute('stroke') === 'none')
         {
           // An area: down to what it stands on, back from right to left
           const lower = [];
-          for (let index = to; index >= from; index--) lower.push(chart.x[index] + ' ' + y(at[index].unders[number]));
-          path += 'L' + lower.join('L') + 'Z';
+          for (let index = from; index <= to; index++) lower.push([chart.x[index], y(at[index].unders[number])]);
+          path += 'L' + pathOf(lower, chart.smooth, true).substring(1) + 'Z';
         }
         shape.setAttribute('d', path);
       });

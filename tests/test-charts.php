@@ -502,3 +502,103 @@
   Check(str_contains($Js, 'window.scChartRestack = restack;') && str_contains($Js, 'const tops = positions(chart, index, hidden);'),
     'the script stacks again without hidden series, the hover dots too (in a browser: test-browser.php)');
   Check(str_contains(file_get_contents(__DIR__ . '/../public/js/app.js'), "window.scChartRestack(this.closest('.sc-chart'))"), 'app.js stacks again on a legend click');
+
+  // Smooth(): monotone cubic curves, through every point and never past one
+  // A path 'M x yC x y x y x y...' as its cubic segments [[x0, y0], [x1, y1], [x2, y2], [x3, y3]]
+  function Segments(string $Path): array
+  {
+    preg_match_all('/-?[\d.]+/', $Path, $Found);
+    $Numbers = array_map('floatval', $Found[0]);
+    $Segments = [];
+    for ($At = 2; $At + 6 <= count($Numbers); $At += 6)
+    {
+      $Segments[] = [[$Numbers[$At - 2], $Numbers[$At - 1]], [$Numbers[$At], $Numbers[$At + 1]], [$Numbers[$At + 2], $Numbers[$At + 3]], [$Numbers[$At + 4], $Numbers[$At + 5]]];
+    }
+    return $Segments;
+  }
+  // Whether every segment stays between its two ends (sampled), x always going one way
+  function NoOvershoot(string $Path): bool
+  {
+    foreach (Segments($Path) as [$P0, $P1, $P2, $P3])
+    {
+      $Low = min($P0[1], $P3[1]) - 0.05;
+      $High = max($P0[1], $P3[1]) + 0.05;
+      $LastX = null;
+      for ($Step = 0; $Step <= 50; $Step++)
+      {
+        $T = $Step / 50;
+        $U = 1 - $T;
+        $X = $U ** 3 * $P0[0] + 3 * $U * $U * $T * $P1[0] + 3 * $U * $T * $T * $P2[0] + $T ** 3 * $P3[0];
+        $Y = $U ** 3 * $P0[1] + 3 * $U * $U * $T * $P1[1] + 3 * $U * $T * $T * $P2[1] + $T ** 3 * $P3[1];
+        if ($Y < $Low || $Y > $High || ($LastX !== null && ($X - $LastX) * ($P3[0] - $P0[0]) < 0))
+        {
+          return false;
+        }
+        $LastX = $X;
+      }
+    }
+    return true;
+  }
+  // 0, 0, 5, 0, 0 (y grows downwards: zero at 100)
+  $Peak = [[0, 100], [10, 100], [20, 50], [30, 100], [40, 100]];
+  $Curve = LineChart::SmoothPathOf($Peak);
+  Check(str_starts_with($Curve, 'M0 100C'), 'smooth: a curve of cubic segments');
+  $Ends = array_map(fn(array $Segment) => $Segment[3], Segments($Curve));
+  Same([[10.0, 100.0], [20.0, 50.0], [30.0, 100.0], [40.0, 100.0]], $Ends, 'smooth: through every point');
+  Check(NoOvershoot($Curve), 'smooth: 0,0,5,0,0 never above the peak nor below zero');
+  Same('M0 100C3.3 100 6.7 100 10 100', substr($Curve, 0, strlen('M0 100C3.3 100 6.7 100 10 100')), 'smooth: between two zeros it stays at zero');
+  $Rising = [[0, 100], [10, 98], [20, 60], [30, 59], [40, 10], [50, 0]];
+  Check(NoOvershoot(LineChart::SmoothPathOf($Rising)), 'smooth: a rising run keeps rising');
+  Check(NoOvershoot(LineChart::SmoothPathOf([[0, 0], [5, 80], [7, 80], [20, 0], [21, 100], [40, 3]])), 'smooth: sharp turns, uneven steps');
+  Same(null, LineChart::SmoothPathOf([[0, 1], [5, 2]]), 'smooth: two points stay a straight step');
+  Same(null, LineChart::SmoothPathOf([[0, 1], [0, 2], [5, 2]]), 'smooth: more points than pixels stays straight');
+  $Back = Segments(LineChart::SmoothPathOf($Rising, true));
+  Same(array_map(fn(array $Segment) => array_reverse($Segment), array_reverse(Segments(LineChart::SmoothPathOf($Rising)))), $Back,
+    'smooth reversed: the same curve from right to left');
+
+  // In a chart: off by default, gaps, one point, the hover
+  $Same = fn(string $Html) => preg_replace('/sc[0-9a-f]{8}-/', 'scX-', $Html);
+  $Unsmoothed = (string)(new LineChart())->FromRows([['h' => 'a', 'n' => 1], ['h' => 'b', 'n' => 4], ['h' => 'c', 'n' => 2]], 'h', 'n');
+  Same($Same($Unsmoothed), $Same((string)(new LineChart())->Smooth(false)->FromRows([['h' => 'a', 'n' => 1], ['h' => 'b', 'n' => 4], ['h' => 'c', 'n' => 2]], 'h', 'n')),
+    'Smooth(false): the same drawing as without it');
+  $Chart = new LineChart();
+  $Chart->AddSeries('n', [0, 0, 5, 0, 0, 3, 1]);
+  Check(preg_match('/<path d="M[\d. ]+l[^"C]+" fill="none"/', (string)$Chart) === 1 && !preg_match('/<path d="M[\d. ]+C/', (string)$Chart), 'not smooth: straight steps');
+  $Chart = (new LineChart())->Smooth()->Area();
+  $Chart->AddSeries('n', [0, 0, 5, 0, 0, 3, 1]);
+  $Html = (string)$Chart;
+  Check(preg_match('/<path d="(M[\d. ]+C[^"]+)" fill="none"/', $Html, $Found) === 1 && NoOvershoot($Found[1]), 'Smooth(): the line is the curve');
+  Check(preg_match('/<path d="M[\d. ]+C[^"]+L[\d. ]+L[\d. ]+Z" fill="url\(#/', $Html) === 1, 'Smooth()->Area(): the gradient fill under the same curve');
+  Check(str_contains($Html, 'vector-effect="non-scaling-stroke"'), 'smooth lines keep their width on screen');
+  Same([0, 0, 5, 0, 0, 3, 1], HoverData($Html)['v'][0], 'the hover keeps the real points');
+  $Gappy = (new LineChart())->Smooth()->Dots(false);
+  $Gappy->AddSeries('n', [1, 2, 3, null, 4, 5, 6, null, 7]);
+  $Html = (string)$Gappy;
+  Same(2, preg_match_all('/<path d="M[\d. ]+C[^"]+" fill="none"/', $Html), 'smooth with gaps: each run a curve of its own');
+  Same(1, preg_match_all('/<circle cx="\d+" cy="\d+" r="2.5"/', $Html), 'and a point on its own a dot');
+
+  // Stacked: a band's lower edge is the curve of the band below, reversed
+  $Bands = (new LineChart())->Smooth()->Area()->Stacked();
+  $Bands->AddSeries('a', [1, 4, 2, 0, 3]);
+  $Bands->AddSeries('b', [2, 0, 3, 1, 1]);
+  $Html = (string)$Bands;
+  preg_match_all('/<g data-series="(\d)">(.*?)<\/g>/s', $Html, $Groups, PREG_SET_ORDER);
+  $EdgeA = $FillB = null;
+  foreach ($Groups as [, $Number, $Inner])
+  {
+    if ($Number === '0' && preg_match('/<path d="([^"]+)" fill="none"/', $Inner, $Found))
+    {
+      $EdgeA = $Found[1];
+    }
+    if ($Number === '1' && preg_match('/<path d="([^"]+)" fill="#[0-9a-f]+" fill-opacity="0.4"/', $Inner, $Found))
+    {
+      $FillB = $Found[1];
+    }
+  }
+  $ReversedA = array_map(fn(array $Segment) => array_reverse($Segment), array_reverse(Segments((string)$EdgeA)));
+  $LowerB = Segments(substr((string)$FillB, strpos((string)$FillB, 'L') + 1, -1));
+  Check($EdgeA !== null && $FillB !== null && str_contains($EdgeA, 'C') && $LowerB === $ReversedA, 'stacked smooth: the band above stands on the curve below');
+  Check(strpos($Html, 'data-series="1">' . '<path d="M') < strpos($Html, 'stroke-linecap="round" data-run="0 4"'), 'stacked smooth: fills first, the edges after');
+  Same(1, HoverData($Html)['smooth'] ?? null, 'stacked smooth: the script draws a restacked band as curves too');
+  $Js = file_get_contents(__DIR__ . '/../php/Chart/standalone.js');
+  Check(str_contains($Js, 'let path = pathOf(points, chart.smooth, false);'), 'the script restacks smooth bands with the same curve');

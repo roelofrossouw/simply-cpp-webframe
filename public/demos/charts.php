@@ -52,6 +52,10 @@
   $Area->AddSeries('Messages', $Hours)->Color('#20c997');
   $Area->Area()->FromZero();
   $Grid->AddChild($Area);
+  $Smooth = new LineChart('Schedules read per hour: Smooth()');
+  $Smooth->AddSeries('Read', [0, 0, 0, 2, 9, 14, 6, 0, 0, 3, 11, 12, 4, 1, 0, 0, null, 5, 8, 2, 0, 0, 0, 1])->Color('#8e44ad');
+  $Smooth->Area()->FromZero()->Smooth();
+  $Grid->AddChild($Smooth);
 
   // Stacked bars and a doughnut
   Page::AddContent($Grid = new Grid());

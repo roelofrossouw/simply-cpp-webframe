@@ -11,6 +11,7 @@
   {
     private bool $Area = false;
     private ?bool $Dots = null;
+    private bool $Smooth = false;
     // Stacked(): '' (not), 'normal' or 'percent'
     private string $Stack = '';
     /** @var array<int|string, string> Thresholds(): from => colour */
@@ -38,6 +39,18 @@
     public function Dots(bool $On = true): static
     {
       $this->Dots = $On;
+      return $this;
+    }
+
+    /**
+     * Smooth curves through the points instead of straight steps, as Grafana's "smooth" line interpolation: monotone
+     * cubic (Fritsch–Carlson, as d3's curveMonotoneX), so a curve goes through every point and never past one (no bump
+     * above a peak, no dip below zero between two zeros). Areas, stacked bands and gaps follow the same curves; the
+     * hover still snaps to the points. Where there are more points than pixel columns the line stays straight.
+     */
+    public function Smooth(bool $On = true): static
+    {
+      $this->Smooth = $On;
       return $this;
     }
 
@@ -353,12 +366,13 @@
             }
             continue;
           }
-          $Line = self::PathOf($Points);
+          $Line = ($this->Smooth ? self::SmoothPathOf($Points) : null) ?? self::PathOf($Points);
           if ($this->Area && $this->Stack !== '')
           {
-            // Down to the series below: its top, back from right to left
-            $Lower = array_reverse(array_map(fn(int $Index) => [$Xs[$Index], (int)round($this->Y($this->Unders[$Number][$Index]))], $RunIndexes[$RunNumber]));
-            $Fill .= '<path d="' . $Line . 'L' . substr(self::PathOf($Lower), 1) . 'Z" fill="' . $Color . '" fill-opacity="0.4" stroke="none"' . $RunOf . '/>';
+            // Down to the series below: its top, back from right to left (smooth: the same curve as its edge, reversed)
+            $Lower = array_map(fn(int $Index) => [$Xs[$Index], (int)round($this->Y($this->Unders[$Number][$Index]))], $RunIndexes[$RunNumber]);
+            $Back = ($this->Smooth ? self::SmoothPathOf($Lower, true) : null) ?? self::PathOf(array_reverse($Lower));
+            $Fill .= '<path d="' . $Line . 'L' . substr($Back, 1) . 'Z" fill="' . $Color . '" fill-opacity="0.4" stroke="none"' . $RunOf . '/>';
           }
           elseif ($this->Area)
           {
@@ -502,6 +516,72 @@
       return $Path . 'l' . implode(' ', array_map(fn(array $Step) => $Step[0] . ' ' . $Step[1], $Steps));
     }
 
+    /**
+     * A run of points (left to right) as a monotone cubic curve (Fritsch–Carlson, the tangents of d3's curveMonotoneX):
+     * through every point, never past one. Reversed: the same curve drawn from right to left (a band's lower edge).
+     * Null where it doesn't apply: fewer than three points (a straight step is the curve) or two points in one pixel
+     * column (more points than pixels).
+     *
+     * @param array<int, array{int|float, int|float}> $Points
+     */
+    public static function SmoothPathOf(array $Points, bool $Reversed = false): ?string
+    {
+      $Count = count($Points);
+      if ($Count < 3)
+      {
+        return null;
+      }
+      for ($At = 1; $At < $Count; $At++)
+      {
+        if ($Points[$At][0] <= $Points[$At - 1][0])
+        {
+          return null;
+        }
+      }
+      // The secants, then each point's tangent: zero at a peak, a valley or a flat side; otherwise the weighted mean,
+      // limited so the curve can't overshoot (d3's slope3); the ends from the secant and their neighbour (slope2)
+      $Secants = [];
+      for ($At = 0; $At < $Count - 1; $At++)
+      {
+        $Secants[$At] = ($Points[$At + 1][1] - $Points[$At][1]) / ($Points[$At + 1][0] - $Points[$At][0]);
+      }
+      $Tangents = [];
+      for ($At = 1; $At < $Count - 1; $At++)
+      {
+        $Before = $Secants[$At - 1];
+        $After = $Secants[$At];
+        $Left = $Points[$At][0] - $Points[$At - 1][0];
+        $Right = $Points[$At + 1][0] - $Points[$At][0];
+        $Mean = ($Before * $Right + $After * $Left) / ($Left + $Right);
+        $Tangents[$At] = ((($Before <=> 0) + ($After <=> 0)) * min(abs($Before), abs($After), 0.5 * abs($Mean)));
+      }
+      $Tangents[0] = (3 * $Secants[0] - $Tangents[1]) / 2;
+      $Tangents[$Count - 1] = (3 * $Secants[$Count - 2] - $Tangents[$Count - 2]) / 2;
+      // Each step as a cubic Bézier, its control points a third of the way along the tangents
+      $Segments = [];
+      for ($At = 0; $At < $Count - 1; $At++)
+      {
+        $Third = ($Points[$At + 1][0] - $Points[$At][0]) / 3;
+        $Segments[] = [
+          $Points[$At],
+          [$Points[$At][0] + $Third, $Points[$At][1] + $Third * $Tangents[$At]],
+          [$Points[$At + 1][0] - $Third, $Points[$At + 1][1] - $Third * $Tangents[$At + 1]],
+          $Points[$At + 1],
+        ];
+      }
+      if ($Reversed)
+      {
+        $Segments = array_map(fn(array $Segment) => array_reverse($Segment), array_reverse($Segments));
+      }
+      $Xy = fn(array $Point) => self::Coordinate($Point[0]) . ' ' . self::Coordinate($Point[1]);
+      $Path = 'M' . $Xy($Segments[0][0]);
+      foreach ($Segments as $Segment)
+      {
+        $Path .= 'C' . $Xy($Segment[1]) . ' ' . $Xy($Segment[2]) . ' ' . $Xy($Segment[3]);
+      }
+      return $Path;
+    }
+
     // With Time(): how long between samples counts as a gap: more than twice the usual step (the median)
     private function GapAfter(): ?int
     {
@@ -575,6 +655,11 @@
       if ($this->Stack !== '')
       {
         $Data['stack'] = $this->Stack;
+        if ($this->Smooth)
+        {
+          // For standalone.js to draw a restacked band's curves as the server does
+          $Data['smooth'] = 1;
+        }
       }
       $Hrefs = [];
       $Attributes = [];
