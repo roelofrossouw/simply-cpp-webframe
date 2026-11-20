@@ -551,7 +551,15 @@
   Check(NoOvershoot(LineChart::SmoothPathOf($Rising)), 'smooth: a rising run keeps rising');
   Check(NoOvershoot(LineChart::SmoothPathOf([[0, 0], [5, 80], [7, 80], [20, 0], [21, 100], [40, 3]])), 'smooth: sharp turns, uneven steps');
   Same(null, LineChart::SmoothPathOf([[0, 1], [5, 2]]), 'smooth: two points stay a straight step');
-  Same(null, LineChart::SmoothPathOf([[0, 1], [0, 2], [5, 2]]), 'smooth: more points than pixels stays straight');
+  Same(null, LineChart::SmoothPathOf([[0, 1], [0, 2], [5, 2]]), 'smooth: points not left to right stay straight');
+  $Many = [];
+  for ($At = 0; $At <= LineChart::SMOOTH_MOST; $At++)
+  {
+    $Many[] = [$At / 10, $At % 7];
+  }
+  Same(null, LineChart::SmoothPathOf($Many), 'smooth: a run of more than SMOOTH_MOST points stays straight');
+  Check(LineChart::SmoothPathOf(array_slice($Many, 0, LineChart::SMOOTH_MOST)) !== null, 'smooth: SMOOTH_MOST points are smoothed');
+  Check(LineChart::SmoothPathOf($Many, false, 4000) !== null, 'smooth: a higher limit (a wide plot) smooths them');
   $Back = Segments(LineChart::SmoothPathOf($Rising, true));
   Same(array_map(fn(array $Segment) => array_reverse($Segment), array_reverse(Segments(LineChart::SmoothPathOf($Rising)))), $Back,
     'smooth reversed: the same curve from right to left');
@@ -577,6 +585,22 @@
   Same(2, preg_match_all('/<path d="M[\d. ]+C[^"]+" fill="none"/', $Html), 'smooth with gaps: each run a curve of its own');
   Same(1, preg_match_all('/<circle cx="\d+" cy="\d+" r="2.5"/', $Html), 'and a point on its own a dot');
 
+  // 240 points on a small nominal Size() (more points than its pixels, as 1web's panels): still smoothed
+  $Dense = (new LineChart())->Smooth()->Dots(false)->Size(240, 160);
+  $Dense->AddSeries('n', array_map(fn(int $At) => ($At * 37) % 11, range(0, 239)));
+  $Html = (string)$Dense;
+  Check(preg_match('/<path d="(M[\d. ]+C[^"]+)" fill="none"/', $Html, $Found) === 1, '240 points on a small plot: smoothed');
+  Same(239, count(Segments($Found[1] ?? 'M0 0')), 'and the curve has a segment per step');
+  $Huge = (new LineChart())->Smooth()->Dots(false)->Size(240, 160);
+  $Huge->AddSeries('n', array_map(fn(int $At) => ($At * 37) % 11, range(0, LineChart::SMOOTH_MOST)));
+  Check(!preg_match('/<path d="M[\d. ]+C/', (string)$Huge), 'more than SMOOTH_MOST points: straight');
+  $Bands = (new LineChart())->Smooth()->Area()->Stacked()->Size(240, 160);
+  $Bands->AddSeries('a', array_map(fn(int $At) => $At % 5, range(0, 239)));
+  $Bands->AddSeries('b', array_map(fn(int $At) => $At % 3, range(0, 239)));
+  $Data = HoverData((string)$Bands);
+  Check(count($Data['sx'] ?? []) === 240 && count(array_unique($Data['sx'])) === 240 && ($Data['most'] ?? 0) >= LineChart::SMOOTH_MOST,
+    'stacked smooth: the exact places and the limit go to the script');
+
   // Stacked: a band's lower edge is the curve of the band below, reversed
   $Bands = (new LineChart())->Smooth()->Area()->Stacked();
   $Bands->AddSeries('a', [1, 4, 2, 0, 3]);
@@ -601,4 +625,4 @@
   Check(strpos($Html, 'data-series="1">' . '<path d="M') < strpos($Html, 'stroke-linecap="round" data-run="0 4"'), 'stacked smooth: fills first, the edges after');
   Same(1, HoverData($Html)['smooth'] ?? null, 'stacked smooth: the script draws a restacked band as curves too');
   $Js = file_get_contents(__DIR__ . '/../php/Chart/standalone.js');
-  Check(str_contains($Js, 'let path = pathOf(points, chart.smooth, false);'), 'the script restacks smooth bands with the same curve');
+  Check(str_contains($Js, 'let path = pathOf(points, chart.smooth, false, chart.most);') && str_contains($Js, 'chart.sx'), 'the script restacks smooth bands with the same curve, at the exact places');

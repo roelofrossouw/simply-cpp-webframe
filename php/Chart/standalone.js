@@ -428,10 +428,10 @@
     });
   };
   // A run of [x, y] points as a path: straight, or with Smooth() the monotone cubic curve LineChart::SmoothPathOf()
-  // draws (reversed: from right to left, a band's lower edge)
-  const pathOf = function (points, smooth, reversed) {
+  // draws (reversed: from right to left, a band's lower edge); straight above most points, as the server does
+  const pathOf = function (points, smooth, reversed, most) {
     const count = points.length;
-    let increasing = count >= 3;
+    let increasing = count >= 3 && count <= (most || 2000);
     for (let at = 1; increasing && at < count; at++) increasing = points[at][0] > points[at - 1][0];
     if (!smooth || !increasing)
     {
@@ -490,14 +490,16 @@
         }
         const [from, to] = element.getAttribute('data-run').split(' ').map(Number);
         const points = [];
-        for (let index = from; index <= to; index++) points.push([chart.x[index], y(at[index][number] ?? 0)]);
-        let path = pathOf(points, chart.smooth, false);
+        // Smooth(): the curves through the labels' exact places, as the server draws them
+        const xs = chart.smooth && chart.sx && to - from + 1 <= (chart.most || 2000) ? chart.sx : chart.x;
+        for (let index = from; index <= to; index++) points.push([xs[index], y(at[index][number] ?? 0)]);
+        let path = pathOf(points, chart.smooth, false, chart.most);
         if (element.getAttribute('stroke') === 'none')
         {
           // An area: down to what it stands on, back from right to left
           const lower = [];
-          for (let index = from; index <= to; index++) lower.push([chart.x[index], y(at[index].unders[number])]);
-          path += 'L' + pathOf(lower, chart.smooth, true).substring(1) + 'Z';
+          for (let index = from; index <= to; index++) lower.push([xs[index], y(at[index].unders[number])]);
+          path += 'L' + pathOf(lower, chart.smooth, true, chart.most).substring(1) + 'Z';
         }
         shape.setAttribute('d', path);
       });

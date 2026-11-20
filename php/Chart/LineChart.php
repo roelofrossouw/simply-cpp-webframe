@@ -12,6 +12,8 @@
     private bool $Area = false;
     private ?bool $Dots = null;
     private bool $Smooth = false;
+    // Smooth(): a run of more points than this (or four per unit of the plot's width, if that's more) stays straight
+    public const SMOOTH_MOST = 2000;
     // Stacked(): '' (not), 'normal' or 'percent'
     private string $Stack = '';
     /** @var array<int|string, string> Thresholds(): from => colour */
@@ -46,7 +48,9 @@
      * Smooth curves through the points instead of straight steps, as Grafana's "smooth" line interpolation: monotone
      * cubic (Fritsch–Carlson, as d3's curveMonotoneX), so a curve goes through every point and never past one (no bump
      * above a peak, no dip below zero between two zeros). Areas, stacked bands and gaps follow the same curves; the
-     * hover still snaps to the points. Where there are more points than pixel columns the line stays straight.
+     * hover still snaps to the points. The curves run through the points' exact places (not whole pixels), so a run
+     * with more points than the nominal Size() has pixels is smoothed too; only a run of more than SMOOTH_MOST points
+     * (or four per unit of the plot's width, if that's more) stays straight.
      */
     public function Smooth(bool $On = true): static
     {
@@ -300,10 +304,16 @@
       $Gap = $this->GapAfter();
       $Bottom = (int)round($this->Y(max($this->Scale->Low, min(0.0, $this->Scale->High))));
       $Xs = [];
+      $Exact = []; // Smooth(): each label's exact place (two decimals), for the curves
       for ($Index = 0; $Index < $Count; $Index++)
       {
         $Xs[$Index] = (int)round($this->X($Index));
+        if ($this->Smooth)
+        {
+          $Exact[$Index] = round($this->X($Index), 2);
+        }
       }
+      $Most = $this->SmoothMost();
       $Svg = $this->ThresholdStyle === 'area' ? $this->ThresholdMarks() : '';
       $Hits = [];
       // With OpenSeries() each line is also a wide see-through stroke to click: its shape then goes in <defs> once and
@@ -366,12 +376,13 @@
             }
             continue;
           }
-          $Line = ($this->Smooth ? self::SmoothPathOf($Points) : null) ?? self::PathOf($Points);
+          $Exactly = fn(array $Run) => array_map(fn(array $Point, int $Index) => [$Exact[$Index], $Point[1]], $Run, $Span);
+          $Line = ($this->Smooth ? self::SmoothPathOf($Exactly($Points), false, $Most) : null) ?? self::PathOf($Points);
           if ($this->Area && $this->Stack !== '')
           {
             // Down to the series below: its top, back from right to left (smooth: the same curve as its edge, reversed)
             $Lower = array_map(fn(int $Index) => [$Xs[$Index], (int)round($this->Y($this->Unders[$Number][$Index]))], $RunIndexes[$RunNumber]);
-            $Back = ($this->Smooth ? self::SmoothPathOf($Lower, true) : null) ?? self::PathOf(array_reverse($Lower));
+            $Back = ($this->Smooth ? self::SmoothPathOf($Exactly($Lower), true, $Most) : null) ?? self::PathOf(array_reverse($Lower));
             $Fill .= '<path d="' . $Line . 'L' . substr($Back, 1) . 'Z" fill="' . $Color . '" fill-opacity="0.4" stroke="none"' . $RunOf . '/>';
           }
           elseif ($this->Area)
@@ -519,15 +530,15 @@
     /**
      * A run of points (left to right) as a monotone cubic curve (Fritsch–Carlson, the tangents of d3's curveMonotoneX):
      * through every point, never past one. Reversed: the same curve drawn from right to left (a band's lower edge).
-     * Null where it doesn't apply: fewer than three points (a straight step is the curve) or two points in one pixel
-     * column (more points than pixels).
+     * Null where it doesn't apply: fewer than three points (a straight step is the curve), more than $Most, or points
+     * not left to right.
      *
      * @param array<int, array{int|float, int|float}> $Points
      */
-    public static function SmoothPathOf(array $Points, bool $Reversed = false): ?string
+    public static function SmoothPathOf(array $Points, bool $Reversed = false, int $Most = self::SMOOTH_MOST): ?string
     {
       $Count = count($Points);
-      if ($Count < 3)
+      if ($Count < 3 || $Count > $Most)
       {
         return null;
       }
@@ -580,6 +591,12 @@
         $Path .= 'C' . $Xy($Segment[1]) . ' ' . $Xy($Segment[2]) . ' ' . $Xy($Segment[3]);
       }
       return $Path;
+    }
+
+    // Smooth(): the most points a run may have to be smoothed: SMOOTH_MOST, or four per unit of the plot's width if more
+    private function SmoothMost(): int
+    {
+      return max(self::SMOOTH_MOST, (int)floor(4 * $this->PlotWidth()));
     }
 
     // With Time(): how long between samples counts as a gap: more than twice the usual step (the median)
@@ -659,6 +676,8 @@
         {
           // For standalone.js to draw a restacked band's curves as the server does
           $Data['smooth'] = 1;
+          $Data['sx'] = array_map(fn(int $Index) => round($this->X($Index), 2), array_keys($Xs));
+          $Data['most'] = $this->SmoothMost();
         }
       }
       $Hrefs = [];
