@@ -330,6 +330,21 @@
   Same([[2.0], [-3.0], [3.0]], Tops($Both->Stacked()), 'stacked: above and below zero apart');
   $Area = (string)(new LineChart())->Area()->Stacked()->FromRows([['m' => 'a', 'x' => 1, 'y' => 2], ['m' => 'b', 'x' => 2, 'y' => 2]], 'm', ['x', 'y']);
   Same(2, preg_match_all('/<path d="M[^"]*L[^"]*Z" fill="[^"]*" fill-opacity="0.4"/', $Area), 'stacked areas: each fills down to the one below, at 0.4');
+  // A series at zero stacked on another: its edge lies on the other's top, so the edges go top series first and the
+  // lower band's own edge ends up on top; the fills stay bottom-up
+  $Zero = new LineChart();
+  $Zero->Area()->Stacked();
+  $Zero->AddSeries('low', [3, 4, 5]);
+  $Zero->AddSeries('zero', [0, 0, 0]);
+  $Zero->AddSeries('high', [1, 1, 1]);
+  preg_match_all('/<g data-series="(\d)"><path d="[^"]*" (fill="[^"]*" fill-opacity="0.4"|fill="none" stroke)/', (string)$Zero, $Found);
+  Same(['0', '1', '2', '2', '1', '0'], $Found[1], 'stacked: fills bottom-up, then edges from the top series down');
+  Same(3, count(array_filter($Found[2], fn($Kind) => str_starts_with($Kind, 'fill="none"'))), 'stacked: each series has its edge');
+  $Plain = new LineChart();
+  $Plain->AddSeries('a', [1, 2]);
+  $Plain->AddSeries('b', [2, 3]);
+  preg_match_all('/<g data-series="(\d)">/', (string)$Plain, $Found);
+  Same(['0', '1'], $Found[1], 'not stacked: one group per series, in order');
   $Codes = new LineChart();
   foreach (['200', '404', '503', 'other'] as $Code)
   {

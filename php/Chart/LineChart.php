@@ -44,7 +44,8 @@
     /**
      * Each series on top of the ones before it, as Grafana's stacking: 'normal' (the values add up) or 'percent' (each
      * time's total is 100%). Values above and below zero stack apart. With Area() each series fills down to the one
-     * below; the hover still shows each series' own value.
+     * below; the hover still shows each series' own value. The edges are drawn from the top series down, so where a
+     * series above is at zero its edge lies under the band below's own.
      */
     public function Stacked(string $Mode = 'normal'): static
     {
@@ -299,6 +300,8 @@
       $Fades = []; // the area gradients drawn
       $Stacked = $this->Stack !== '';
       $Shapes = '';
+      $Fills = [];
+      $Edges = [];
       foreach ($this->Series as $Number => $Series)
       {
         $Color = self::Escape($this->ColorOf($Number));
@@ -330,7 +333,9 @@
             $Circles .= '<circle cx="' . $Point[0] . '" cy="' . $Point[1] . '" r="2.5" fill="' . $Color . '"' . ($Stacked ? ' data-i="' . $Index . '"' : '') . '/>';
           }
         }
-        $Svg .= '<g data-series="' . $Number . '">';
+        // Stacked with Area(): the fills (bottom-up) apart from the edges and dots (in $Body)
+        $Fill = '';
+        $Body = '';
         $Lines = [];
         foreach ($Runs as $RunNumber => $Points)
         {
@@ -344,7 +349,7 @@
             // A point on its own shows as a dot
             if (!$Dots)
             {
-              $Svg .= '<circle cx="' . $Start[0] . '" cy="' . $Start[1] . '" r="2.5" fill="' . $Color . '"' . ($Stacked ? ' data-i="' . $Span[0] . '"' : '') . '/>';
+              $Body .= '<circle cx="' . $Start[0] . '" cy="' . $Start[1] . '" r="2.5" fill="' . $Color . '"' . ($Stacked ? ' data-i="' . $Span[0] . '"' : '') . '/>';
             }
             continue;
           }
@@ -353,7 +358,7 @@
           {
             // Down to the series below: its top, back from right to left
             $Lower = array_reverse(array_map(fn(int $Index) => [$Xs[$Index], (int)round($this->Y($this->Unders[$Number][$Index]))], $RunIndexes[$RunNumber]));
-            $Svg .= '<path d="' . $Line . 'L' . substr(self::PathOf($Lower), 1) . 'Z" fill="' . $Color . '" fill-opacity="0.4" stroke="none"' . $RunOf . '/>';
+            $Fill .= '<path d="' . $Line . 'L' . substr(self::PathOf($Lower), 1) . 'Z" fill="' . $Color . '" fill-opacity="0.4" stroke="none"' . $RunOf . '/>';
           }
           elseif ($this->Area)
           {
@@ -363,26 +368,48 @@
             if (!isset($Fades[$Fade]))
             {
               $Fades[$Fade] = true;
-              $Svg .= '<defs><linearGradient id="' . $Fade . '" gradientUnits="userSpaceOnUse" x1="0" y1="' . self::TOP . '" x2="0" y2="' . $Bottom . '">' .
+              $Body .= '<defs><linearGradient id="' . $Fade . '" gradientUnits="userSpaceOnUse" x1="0" y1="' . self::TOP . '" x2="0" y2="' . $Bottom . '">' .
                 '<stop offset="0" stop-color="' . $Color . '" stop-opacity="0.35"/><stop offset="1" stop-color="' . $Color . '" stop-opacity="0"/>' .
                 '</linearGradient></defs>';
             }
-            $Svg .= '<path d="' . $Line . 'L' . $End[0] . ' ' . $Bottom . 'L' . $Start[0] . ' ' . $Bottom . 'Z" fill="url(#' . $Fade . ')" stroke="none"/>';
+            $Body .= '<path d="' . $Line . 'L' . $End[0] . ' ' . $Bottom . 'L' . $Start[0] . ' ' . $Bottom . 'Z" fill="url(#' . $Fade . ')" stroke="none"/>';
           }
           if ($Linked)
           {
             $Id = $Prefix . $Number . '-' . count($Lines);
             $Shapes .= '<path id="' . $Id . '" d="' . $Line . '"/>';
-            $Svg .= '<use href="#' . $Id . '" fill="none" stroke="' . $Color . $Stroke . ' stroke-linejoin="round" stroke-linecap="round"' . $RunOf . '/>';
+            $Body .= '<use href="#' . $Id . '" fill="none" stroke="' . $Color . $Stroke . ' stroke-linejoin="round" stroke-linecap="round"' . $RunOf . '/>';
             $Lines[] = '#' . $Id;
           }
           else
           {
-            $Svg .= '<path d="' . $Line . '" fill="none" stroke="' . $Color . $Stroke . ' stroke-linejoin="round" stroke-linecap="round"' . $RunOf . '/>';
+            $Body .= '<path d="' . $Line . '" fill="none" stroke="' . $Color . $Stroke . ' stroke-linejoin="round" stroke-linecap="round"' . $RunOf . '/>';
           }
         }
-        $Svg .= $Circles . '</g>';
+        $Body .= $Circles;
         $Hits[$Number] = $Lines;
+        if ($Stacked)
+        {
+          $Fills[$Number] = $Fill;
+          $Edges[$Number] = $Body;
+        }
+        else
+        {
+          $Svg .= '<g data-series="' . $Number . '">' . $Body . '</g>';
+        }
+      }
+      if ($Stacked)
+      {
+        // Stacked: every fill first, bottom-up; then the edges from the top series down, so where edges coincide (a
+        // series above at zero lies on the top of the one below) the lower band's own edge ends up on top
+        foreach ($Fills as $Number => $Fill)
+        {
+          $Svg .= $Fill !== '' ? '<g data-series="' . $Number . '">' . $Fill . '</g>' : '';
+        }
+        foreach (array_reverse($Edges, true) as $Number => $Edge)
+        {
+          $Svg .= '<g data-series="' . $Number . '">' . $Edge . '</g>';
+        }
       }
       $Svg .= $this->ThresholdStyle === 'line' ? $this->ThresholdMarks() : '';
       return ($Shapes !== '' ? '<defs>' . $Shapes . '</defs>' : '') . $Svg . $this->SeriesLinks($Hits) . $this->HoverArea($Xs) . $this->AnnotationMarks();
