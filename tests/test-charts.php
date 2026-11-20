@@ -398,15 +398,34 @@
   Same(['0', '1', '2', '3'], $Order[1], 'no sort: the series\' order');
   Check(str_contains((string)(clone $Jobs)->Legend('table', ['last'])->Format(fn(float $V) => $V . ' ms'), '>3 ms</td>'), 'values as Format() writes them');
 
-  // Beside the drawing: it takes 58% of the width, the legend the rest, as tall as the drawing
+  // Beside the drawing: the legend as wide as its content needs (longest name, widest values, headers), between 19% and
+  // 41% of the width, the drawing the rest less a 1% gap; as tall as the drawing, scrolling
   $Right = (clone $Jobs)->Legend('table', ['last'], Placement: 'right');
   $Html = (string)$Right;
+  // Five-letter names and one value column: 21 + 5 x 7.2 + 16 + 16 for the name, 6 x 7.5 + 16 for "Last *": 150 of 640 px
   Check(str_contains($Html, '<div class="sc-chart-body sc-legend-right" style="display:flex;align-items:stretch;gap:.75rem"><div style="flex:1 1 0;min-width:0"><svg')
-    && str_contains($Html, 'viewBox="0 0 371 240" width="371"'), 'right: the drawing in its share of the width, at the chart\'s height');
-  Check(preg_match('/data-plot="[\d.]+ 10 359 214"/', $Html) === 1, 'its plot box in the narrower drawing, for the hover script');
-  Check(str_contains($Html, 'flex:0 0 41%;position:relative') && str_contains($Html, '<div class="sc-legend-scroll" style="position:absolute;inset:0;overflow:auto">'),
-    'and the legend beside it, scrolling inside the drawing\'s height');
-  Same(155, $Right->Resolution(), 'fewer points to fetch for the narrower drawing');
+    && str_contains($Html, 'viewBox="0 0 484 240" width="484"'), 'right: the drawing takes what the short legend leaves, at the chart\'s height');
+  Check(preg_match('/data-plot="[\d.]+ 10 472 214"/', $Html) === 1, 'its plot box in the drawing, for the hover script');
+  Check(str_contains($Html, 'flex:0 0 23.4%;position:relative') && str_contains($Html, '<div class="sc-legend-scroll" style="position:absolute;inset:0;overflow:auto">'),
+    'and the legend beside it, as wide as its content, scrolling inside the drawing\'s height');
+  Same(212, $Right->Resolution(), 'points to fetch for the drawing\'s width');
+  // Long names: at most 41% (a longer name ends in an ellipsis), the drawing 58%
+  $Long = new LineChart();
+  $Long->AddSeries('a rather long series name that will not fit beside the drawing', [1, 2]);
+  $Long->AddSeries('short', [3, 4]);
+  $Html = (string)$Long->Legend('table', ['last', 'max'], Placement: 'right');
+  Check(str_contains($Html, 'flex:0 0 41%;position:relative') && str_contains($Html, 'viewBox="0 0 371 240" width="371"'), 'long names: the legend at its most, 41%');
+  Check(str_contains($Html, ';width:100%;max-width:0;overflow:hidden;text-overflow:ellipsis" title="a rather long series name'), 'the name cut with an ellipsis, in full on hover');
+  Same(155, $Long->Resolution(), 'fewer points to fetch for the narrower drawing');
+  // Tiny names and values: at least 19%
+  $Tiny = new LineChart();
+  $Tiny->AddSeries('a', [1]);
+  Check(str_contains((string)$Tiny->Legend('table', ['max'], Placement: 'right'), 'flex:0 0 19%;position:relative'), 'tiny content: the legend at its least, 19%');
+  // Before any series (Prometheus asks Resolution() before the data): the most the legend may take
+  Same(155, (new LineChart())->Legend('table', ['last'], Placement: 'right')->Resolution(), 'no series yet: the drawing as narrow as it can be');
+  // A sorted column's arrow counts in its header's width
+  $Sorted = (string)(clone $Jobs)->Legend('table', ['last'], SortBy: 'last', Placement: 'right');
+  Check(str_contains($Sorted, 'flex:0 0 25.8%;position:relative'), 'the sort arrow widens its header');
 
   // Top(): Others last, whatever the sort, in grey, with the summed values
   $Many = new LineChart();

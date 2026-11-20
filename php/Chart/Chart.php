@@ -35,8 +35,19 @@
       'color:var(--bs-secondary-color,#6c757d);font-weight:500;white-space:nowrap;cursor:pointer;user-select:none;' .
       'border-bottom:1px solid var(--bs-border-color,#dee2e6)';
     private const string TABLE_CELL = 'padding:.2rem .5rem;white-space:nowrap;border-bottom:1px solid var(--bs-border-color-translucent,rgba(0,0,0,.08))';
-    // Legend(Placement: 'right'): the drawing's share of the chart's width, the legend beside it taking the rest
-    private const float DRAWING_SHARE = 0.58;
+    // Legend(Placement: 'right'): the legend's share of the chart's width, sized to its content between these two, the
+    // drawing taking the rest less the gap between them
+    private const float LEGEND_SHARE_MIN = 0.19;
+    private const float LEGEND_SHARE_MAX = 0.41;
+    private const float GAP_SHARE = 0.01;
+    // The table's text at .8125rem (13px), estimated per character: names, values (tabular figures), headers (weight 500)
+    private const float NAME_CHAR_PX = 7.2;
+    private const float VALUE_CHAR_PX = 7.8;
+    private const float HEAD_CHAR_PX = 7.5;
+    // A cell's padding (.5rem each side), the swatch with its margin, and room for a scroll bar
+    private const float CELL_PADDING_PX = 16;
+    private const float SWATCH_PX = 21;
+    private const float SCROLLBAR_PX = 16;
 
     /** @var string[] the labels, in order */
     protected array $Labels = [];
@@ -411,10 +422,40 @@
       return max(20, intdiv($this->DrawingWidth() - 60, 2));
     }
 
-    // The drawing's width: Size()'s, less the legend's share when a table legend goes on its right
+    // The drawing's width: Size()'s, less the legend's share and the gap when a table legend goes on its right
     private function DrawingWidth(): int
     {
-      return $this->LegendMode === 'table' && $this->LegendPlacement === 'right' ? (int)round($this->Width * self::DRAWING_SHARE) : $this->Width;
+      return $this->LegendMode === 'table' && $this->LegendPlacement === 'right' ?
+        (int)round($this->Width * (1 - $this->LegendShare() - self::GAP_SHARE)) : $this->Width;
+    }
+
+    /**
+     * A table legend on the right: its share of the chart's width, as wide as its longest name, widest values and
+     * headers need, between LEGEND_SHARE_MIN and LEGEND_SHARE_MAX (where a longer name ends in an ellipsis). Worked out
+     * here, so the layout is right as the HTML arrives; without series yet (Resolution() before the data) the most.
+     */
+    protected function LegendShare(): float
+    {
+      if (empty($this->Series) || $this->Width <= 0)
+      {
+        return self::LEGEND_SHARE_MAX;
+      }
+      $Name = mb_strlen('Name') * self::HEAD_CHAR_PX + ($this->LegendSort === 'name' ? 2 * self::HEAD_CHAR_PX : 0);
+      foreach ($this->Series as $Series)
+      {
+        $Name = max($Name, self::SWATCH_PX + mb_strlen($Series->Name) * self::NAME_CHAR_PX);
+      }
+      $Pixels = $Name + self::CELL_PADDING_PX + self::SCROLLBAR_PX;
+      foreach ($this->LegendValues as $Calculation)
+      {
+        $Column = (mb_strlen(self::CALCULATIONS[$Calculation]) + ($this->LegendSort === $Calculation ? 2 : 0)) * self::HEAD_CHAR_PX;
+        foreach ($this->Series as $Series)
+        {
+          $Column = max($Column, mb_strlen($this->Value(self::Calculate($Series, $Calculation))) * self::VALUE_CHAR_PX);
+        }
+        $Pixels += $Column + self::CELL_PADDING_PX;
+      }
+      return min(self::LEGEND_SHARE_MAX, max(self::LEGEND_SHARE_MIN, $Pixels / $this->Width));
     }
 
     /**
@@ -780,7 +821,7 @@
         '<thead><tr>' . $Head . '</tr></thead><tbody>' . $Body . '</tbody></table>';
       if ($this->LegendPlacement === 'right')
       {
-        return '<div class="sc-chart-legend sc-legend-table" style="display:block;flex:0 0 ' . round(100 * (1 - self::DRAWING_SHARE) - 1) .
+        return '<div class="sc-chart-legend sc-legend-table" style="display:block;flex:0 0 ' . round(100 * $this->LegendShare(), 1) .
           '%;position:relative;min-width:0;margin:0;font-size:.8125rem"><div class="sc-legend-scroll" style="position:absolute;inset:0;overflow:auto">' .
           $Table . '</div></div>';
       }

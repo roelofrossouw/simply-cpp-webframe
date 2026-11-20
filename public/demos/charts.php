@@ -156,6 +156,21 @@
     }
   }
   $Card->AddChild($Side->Top(8)->Legend('table', ['last', 'max', 'mean'], Placement: 'right', SortBy: 'last'));
+  // On the right the legend is as wide as its names and values need (19% to 41%): short names leave the drawing more room
+  $Short = (new LineChart('Short names: a narrow legend on the right'))->Time();
+  $Long = (new LineChart('Long names: the legend at its widest, names cut'))->Time();
+  foreach (['VMS', '2WC', 'MTA'] as $Number => $Name)
+  {
+    $Points = [];
+    for ($Point = 0; $Point < 240; $Point++)
+    {
+      $Points[$Start + 90 * $Point] = round(abs(sin($Point / 25 + $Number)) * 40, 1);
+    }
+    $Short->AddSeries($Name, $Points);
+    $Long->AddSeries("$Name positions received from the devices of every account", $Points);
+  }
+  $Card->AddChild($Short->Legend('table', ['last', 'max'], Placement: 'right'));
+  $Card->AddChild($Long->Legend('table', ['last', 'max'], Placement: 'right'));
   $Card->AddChild($Under->Area()->Legend('table', ['last', 'min', 'max', 'sum'], SortBy: 'name', Desc: false));
 
   // Stacked, below zero, per-series settings and thresholds
