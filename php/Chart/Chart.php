@@ -430,15 +430,15 @@
     }
 
     /**
-     * A table legend on the right: its share of the chart's width, as wide as its longest name, widest values and
-     * headers need, between LEGEND_SHARE_MIN and LEGEND_SHARE_MAX (where a longer name ends in an ellipsis). Worked out
-     * here, so the layout is right as the HTML arrives; without series yet (Resolution() before the data) the most.
+     * A table legend on the right: the pixels its content needs (longest name, widest values and headers, at the table's
+     * 13px), worked out here so the layout is right as the HTML arrives; null without series yet (Resolution() before
+     * the data). The text is HTML at a fixed size, so this is an absolute width, whatever Size() says.
      */
-    protected function LegendShare(): float
+    protected function LegendPixels(): ?float
     {
-      if (empty($this->Series) || $this->Width <= 0)
+      if (empty($this->Series))
       {
-        return self::LEGEND_SHARE_MAX;
+        return null;
       }
       $Name = mb_strlen('Name') * self::HEAD_CHAR_PX + ($this->LegendSort === 'name' ? 2 * self::HEAD_CHAR_PX : 0);
       foreach ($this->Series as $Series)
@@ -454,6 +454,21 @@
           $Column = max($Column, mb_strlen($this->Value(self::Calculate($Series, $Calculation))) * self::VALUE_CHAR_PX);
         }
         $Pixels += $Column + self::CELL_PADDING_PX;
+      }
+      return ceil($Pixels);
+    }
+
+    /**
+     * A table legend on the right: its share of Size()'s width, for the width the drawing is drawn at (taking Size() as
+     * pixels): LegendPixels() between LEGEND_SHARE_MIN and LEGEND_SHARE_MAX, without series yet the most. On the page the
+     * legend is LegendPixels() wide between the same shares of the real width, the drawing scaling to the rest.
+     */
+    protected function LegendShare(): float
+    {
+      $Pixels = $this->LegendPixels();
+      if ($Pixels === null || $this->Width <= 0)
+      {
+        return self::LEGEND_SHARE_MAX;
       }
       return min(self::LEGEND_SHARE_MAX, max(self::LEGEND_SHARE_MIN, $Pixels / $this->Width));
     }
@@ -599,8 +614,10 @@
         $this->Width = $Width;
       }
       $PlotAttribute = $Plot !== null ? ' data-plot="' . implode(' ', array_map(fn($Edge) => self::Coordinate((float)$Edge), $Plot)) . '"' : '';
+      // Beside a table legend the drawing fills whatever the legend leaves (known only on the page)
+      $Fit = $HasLegend && $this->LegendMode === 'table' && $this->LegendPlacement === 'right' ? 'width:100%;height:auto' : 'max-width:100%;height:auto';
       $Svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' . $Drawn . ' ' . $this->Height .
-        '" width="' . $Drawn . '" height="' . $this->Height . '" style="max-width:100%;height:auto" role="img" aria-label="' . self::Escape($Label) .
+        '" width="' . $Drawn . '" height="' . $this->Height . '" style="' . $Fit . '" role="img" aria-label="' . self::Escape($Label) .
         '"' . $PlotAttribute . ' font-family="system-ui, -apple-system, sans-serif" font-size="11">' . $Body . '</svg>';
       $Legend = $HasLegend ? $this->DrawLegend() : '';
       if ($Legend !== '' && $this->LegendMode === 'table' && $this->LegendPlacement === 'right')
@@ -821,8 +838,13 @@
         '<thead><tr>' . $Head . '</tr></thead><tbody>' . $Body . '</tbody></table>';
       if ($this->LegendPlacement === 'right')
       {
-        return '<div class="sc-chart-legend sc-legend-table" style="display:block;flex:0 0 ' . round(100 * $this->LegendShare(), 1) .
-          '%;position:relative;min-width:0;margin:0;font-size:.8125rem"><div class="sc-legend-scroll" style="position:absolute;inset:0;overflow:auto">' .
+        // As wide as its content in pixels (not a share of Size(), which may be nominal: the drawing is stretched), held
+        // between 19% and 41% of the real width; without series yet, the most
+        $Pixels = $this->LegendPixels();
+        $Basis = $Pixels === null ? round(100 * self::LEGEND_SHARE_MAX) . '%' : (int)$Pixels . 'px';
+        return '<div class="sc-chart-legend sc-legend-table" style="display:block;flex:0 0 ' . $Basis . ';min-width:' .
+          round(100 * self::LEGEND_SHARE_MIN) . '%;max-width:' . round(100 * self::LEGEND_SHARE_MAX) .
+          '%;position:relative;margin:0;font-size:.8125rem"><div class="sc-legend-scroll" style="position:absolute;inset:0;overflow:auto">' .
           $Table . '</div></div>';
       }
       return '<div class="sc-chart-legend sc-legend-table" style="display:block;margin-top:.5rem;font-size:.8125rem;overflow:auto;max-height:' .

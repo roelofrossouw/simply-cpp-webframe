@@ -31,7 +31,7 @@
     '.sc-chart svg [data-series]{transition:opacity .12s}.sc-chart svg.sc-dim [data-series]:not(.sc-lit){opacity:.15}' +
     '.sc-legend-table tbody tr[data-row]:hover,.sc-legend-table tbody tr[data-row]:focus-visible{background:var(--bs-tertiary-bg,rgba(0,0,0,.04));outline:none}' +
     '.sc-legend-table th[data-sort]:hover{color:var(--bs-body-color,#212529)!important}' +
-    '@media (max-width:575.98px){.sc-legend-right{flex-direction:column}.sc-legend-right>.sc-legend-table{flex:none!important}' +
+    '@media (max-width:575.98px){.sc-legend-right{flex-direction:column}.sc-legend-right>.sc-legend-table{flex:none!important;min-width:0!important;max-width:none!important}' +
     '.sc-legend-right .sc-legend-scroll{position:static!important;max-height:12rem}}';
   document.head.appendChild(style);
 
