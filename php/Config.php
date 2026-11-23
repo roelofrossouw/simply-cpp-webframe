@@ -17,6 +17,7 @@
    *   prometheus  url (e.g. http://prometheus.example.com:9090), timeout (seconds, 10), scrape_interval (seconds, 15): where
    *             Chart\Prometheus reads metrics
    *   loki      url (e.g. http://loki.example.com:3100), timeout (seconds, 30): where Chart\Loki reads logs (server-side only)
+   *   usage     false: don't hand page views to the storage (see Storage\PageViews; default on when the storage keeps them)
    *
    * Where the file is, the first that is set: the WEBFRAME_CONFIG constant (define it before including autoload.php), the
    * WEBFRAME_CONFIG environment variable (Apache: SetEnv, which PHP-FPM gets too), the webframe.config php.ini setting, or
@@ -95,6 +96,65 @@
       {
         self::Refuse($Shown, $Edit);
       }
+
+      if (self::$UserPage && \Auth\Base::LoggedIn())
+      {
+        self::CountView($Access === null || $Access === self::ANY_USER ? Server::Page() : $Access, $Shown);
+      }
+    }
+
+    /**
+     * A signed-in user's view of a page, handed to the storage when it keeps page usage (Storage\PageViews) and the
+     * settings' usage isn't false: once the page has gone out (after Page::Show(), the response finished where PHP-FPM
+     * can), so it never slows the page, and whatever goes wrong is dropped
+     */
+    private static function CountView(string $Page, \BS\Dismiss $Shown): void
+    {
+      if (self::Get('usage', true) === false)
+      {
+        return;
+      }
+      $UserID = \Auth\Base::ID();
+      if ($UserID === null || !ctype_digit((string)$UserID) || (int)$UserID <= 0)
+      {
+        return;
+      }
+      $How = match ($Shown)
+      {
+        \BS\Dismiss::Modal => 'popup',
+        \BS\Dismiss::OffCanvas => 'panel',
+        \BS\Dismiss::Toast => 'toast',
+        default => 'page',
+      };
+      $Request = Server::Get('REQUEST_URI');
+      $Report = static function () use ($UserID, $Page, $How, $Request): void {
+        try
+        {
+          $Storage = \Storage\Store::Get();
+          if (!$Storage instanceof \Storage\PageViews)
+          {
+            return;
+          }
+          if (function_exists('fastcgi_finish_request'))
+          {
+            if (session_status() === PHP_SESSION_ACTIVE)
+            {
+              session_write_close(); // The user's next request needn't wait for this one's session
+            }
+            fastcgi_finish_request();
+          }
+          $Storage->PageView((int)$UserID, $Page, $How, $Request === null || $Request === '' ? null : (string)$Request);
+        }
+        catch (\Throwable)
+        {
+          // Page usage never breaks a page
+        }
+      };
+      // Registered again once shutdown starts, so it runs after every shutdown function the page registered, Page::Show()
+      // among them (autoload.php registers it when Page is first used, which may be after Init())
+      register_shutdown_function(static function () use ($Report): void {
+        register_shutdown_function($Report);
+      });
     }
 
     /**

@@ -507,6 +507,19 @@ class SiteStorage implements Storage\Backend, Storage\EmailCodes, Storage\Passke
 
 See the interfaces' comments for each method's values.
 
+Page usage (since 1.46.0): a storage that also implements `Storage\PageViews` is handed every page a signed-in user is
+let into, for usage statistics:
+
+```php
+public function PageView(int $UserID, string $Page, string $Shown, ?string $Request): void;
+```
+
+`$Page` is the menu page whose access applied (`Config::Init()`'s `Access`), else the page itself; `$Shown` is `page`,
+`popup`, `panel` or `toast` (`Shown`: none, `Modal`, `OffCanvas`, `Toast`); `$Request` the URL as asked, with its
+query. It's called after the page has gone out (the last shutdown function, after `fastcgi_finish_request()` under
+PHP-FPM, the session closed first), so it never slows a page, and whatever it throws is dropped. Refused and anonymous
+pages aren't counted. `"usage": false` in the settings turns it off; `Storage\Postgres` doesn't keep page usage.
+
 ## The Hello world example
 
 [examples/hello](examples/hello) is a whole site: `public/index.php`, `public/home.php` (Hello world!, and who you are
