@@ -104,7 +104,7 @@
     global $Sendmail, $MailFile, $On, $Sessions;
     file_put_contents($MailFile, '');
     return (string)shell_exec(escapeshellarg(PHP_BINARY) . ' -d error_reporting=-1 -d display_errors=1 -d sendmail_path=' . escapeshellarg($Sendmail)
-      . ' -d session.save_path=' . escapeshellarg($Sessions) . ' ' . escapeshellarg(__FILE__) . ' ' . escapeshellarg($Page) . ' '
+      . ' -d session.use_strict_mode=0 -d session.save_path=' . escapeshellarg($Sessions) . ' ' . escapeshellarg(__FILE__) . ' ' . escapeshellarg($Page) . ' '
       . escapeshellarg(json_encode([$Post, $Cookies, $Query, $Settings + $On])) . ' 2>&1');
   }
 
