@@ -87,6 +87,15 @@
 
   $Profile = Render('profile.php');
   Check(str_contains($Profile, 'Your profile') && str_contains($Profile, 'Ann'), 'the profile');
+  Check(str_contains($Profile, 'Also for you') && str_contains($Profile, 'id="profile-notifications"') && str_contains($Profile, 'id="profile-mailpassword"'),
+    'the profile: the site\'s own buttons (section profile) under Also for you');
+  Check(!str_contains($Profile, 'profile-secret'), 'but not one for an access level the user hasn\'t');
+  Check(preg_match('/<button[^>]*id="profile-mailpassword"[^>]*>/', $Profile, $B) === 1 && str_contains($B[0], 'modal-push')
+    && preg_match('/<button[^>]*id="profile-notifications"[^>]*>/', $Profile, $N) === 1 && !str_contains($N[0], 'modal-'),
+    'a popup item opens on top of the profile, the other in the app');
+  Check(str_contains($Profile, '\/app\/mail.php') && str_contains($Profile, '\/app\/notifications.php'), 'each opens its target');
+  Check(preg_match('/<button[^>]*id="profile-logout"[^>]*>/', $Profile, $L) === 1 && str_contains($L[0], 'data-skip-form') && str_contains($Profile, '\/framework\/logout.php'),
+    'and Sign out loads the Sign out item\'s target');
   Check(!preg_match('/Warning|Deprecated|Fatal|Something Went Wrong/', $Profile), 'the profile without errors' . (preg_match('/(Warning|Deprecated|Fatal)[^\n]*/', $Profile, $M) ? ': ' . $M[0] : ''));
 
   $Own = Render('admin/usergrant.php', ['userid' => '7', 'code' => 'admin', 'val' => 'false']);

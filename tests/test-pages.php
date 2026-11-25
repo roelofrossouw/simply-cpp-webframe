@@ -35,6 +35,10 @@
   Check(!str_contains($Html, 'Orders') && !str_contains($Html, 'Administer') && !str_contains($Html, 'Sign out'), 'signed out: nothing else');
   Check(str_contains($Html, 'login-github') && str_contains($Html, 'login.php?provider=github') && !str_contains($Html, 'login-google'), 'Sign in offers the providers that are set up');
   Check(!Auth\Base::Allowed('/app/orders.php') && Auth\Base::Allowed('/home.php'), 'signed out: only public pages are allowed');
+  Same([], MenuLayout::Items('profile'), 'signed out: no profile buttons');
+  Same('/framework/logout.php', MenuLayout::Target('logout'), 'an item\'s target by its code');
+  Same(null, MenuLayout::Target('nothing'), 'none for a code there isn\'t');
+  Check(array_key_exists('profile', MenuLayout::SECTIONS), 'profile is a section');
 
   // No sign-in provider set up: no Sign in item at all
   $Providers = Config::Get('auth.github');

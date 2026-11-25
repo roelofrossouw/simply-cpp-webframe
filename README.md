@@ -242,8 +242,9 @@ Config::Init(Access: Config::ANY_USER);                           // Any signed 
 Config::Init(Anonymous: true);                                    // Anyone, also signed out
 ```
 
-Menu items (`framework.menu`) are in a tree per section: `main` (the menu at the top), `status` (the bar at the bottom)
-and `page` (in no menu: popups and pages opened from elsewhere). Each item has an icon (a Bootstrap icon class), a
+Menu items (`framework.menu`) are in a tree per section: `main` (the menu at the top), `status` (the bar at the bottom),
+`profile` (buttons on Your profile, see below) and `page` (in no menu: popups and pages opened from elsewhere). A
+submenu inside a navbar's dropdown (a third level) opens in place, indented under its item. Each item has an icon (a Bootstrap icon class), a
 target page, whether it opens in a popup, whether it is public (open to everyone), and when it shows (always, signed in,
 signed out). `framework.menu_access` gives access levels the View right on an item, and with `can_edit` the Edit right
 too. Add your access levels to `access.levels`, and grant them in `access.grants`.
@@ -260,7 +261,11 @@ columns to Users, after Last sign-in, with a class that implements `Admin\UserCo
 `Headings()` gives them (`[key => heading]`), `Cell()` each user's cell, which may be a control that saves itself (a
 select with `OnChange('toast.call(this, url)')` posts its `data-` values and `val` to the site's page, as the switches do).
 **Your profile** is in the status bar for anyone signed in: what the site calls them, their photo, a test email, and for
-password accounts a link to change the password (the address itself never changes).
+password accounts a link to change the password (the address itself never changes). Its footer has **Sign out** (the
+`logout` item's target, loaded as that item does). The site's own personal pages go in the `profile` section: they show
+as buttons under **Also for you**, filtered by the same access rules as the menus, each opening its target as a menu
+item would (in the app, or on top of the profile with a way back when it's a popup); `MenuLayout::Items($Section)` gives
+any section's items the visitor may see, for a page that shows them itself.
 Change their access in the menu like any other page's. A site's own admin pages can do the same with
 `MenuLayout::Add()`, `Update()`, `SetAccess()` and `Delete()`, and `User::All()`, `User::SetAccess()` and
 `User::Levels()`.

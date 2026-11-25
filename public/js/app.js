@@ -370,14 +370,25 @@ document.addEventListener('shown.bs.dropdown', function (event) {
   const toggle = event.target;
   if (!toggle.closest || !toggle.closest('.navbar')) return;
   const menu = toggle.parentElement ? toggle.parentElement.querySelector(':scope > .dropdown-menu') : null;
-  fitNavbarDropdown(menu);
+  // A submenu opens in place inside its dropdown (style.css), so that outer dropdown is the one to fit
+  const outer = menu && menu.parentElement ? menu.parentElement.closest('.dropdown-menu') : null;
+  fitNavbarDropdown(outer || menu);
+});
+// ... and again when the submenu closes (it gets shorter)
+document.addEventListener('hidden.bs.dropdown', function (event) {
+  const toggle = event.target;
+  if (!toggle.closest || !toggle.closest('.navbar')) return;
+  const outer = toggle.parentElement ? toggle.parentElement.closest('.dropdown-menu') : null;
+  if (outer) fitNavbarDropdown(outer);
 });
 (function () {
   let pending = 0;
   const refit = function () {
     cancelAnimationFrame(pending);
     pending = requestAnimationFrame(function () {
-      for (const menu of document.querySelectorAll('.navbar .dropdown-menu.show')) fitNavbarDropdown(menu);
+      for (const menu of document.querySelectorAll('.navbar .dropdown-menu.show')) {
+        if (!menu.parentElement || !menu.parentElement.closest('.dropdown-menu')) fitNavbarDropdown(menu); // not a submenu
+      }
     });
   };
   window.addEventListener('resize', refit);

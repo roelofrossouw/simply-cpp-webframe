@@ -14,8 +14,9 @@
     const array FIELDS = ['name' => 'Name', 'icon' => 'Icon', 'target' => 'Target', 'code' => 'ID', 'position' => 'Position',
       'parent_id' => 'Parent', 'popup' => 'Popup', 'public' => 'Public', 'shown' => 'Shown'];
 
-    // Where an item is: the menu at the top, the status bar at the bottom, or in no menu (a page opened from elsewhere)
-    const array SECTIONS = ['main' => 'Main menu', 'status' => 'Status bar', 'page' => 'Free-standing pages'];
+    // Where an item is: the menu at the top, the status bar at the bottom, the buttons on Your profile (its "Also for
+    // you" area, since 1.48.0), or in no menu (a page opened from elsewhere)
+    const array SECTIONS = ['main' => 'Main menu', 'status' => 'Status bar', 'profile' => 'Your profile page', 'page' => 'Free-standing pages'];
 
     // When an item shows
     const array SHOWN = ['always' => 'Always', 'signed_in' => 'Signed in', 'signed_out' => 'Signed out'];
@@ -119,6 +120,57 @@
         }
       }
       self::AddItems($Menu, $Children, 0);
+    }
+
+    /**
+     * A section's items the visitor may see that have a target, in menu order (an item's children after it): for a page
+     * that shows them itself, such as the profile page's buttons (section profile). The same rules as Build(): public
+     * or one of the user's access levels, and shown now; an item under a parent the visitor may not see is left out too.
+     */
+    public static function Items(string $Section): array
+    {
+      $Children = [];
+      foreach (self::All() as $Item)
+      {
+        if (($Item['section'] ?? 'main') === $Section)
+        {
+          $Children[$Item['parent_id'] ?? 0][] = $Item;
+        }
+      }
+      $Items = [];
+      self::CollectItems($Children, 0, $Items);
+      return $Items;
+    }
+
+    private static function CollectItems(array $Children, int $ParentID, array &$Items): void
+    {
+      foreach ($Children[$ParentID] ?? [] as $Item)
+      {
+        if (!self::Visible($Item))
+        {
+          continue;
+        }
+        if ($Item['target'] !== null)
+        {
+          $Items[] = $Item;
+        }
+        self::CollectItems($Children, (int)$Item['id'], $Items);
+      }
+    }
+
+    /**
+     * The target of the item with this code (e.g. logout), or null when there's none
+     */
+    public static function Target(string $Code): ?string
+    {
+      foreach (self::All() as $Item)
+      {
+        if ($Item['code'] === $Code)
+        {
+          return $Item['target'];
+        }
+      }
+      return null;
     }
 
     // Whether the visitor may see an item: public or one of their access levels, and shown now

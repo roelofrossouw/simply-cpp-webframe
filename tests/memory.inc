@@ -251,6 +251,10 @@
         12 => $Item(12, 'config2', 'Config', '/framework/admin/config.php', false, Parent: 8),
         13 => $Item(13, 'demos', 'Demos', '/framework/demos/index.php', false, Parent: 8),
         11 => $Item(11, 'profile', 'Your profile', '/framework/profile.php', false, 'signed_in', 'status', Access: ['admin', 'public']),
+        // Your profile's own buttons (section profile): one in the app, one a popup, one for an access level nobody has
+        14 => $Item(14, 'notifications', 'Notifications', '/app/notifications.php', false, 'signed_in', 'profile', Access: ['public']),
+        15 => ['popup' => 't'] + $Item(15, 'mailpassword', 'Mail passwords', '/app/mail.php', false, 'signed_in', 'profile', Access: ['public']),
+        16 => $Item(16, 'secret', 'Secret', '/app/secret.php', false, 'signed_in', 'profile', Access: ['nobody']),
       ];
     }
     public function AddMenuItem(string $Name, ?int $ParentID, string $Code, ?string $Target, string $Icon, string $Section): int|string { return 8; }

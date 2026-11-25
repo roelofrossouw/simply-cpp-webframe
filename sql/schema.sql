@@ -4,7 +4,7 @@
 --   access.levels       the access that can be granted: public (anyone signed in) and admin to start with
 --   access.grants       which users have which access; revoking keeps the row, with when
 --   framework.menu      the pages, in a tree per section: main (the menu at the top), status (the bar at the bottom),
---                       page (in no menu, opened from elsewhere)
+--                       profile (buttons on Your profile, since 1.48.0), page (in no menu, opened from elsewhere)
 --   framework.menu_access  which access levels may view each item's page, and which may also change things there
 --   access.passwords    the password accounts' hashes, and their wrong passwords lately (since 1.3.0)
 --   access.sign_in_failures  wrong passwords by address, to slow down guessing
@@ -154,12 +154,16 @@ create table if not exists framework.menu
   target    text,                                                             -- the page it loads, e.g. /app/users.php; null for a submenu
   popup     boolean not null default false,                                   -- open the target in the popup rather than the page
   code      text    not null unique,                                          -- the menu link's element id, e.g. users
-  section   text    not null default 'main' check (section in ('main', 'status', 'page')),
+  section   text    not null default 'main' check (section in ('main', 'status', 'profile', 'page')),
   public    boolean not null default false,                                   -- anyone may open the page, also without signing in
   shown     text    not null default 'always' check (shown in ('always', 'signed_in', 'signed_out'))
 );
 
 create index if not exists menu_parent on framework.menu (parent_id, position);
+
+-- Section profile (since 1.48.0) in a menu table made before it
+alter table framework.menu drop constraint if exists menu_section_check;
+alter table framework.menu add constraint menu_section_check check (section in ('main', 'status', 'profile', 'page'));
 
 create table if not exists framework.menu_access
 (

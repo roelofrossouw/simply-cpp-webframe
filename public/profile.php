@@ -259,5 +259,34 @@
     $Post->Modal();
   }
 
+  // Also for you: the site's own personal pages (menu section profile, with the menus' access rules), each opened as
+  // its menu item would be: in the app, or on top of this popup (with a way back) when it's a popup
+  if ($Actions = MenuLayout::Items('profile'))
+  {
+    $Dialog->AddChild($Heading = new HTML\Header(5, 'Also for you'));
+    $Heading->Format->Margin(Side::Top, PadSize::Pad4);
+    $Dialog->AddChild($Bar = new HTML\Div());
+    $Bar->AddClasses(['d-flex', 'flex-wrap', 'gap-2']);
+    foreach ($Actions as $Item)
+    {
+      $Bar->AddChild($Action = new Button($Item['name'], Icon::tryFrom($Item['icon']) ?? Icon::Circle, $Item['target']));
+      $Action->Id = 'profile-' . $Item['code'];
+      $Action->Color(Color::Secondary);
+      $Action->SkipForm();
+      if ($Item['popup'] === 't')
+      {
+        $Action->Push(false);
+      }
+      // else it loads in the app, and loadPage() closes this popup
+    }
+  }
+
+  // Sign out: loads where the menu's Sign out item goes (the framework's logout page when there's none) in the app, as
+  // that item does (this popup closes)
+  $Dialog->AddButton($SignOut = new Button('Sign out', Icon::BoxArrowRight, MenuLayout::Target('logout') ?? Config::FrameworkURL('logout.php')));
+  $SignOut->Id = 'profile-logout';
+  $SignOut->Color(Color::Secondary);
+  $SignOut->SkipForm();
+  $SignOut->AddClass('me-auto');
   $Dialog->AddButton($Save = new Button('Save', Icon::Check2, "$Here?action=save"));
   $Save->Modal();
