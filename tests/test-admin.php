@@ -96,6 +96,8 @@
   Check(str_contains($Profile, '\/app\/mail.php') && str_contains($Profile, '\/app\/notifications.php'), 'each opens its target');
   Check(preg_match('/<button[^>]*id="profile-logout"[^>]*>/', $Profile, $L) === 1 && str_contains($L[0], 'data-skip-form') && str_contains($Profile, '\/framework\/logout.php'),
     'and Sign out loads the Sign out item\'s target');
+  Check(str_contains($Profile, "$('#profile-mailpassword').on(") && str_contains($Profile, "$('#profile-notifications').on(") && str_contains($Profile, "$('#profile-logout').on("),
+    'and each button\'s click is bound to the button by its own id');
   Check(!preg_match('/Warning|Deprecated|Fatal|Something Went Wrong/', $Profile), 'the profile without errors' . (preg_match('/(Warning|Deprecated|Fatal)[^\n]*/', $Profile, $M) ? ': ' . $M[0] : ''));
 
   $Own = Render('admin/usergrant.php', ['userid' => '7', 'code' => 'admin', 'val' => 'false']);

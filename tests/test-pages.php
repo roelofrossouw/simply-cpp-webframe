@@ -21,6 +21,14 @@
   Check(str_contains($Html, 'Fish &amp; chips'), 'paragraph text is escaped');
   $Button = new BS\Button('Go', BS\Icon::House, '/go.php');
   Check(str_contains((string)$Button, 'bi-house'), 'a button shows its icon');
+  // A script an element adds for itself names the id it has when written, also one set afterwards
+  $Later = new BS\Button('Later', BS\Icon::House);
+  $Later->OnClick('go();');
+  $Later->Id = 'later';
+  $Later->Focus();
+  $Html = (string)$Later;
+  Check(str_contains($Html, 'id="later"') && str_contains($Html, "$('#later').on(") && str_contains($Html, "$('#later')[0].focus()") && !str_contains($Html, '#e_'),
+    'an element\'s scripts follow an id set after them');
 
   // The menu, by who looks: signed out, only the public items and Sign in
   Auth\Base::Factory(new Auth\GitHub());

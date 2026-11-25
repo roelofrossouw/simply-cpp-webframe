@@ -351,13 +351,18 @@
 
     private function ExecuteScript($Function, $Arguments)
     {
-      $ID = $this->EnsureID();
       $ArgumentList = implode(',', $Arguments);
-      $Script = <<<JavaScript
-                $('#{$ID}').{$Function}($ArgumentList);
-JavaScript;
+      $this->AddOwnScript(fn(string $ID) => "$('#{$ID}').{$Function}($ArgumentList);");
+    }
 
-      $this->AddSibling(new Script($Script));
+    // A script next to the element that names it by its id: the id it has when the page is written, so one set later
+    // (->Id = ...) still matches
+    private function AddOwnScript(\Closure $Write): static
+    {
+      $Bound = $this->EnsureID();
+      $Script = new Script();
+      $Script->AddChild(new Raw(fn() => $Write($this->ID ?? $Bound))); // the id it had, if it was taken away
+      return $this->AddSibling($Script);
     }
 
     private function EnsureID(): string
@@ -376,13 +381,8 @@ JavaScript;
 
     public function Focus(): static
     {
-      $ID = $this->EnsureID();
       $this->TabIndex(1);
-      $Script = <<<JavaScript
-                $('#{$ID}')[0].focus();
-JavaScript;
-
-      return $this->AddSibling(new Script($Script));
+      return $this->AddOwnScript(fn(string $ID) => "$('#{$ID}')[0].focus();");
     }
 
     /**
