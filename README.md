@@ -358,6 +358,14 @@ heading over its items. The main menu has it on (setting `menu.overflow`, `false
 button instead); it still folds away when even the kept items and More don't fit. For a nav of your own, put it in a
 `BS\NavOverflow` and call `Enable()`.
 
+A navbar's dropdown (More, or any menu with many items) is never taller than the screen: as it opens, and when the
+window changes (a phone turned), its height is capped at the room below it, less a fixed bottom bar, and it scrolls
+inside (since 1.47.0; before, on a phone the end of a long menu went under the footer bar and couldn't be reached).
+
+A site's own stylesheet: when its document root has `css/site.css`, every page links it after the framework's (with its
+modification time in the URL, so a change is fetched at once), the same way `manifest.webmanifest` and the icons are
+picked up (since 1.47.0).
+
 ## Dates, times and multi-selects
 
 `BS\DatePicker` is a date field with a calendar that opens under it: Bootstrap 6's

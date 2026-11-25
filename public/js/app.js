@@ -333,6 +333,58 @@ function markCutCells(table) {
   }
 }
 
+// A navbar's dropdown never runs past the screen: on a phone (portrait or landscape) a long menu (More, Setup ...)
+// went under the fixed footer bar or off the bottom, and couldn't scroll. When one opens, and while the window
+// changes, its height is capped at the room between it and the screen's edge, less any fixed bar in the way
+// (.fixed-bottom below a menu that drops down, .fixed-top above one that drops up); it scrolls inside (style.css).
+function fitNavbarDropdown(menu) {
+  if (!menu || !menu.classList.contains('show')) return;
+  menu.style.maxHeight = '';
+  const view = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+  const box = menu.getBoundingClientRect();
+  const toggle = menu.parentElement ? menu.parentElement.querySelector('[data-bs-toggle="dropdown"]') : null;
+  const at = toggle ? toggle.getBoundingClientRect() : box;
+  const gap = 6;
+  let room;
+  if (box.top >= at.top) {
+    // Drops down: to the screen's bottom, or the top of a fixed bar below it
+    let bottom = view;
+    for (const bar of document.querySelectorAll('.fixed-bottom')) {
+      if (bar.contains(menu) || bar.getClientRects().length === 0) continue; // hidden (a fixed bar has no offsetParent)
+      bottom = Math.min(bottom, bar.getBoundingClientRect().top);
+    }
+    room = bottom - box.top - gap;
+  } else {
+    // Drops up (a bottom bar's menu): from the screen's top, or the bottom of a fixed bar above it
+    let top = 0;
+    for (const bar of document.querySelectorAll('.fixed-top')) {
+      if (bar.contains(menu) || bar.getClientRects().length === 0) continue; // hidden (a fixed bar has no offsetParent)
+      top = Math.max(top, bar.getBoundingClientRect().bottom);
+    }
+    room = box.bottom - top - gap;
+  }
+  menu.style.maxHeight = Math.max(120, Math.floor(room)) + 'px';
+}
+
+document.addEventListener('shown.bs.dropdown', function (event) {
+  const toggle = event.target;
+  if (!toggle.closest || !toggle.closest('.navbar')) return;
+  const menu = toggle.parentElement ? toggle.parentElement.querySelector(':scope > .dropdown-menu') : null;
+  fitNavbarDropdown(menu);
+});
+(function () {
+  let pending = 0;
+  const refit = function () {
+    cancelAnimationFrame(pending);
+    pending = requestAnimationFrame(function () {
+      for (const menu of document.querySelectorAll('.navbar .dropdown-menu.show')) fitNavbarDropdown(menu);
+    });
+  };
+  window.addEventListener('resize', refit);
+  window.addEventListener('orientationchange', refit);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', refit);
+})();
+
 // Nav overflow, Bootstrap 6's NavOverflow ("Priority+") on Bootstrap 5.3 (BS\Tabs::Overflow(), BS\Menu::Overflow()):
 // a .nav-overflow[data-bs-toggle="nav-overflow"] wrapper around a .nav moves the items that don't fit into a More
 // dropdown at its end, last first, and back as room comes. It watches the wrapper, not the window, so it works in a

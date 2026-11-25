@@ -259,6 +259,15 @@ th.sortable {
   }
 }
 
+/* A navbar's dropdown scrolls inside when it's taller than the room on screen: js/app.js fitNavbarDropdown() sets its
+   max-height as it opens (the room below it, less a fixed bottom bar); this cap is for before that runs. */
+.navbar .dropdown-menu {
+  max-height: calc(100dvh - 4rem - env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
 /* Nav overflow (js/app.js navOverflow()): the wrapper takes the room there is, not what its items would like, so
    moving items into More doesn't change what it measures; the nav stays one line. Without Overflow() the wrapper
    (BS\Tabs, BS\Menu) takes no part in the layout. */

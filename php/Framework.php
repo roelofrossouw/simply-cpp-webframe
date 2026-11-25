@@ -251,5 +251,10 @@
       {
         $Parent->AddChild(new HTML\Stylesheet($Stylesheet));
       }
+      // The site's own stylesheet, when it has one, after the framework's so it can change them
+      if (self::SiteHas('/css/site.css'))
+      {
+        $Parent->AddChild(new HTML\Stylesheet('/css/site.css?v=' . filemtime($_SERVER['DOCUMENT_ROOT'] . '/css/site.css')));
+      }
     }
   }
