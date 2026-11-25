@@ -285,6 +285,21 @@ th.sortable {
   background: transparent;
 }
 
+/* The loading spinner over a remembered page that has no heading (js/app.js showBusy()): top-right, taking no room */
+.skeleton-corner {
+  position: relative;
+  z-index: 2;
+  height: 0;
+  overflow: visible;
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: none;
+
+  .skeleton-spinner {
+    margin: 0.75rem 0.75rem 0 0 !important;
+  }
+}
+
 /* Nav overflow (js/app.js navOverflow()): the wrapper takes the room there is, not what its items would like, so
    moving items into More doesn't change what it measures; the nav stays one line. Without Overflow() the wrapper
    (BS\Tabs, BS\Menu) takes no part in the layout. */

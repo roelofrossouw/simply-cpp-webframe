@@ -2018,7 +2018,9 @@ function showBusy(target) {
   {
     target.html(skeleton);
     const heading = target.find('.modal-title, .offcanvas-title, h1, h2, h3, h4, h5, h6, .card-title').first();
-    heading.length ? heading.prepend(spinner) : target.children().first().prepend(spinner);
+    // Without a heading the spinner keeps to the top-right corner, over the skeleton: in a zero-height bar of its own, so it
+    // never sits on a card's border or pushes a table down (style.css .skeleton-corner)
+    heading.length ? heading.prepend(spinner) : target.prepend('<div class="skeleton-corner">' + spinner + '</div>');
   }
   else
   {
@@ -2165,7 +2167,7 @@ function skeletonOf(node) {
   const element = node;
   const name = element.tagName.toLowerCase();
   if (['script', 'template', 'noscript', 'style', 'link', 'meta'].includes(name) || element.getAttribute('data-skeleton') === 'skip'
-    || element.matches('.toast, .tooltip, .popover, .modal-back, .skeleton-spinner'))
+    || element.matches('.toast, .tooltip, .popover, .modal-back, .skeleton-spinner, .skeleton-corner'))
   {
     return null;
   }
