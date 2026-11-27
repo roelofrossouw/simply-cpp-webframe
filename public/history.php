@@ -54,19 +54,21 @@
   {
     $Dialog->AddChild($Notice);
   }
-  $UndoButton = function (array $Change, array $Back) use ($CanUndo, $Link): ?Button
+  // Undo first asks (the change in full, ?ask=undo), then does it ($Now) and goes back to the list as it was
+  $UndoButton = function (array $Change, array $Back, bool $Now = false) use ($CanUndo, $Link): ?Button
   {
     if (!$CanUndo || $Change['undone_by'] !== null)
     {
       return null;
     }
-    $Undo = new Button('Undo', Icon::ArrowCounterclockwise, $Link(['action' => 'undo', 'undo' => $Change['id']] + $Back));
+    $Undo = new Button($Now ? 'Yes, undo' : 'Undo', Icon::ArrowCounterclockwise,
+      $Link(($Now ? ['action' => 'undo', 'undo' => $Change['id']] : ['id' => $Change['id'], 'ask' => 'undo']) + $Back));
     $Undo->Modal();
     $Undo->SkipForm();
     $Undo->Color(Color::Warning);
     $Undo->AddClass('btn-sm');
-    $Undo->AddAttribute('aria-label', 'Undo change ' . $Change['id']);
-    $Undo->AddAttribute('title', 'Put this change back');
+    $Undo->AddAttribute('aria-label', ($Now ? 'Yes, undo change ' : 'Undo change ') . $Change['id']);
+    $Undo->AddAttribute('title', $Now ? 'Put this change back now' : 'Put this change back (asks first)');
     return $Undo;
   };
   $State = function (array $Change): ?HTML\Element
@@ -78,7 +80,15 @@
     return $Change['undo_of'] !== null ? new Badge('Undoes #' . $Change['undo_of'], Color::Info) : null;
   };
 
-  // One change in full: every column it touched, before and after
+  // What the list looks for, kept through a change in full and an undo
+  $Days = (string)(Post::Get('days') ?? QueryString::Get('days') ?? '7');
+  $Days = array_key_exists($Days, History::RANGES) ? $Days : '7';
+  $Search = trim((string)(Post::Get('search') ?? QueryString::Get('search') ?? ''));
+  $Table = (string)(Post::Get('table') ?? QueryString::Get('table') ?? '');
+  $Table = in_array($Table, $Scope['tables'], true) ? $Table : '';
+  $Back = ['days' => $Days, 'search' => $Search, 'table' => $Table];
+
+  // One change in full: every column it touched, before and after; with ?ask=undo, whether to put it back
   if (($ID = filter_var(QueryString::Get('id'), FILTER_VALIDATE_INT)) !== false)
   {
     $Change = History::Change($Scope, $ID);
@@ -86,6 +96,12 @@
     {
       $Dialog->AddChild(new \BS\AlertWarning('No such change', 'It isn\'t in this history.'));
       return;
+    }
+    $Asking = QueryString::Get('ask') === 'undo' && $CanUndo && $Change['undone_by'] === null;
+    if ($Asking)
+    {
+      $Dialog->AddChild(new \BS\AlertWarning('Undo this change?', 'Each column below goes back to Before, as you. The undo is a change of its own in '
+        . 'this history, so it can be undone in turn.'));
     }
     $Dialog->AddChild($Facts = new HTML\Paragraph(''));
     $Facts->AddChild($Action($Change));
@@ -113,19 +129,14 @@
         $Pre->AddClasses(['mb-0', 'small', 'text-wrap', 'text-break']);
       }
     }
-    if (($Undo = $UndoButton($Change, ['id' => $ID])) !== null)
+    if (($Undo = $UndoButton($Change, $Back, $Asking)) !== null)
     {
       $Dialog->AddButton($Undo);
     }
     return;
   }
 
-  // The list, with what to look for
-  $Days = (string)(Post::Get('days') ?? QueryString::Get('days') ?? '7');
-  $Days = array_key_exists($Days, History::RANGES) ? $Days : '7';
-  $Search = trim((string)(Post::Get('search') ?? QueryString::Get('search') ?? ''));
-  $Table = (string)(Post::Get('table') ?? QueryString::Get('table') ?? '');
-  $Table = in_array($Table, $Scope['tables'], true) ? $Table : '';
+  // The list
 
   $Dialog->AddChild($Form = new HTML\Form());
   $Form->AddChild($Fields = new Grid(1));
@@ -143,7 +154,6 @@
   $Show->Color(Color::Primary);
   $Show->AddClasses(['h-100', 'w-100']);
 
-  $Back = ['days' => $Days, 'search' => $Search, 'table' => $Table];
   $Changes = History::Changes($Scope, (int)$Days, $Search, $Table === '' ? null : $Table);
   if ($Changes === [])
   {

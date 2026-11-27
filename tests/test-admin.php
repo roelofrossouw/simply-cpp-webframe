@@ -14,24 +14,30 @@
     $_SERVER['HTTP_X_REQUESTED_BY'] = 'sc-webframe';
     $_SERVER['SCRIPT_NAME'] = $_SERVER['PHP_SELF'] = Config::FrameworkURL($Page);
     parse_str($argv[2] ?? '', $_POST);
+    parse_str($argv[3] ?? '', $_GET);
     Config::Load();
     if (!empty($_POST['site_settings']))
     {
       Config::Set('admin.settings', 'TestSiteSettings');
       $_POST = [];
     }
-    Storage\Store::Use($Storage = new MemoryStorage());
+    Storage\Store::Use($Storage = $Page === 'history.php' ? new HistoryMemoryStorage() : new MemoryStorage());
     $Storage->Grants[7] = ['public', 'admin'];
     $_COOKIE['auth_token'] = (string)new Auth\JWT(['userid' => '7', 'access' => ['public', 'admin'], 'provider' => 'github'], 600);
     $_COOKIE['auth_provider'] = 'github';
+    // The history popup's token, made here as a glyph would make it (t=menu)
+    if (($_GET['t'] ?? '') === 'menu')
+    {
+      $_GET['t'] = History::Token('/framework/admin/menu.php', ['framework.menu'], [], 'the menu');
+    }
     include Config::FrameworkFolder() . '/' . $Page;
     return;
   }
 
-  function Render(string $Page, array $Post = []): string
+  function Render(string $Page, array $Post = [], array $Get = []): string
   {
     return (string)shell_exec(escapeshellarg(PHP_BINARY) . ' -d error_reporting=-1 -d display_errors=1 ' . escapeshellarg(__FILE__) . ' '
-      . escapeshellarg($Page) . ' ' . escapeshellarg(http_build_query($Post)) . ' 2>&1');
+      . escapeshellarg($Page) . ' ' . escapeshellarg(http_build_query($Post)) . ' ' . escapeshellarg(http_build_query($Get)) . ' 2>&1');
   }
 
   // Administer → Demos: every demo page renders for an admin, without errors
@@ -71,6 +77,17 @@
   Check(substr_count($Menu, 'bi-clock-history') > 1 && str_contains($Menu, '\\/framework\\/history.php?t='), 'Menu has history glyphs, for it and per item');
   Check(substr_count($Users, 'bi-clock-history') > 1 && str_contains($Users, '\\/framework\\/history.php?t='), 'Users has history glyphs, for all and per user');
   Check(str_contains(Render('history.php', []), 'This link has expired'), 'the history popup refuses a missing token');
+  // A storage's history (HistoryMemoryStorage): Undo asks first, then puts it back with a toast and shows the list
+  $List = Render('history.php', [], ['t' => 'menu', 'days' => '30']);
+  Check(str_contains($List, 'Sign in') && str_contains($List, 'ask=undo') && !str_contains($List, 'action=undo'), 'the list\'s Undo asks first');
+  $Ask = Render('history.php', [], ['t' => 'menu', 'id' => '5', 'ask' => 'undo', 'days' => '30']);
+  Check(str_contains($Ask, 'Undo this change?') && str_contains($Ask, 'Yes, undo') && str_contains($Ask, 'action=undo&undo=5&days=30'),
+    'asking: the change in full, and Yes, undo keeps the list\'s time range');
+  Check(!str_contains(Render('history.php', [], ['t' => 'menu', 'id' => '5']), 'Undo this change?'), 'the change in full doesn\'t ask unasked');
+  $Done = Render('history.php', [], ['t' => 'menu', 'action' => 'undo', 'undo' => '5', 'days' => '30']);
+  Check(str_contains($Done, 'toast text-bg-success') && str_contains($Done, 'Change 5 put back.') && str_contains($Done, '<table'),
+    'undone: a green toast, and the list');
+  Check(str_contains(Render('history.php', [], ['t' => 'menu', 'action' => 'undo', 'undo' => '6']), 'That change isn'), 'a change it refuses: why');
 
   $Config = Render('admin/config.php');
   Check(preg_match('/class="sticky-bottom[^"]*"[^>]*>.*?Save/s', $Config) === 1, 'Config\'s Save stays in sight at the foot');

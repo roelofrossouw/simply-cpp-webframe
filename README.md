@@ -310,7 +310,7 @@ $Cell->AddChild(BS\History::Glyph('/app/templates.php', ['servers.template', 'se
 - The popup lists the newest changes first (200 at most): when (today, 7 or 30 days, a year, all), a search (text in the
   row's key, its values, who or where from) and the table; per change who, the row, and each column before → after
   (long values shortened). The eye opens one change in full.
-- Undo puts a change back with `audit.undo(id, by)` as the signed-in user, and its answer shows as a toast; only for
+- Undo first shows the change in full and asks ("Yes, undo"; since 1.49.4), then puts it back with `audit.undo(id, by)` as the signed-in user; its answer shows as a toast (green when undone, 8 s) over the list. Only for
   those with the Edit right on the glyph's page.
 - What the popup may show travels in a signed token that expires after 12 hours (`History::Token()`, `History::Scope()`):
   a changed link shows nothing, and never another table or row than the glyph named. A match is `row_key || coalesce(about, '{}')` (the expression an index can be on)

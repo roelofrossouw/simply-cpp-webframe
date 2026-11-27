@@ -263,6 +263,27 @@
     public function DeleteMenuItem(int $ID, ?string $Editor): ?string { return null; }
   }
 
+  // A storage that keeps a change history (Storage\History): change 5 of framework.menu; undo puts back what isn't undone
+  class HistoryMemoryStorage extends MemoryStorage implements Storage\History
+  {
+    public function Changes(array $Tables, array $Match, int $Days, string $Search, ?string $Table, int $Limit): array
+    {
+      return [$this->Change(5, $Tables, $Match)];
+    }
+
+    public function Change(int $ID, array $Tables, array $Match): ?array
+    {
+      return $ID === 5 ? ['id' => 5, 'at' => '2026-11-27 08:00:00+02', 'tbl' => 'framework.menu', 'row_key' => ['id' => 29], 'action' => 'update',
+        'old' => ['name' => 'Sign in'], 'new' => ['name' => 'Home'], 'changed_by' => 'ann@example.com', 'source' => null, 'undo_of' => null,
+        'undone_by' => null] : null;
+    }
+
+    public function Undo(int $ID, ?string $By, array $Tables, array $Match): array
+    {
+      return $ID === 5 ? ['message' => 'Change 5 put back.', 'undone' => true] : ['message' => 'That change isn\'t in this history.', 'undone' => false];
+    }
+  }
+
   // A site's own settings on Administer → Config (admin.settings)
   class TestSiteSettings implements Admin\SiteSettings
   {
