@@ -36,7 +36,7 @@
   }
   // Their change history (in a database that keeps one, audit.change): everyone's here, one user's beside their name
   $Here = Config::FrameworkURL('admin/users.php');
-  $HistoryTables = ['access.users', 'access.grants', 'access.levels'];
+  $HistoryTables = ['access.grants', 'access.levels'];
   $Result->AddChild($Tools = new HTML\Div());
   $Tools->AddClasses(['d-flex', 'justify-content-end', 'mb-1']);
   $Tools->AddChild(\BS\History::Glyph($Here, $HistoryTables, [], 'users and access'));
@@ -68,8 +68,7 @@
     $Access = $Record['access'];
     $Row = $Table->Body()->AddRow();
     $Name = $Row->AddCell(($Record['name'] ?: '-') . (User::Blocked($Access) ? ' (blocked)' : '') . ' ');
-    $Name->AddChild(\BS\History::Glyph($Here, ['access.users', 'access.grants'],
-      ['access.users' => ['user_id' => (int)$Record['user_id']], 'access.grants' => ['user_id' => (int)$Record['user_id']]],
+    $Name->AddChild(\BS\History::Glyph($Here, ['access.grants'], ['user_id' => (int)$Record['user_id']],
       $Record['name'] ?: ($Record['email'] ?? 'user ' . $Record['user_id'])));
     $Row->AddCell($Record['email'] ?? '-');
     // A password account works once a link chose its password

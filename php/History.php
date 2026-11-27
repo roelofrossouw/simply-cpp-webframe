@@ -91,7 +91,8 @@
      */
     private static function Where(array $Scope, array &$Parameters, ?string $Table = null): string
     {
-      $Facts = self::HasAbout() ? 'coalesce(c.about, \'{}\'::jsonb) || c.row_key'
+      // With about: exactly the expression 1webman's GIN index change_match is on (sql/918), so it's used
+      $Facts = self::HasAbout() ? 'c.row_key || coalesce(c.about, \'{}\'::jsonb)'
         : 'coalesce(c.old, \'{}\'::jsonb) || coalesce(c.new, \'{}\'::jsonb) || c.row_key';
       $Each = [];
       foreach ($Scope['tables'] as $Each_Table)

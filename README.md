@@ -313,7 +313,7 @@ $Cell->AddChild(BS\History::Glyph('/app/templates.php', ['servers.template', 'se
 - Undo puts a change back with `audit.undo(id, by)` as the signed-in user, and its answer shows as a toast; only for
   those with the Edit right on the glyph's page.
 - What the popup may show travels in a signed token that expires after 12 hours (`History::Token()`, `History::Scope()`):
-  a changed link shows nothing, and never another table or row than the glyph named. A match is `about || row_key`
+  a changed link shows nothing, and never another table or row than the glyph named. A match is `row_key || coalesce(about, '{}')` (the expression an index can be on)
   containing the object (`@>`), or, without `about`, the row's key and values.
 - Menu (all, and per item: its row and its `framework.menu_access` rows) and Users (all, and per user) have glyphs.
   Config has none: its settings are a file, not a table.

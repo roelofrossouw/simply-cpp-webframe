@@ -64,6 +64,12 @@
   Same(['message' => 'Put back.', 'undone' => true], History::Undo($Menu, 1), 'an undo');
   Same('5', (string)(History::Change($Menu, 1)['undone_by'] ?? ''), 'and the change says what undid it');
   Same(['message' => 'It is undone already.', 'undone' => true], History::Undo($Menu, 1), 'not twice');
+  // With about (the row's parent ids as of the change): a child row found by its parent even when its key doesn't say
+  DB::Exec('alter table audit.change add column about jsonb');
+  (new ReflectionProperty(History::class, 'HasAbout'))->setValue(null, null); // looked up again, as the next request would
+  DB::Exec('insert into audit.change (tbl, row_key, action, old, new, about) values (\'framework.menu_access\', \'{"access_id": 9}\', \'update\', \'{"edit": false}\', \'{"edit": true}\', \'{"menu_id": 29}\')');
+  $Item = History::Scope(History::Token('/framework/admin/menu.php', ['framework.menu_access'], ['menu_id' => 29]));
+  Same([6, 3], array_map(fn($Row) => (int)$Row['id'], History::Changes($Item, 0)), 'with about: by the parent id, and rows without about by their key');
   DB::Exec('drop schema audit cascade');
 
   // audit.user: empty while nobody is signed in, the signed-in user's email once someone is, set again when that changes
