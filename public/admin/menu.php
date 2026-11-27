@@ -227,6 +227,13 @@
     $Code->InputElement()->Required = true;
     $Grid->Col($Icon = new \BS\Input('icon', 'Icon'));
     $Icon->InputElement()->AddAttribute('placeholder', 'e.g. bi-people');
+    // Keep the browser's sign-in autofill out of the form
+    foreach ([$Name, $Target, $Code, $Icon] as $Field)
+    {
+      $Field->InputElement()->AddAttribute('autocomplete', 'off');
+      $Field->InputElement()->AddAttribute('data-1p-ignore', 'true');
+      $Field->InputElement()->AddAttribute('data-lpignore', 'true');
+    }
     $Form->AddChild($Hint = new HTML\Small('The target is the script it loads, e.g. /app/orders.php. The ID names the link, e.g. orders: lower case, unique. The icon is a Bootstrap icon class, e.g. bi-people (see icons.getbootstrap.com).'));
     $Hint->AddClass('d-block');
     $Hint->Format->Color(Color::BodySecondary);

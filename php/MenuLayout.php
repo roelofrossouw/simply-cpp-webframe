@@ -300,9 +300,9 @@
     public static function Add(string $Name, ?int $ParentID, string $Code, string $Target, string $Icon, string $Section = 'main'): ?string
     {
       $Name = trim($Name);
-      if ($Name === '')
+      if (($Problem = self::CheckName($Name)) !== null)
       {
-        return 'Give it a name.';
+        return $Problem;
       }
       if (!array_key_exists($Section, self::SECTIONS))
       {
@@ -328,12 +328,24 @@
      *
      * @return string|null Why it can't be saved, or null when it was
      */
+    // A browser or password manager may fill a sign-in name into a menu name (2026-11-27: the Sign in item showed an
+    // admin's email address), so an email address is never a name
+    private static function CheckName(string $Name): ?string
+    {
+      return match (true)
+      {
+        $Name === '' => 'Give it a name.',
+        filter_var($Name, FILTER_VALIDATE_EMAIL) !== false => 'A menu name can\'t be an email address (was it filled in by the browser?).',
+        default => null,
+      };
+    }
+
     public static function Update(int $ID, string $Field, string $Value): ?string
     {
       $Value = trim($Value);
       $Problem = match ($Field)
       {
-        'name' => $Value === '' ? 'Give it a name.' : null,
+        'name' => self::CheckName($Value),
         'icon' => self::CheckIcon($Value),
         'code' => self::CheckCode($Value),
         'position' => filter_var($Value, FILTER_VALIDATE_INT) === false ? 'The position is a whole number.' : null,

@@ -48,6 +48,13 @@
   Same(null, MenuLayout::Target('nothing'), 'none for a code there isn\'t');
   Check(array_key_exists('profile', MenuLayout::SECTIONS), 'profile is a section');
 
+  // Save-on-change inputs stay out of autofill, and a menu name is never an email address (2026-11-27)
+  $Html = (string)new BS\DataInput('Sign in');
+  Check(str_contains($Html, 'autocomplete="off"') && str_contains($Html, 'data-1p-ignore') && str_contains($Html, 'data-lpignore="true"'),
+    'a DataInput turns autofill and password managers off');
+  Check(str_contains((string)MenuLayout::Add('ann@example.com', null, 'x', '/x.php', ''), 'email address'), 'an email address is refused as a menu name');
+  Same('Give it a name.', MenuLayout::Add('  ', null, 'x', '/x.php', ''), 'an empty name is still refused');
+
   // No sign-in provider set up: no Sign in item at all
   $Providers = Config::Get('auth.github');
   Config::Set('auth.github', null);
