@@ -220,6 +220,38 @@
   Same('menu_id 29, access_id 3', History::KeyText(['menu_id' => 29, 'access_id' => 3]), 'a key as words');
   Same('abcd…', History::ValueText('abcdefgh', 5), 'a long value shortened');
 
+  // A storage that keeps the history (Storage\History) answers it, with the token's scope; no database is asked
+  $Kept = new class extends MemoryStorage implements Storage\History {
+    public array $Asked = [];
+
+    public function Changes(array $Tables, array $Match, int $Days, string $Search, ?string $Table, int $Limit): array
+    {
+      $this->Asked[] = ['Changes', $Tables, $Match, $Days, $Search, $Table, $Limit];
+      return [['id' => 5, 'at' => '2026-11-27 08:00:00+02', 'tbl' => 'framework.menu', 'row_key' => ['id' => 29], 'action' => 'update',
+        'old' => ['name' => 'A'], 'new' => ['name' => 'B'], 'changed_by' => 'ann@example.com', 'source' => null, 'undo_of' => null, 'undone_by' => null]];
+    }
+
+    public function Change(int $ID, array $Tables, array $Match): ?array
+    {
+      $this->Asked[] = ['Change', $ID, $Tables, $Match];
+      return $ID === 5 ? $this->Changes($Tables, $Match, 0, '', null, 1)[0] : null;
+    }
+
+    public function Undo(int $ID, ?string $By, array $Tables, array $Match): array
+    {
+      $this->Asked[] = ['Undo', $ID, $By, $Tables, $Match];
+      return ['message' => 'Put back.', 'undone' => true];
+    }
+  };
+  Store::Use($Kept);
+  Same(5, History::Changes($Scope, 1, ' B ', 'framework.menu')[0]['id'] ?? null, 'the storage lists the changes');
+  Same(['Changes', ['framework.menu', 'framework.menu_access'], ['framework.menu' => ['id' => 29], 'framework.menu_access' => ['menu_id' => 29]],
+    1, 'B', 'framework.menu', History::LIMIT], $Kept->Asked[0], 'with the token\'s tables and match, days, search and table');
+  Same(null, History::Change($Scope, 6), 'a change the storage hasn\'t: none');
+  Same(['message' => 'Put back.', 'undone' => true], History::Undo($Scope, 5), 'the storage undoes it');
+  Same('Undo', $Kept->Asked[count($Kept->Asked) - 1][0], 'Undo asked the storage');
+  Store::Use($Storage);
+
   // Who a change history names (audit.user): the email, else the name, else the user id; nobody when signed out
   Same(null, Auth\Base::AuditName(), 'signed out: no audit user');
   $_COOKIE['auth_token'] = (string)new Auth\JWT(['userid' => '7', 'email' => 'ann@example.com', 'firstname' => 'Ann', 'access' => ['public']], 60);

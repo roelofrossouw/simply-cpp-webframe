@@ -317,6 +317,10 @@ $Cell->AddChild(BS\History::Glyph('/app/templates.php', ['servers.template', 'se
   containing the object (`@>`), or, without `about`, the row's key and values.
 - Menu (all, and per item: its row and its `framework.menu_access` rows) and Users (all, and per user) have glyphs.
   Config has none: its settings are a file, not a table.
+- A site without a database of its own (its storage works through an API) keeps the history in its storage (since
+  1.49.3): a `storage.class` that also implements `Storage\History` (`Changes`, `Change`, `Undo`) answers the popup, each
+  call with the token's tables and match, which it must keep to. Without it the popup queries `audit.change` through
+  `DB`. `DB` sets `audit.user` only when the settings have a database section.
 
 ## Popups on popups (since 1.19.0)
 

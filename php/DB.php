@@ -208,6 +208,13 @@
       {
         return;
       }
+      // No database of its own (a storage that works through an API): nothing to set, and the statement's own
+      // connection says why it can't run
+      $Settings = Config::Get('database');
+      if (!is_array($Settings) || empty($Settings))
+      {
+        return;
+      }
       if (@pg_query_params(self::Connection(), 'select set_config(\'audit.user\', $1, false)', [$Who]) !== false)
       {
         self::$AuditUser = $Who;

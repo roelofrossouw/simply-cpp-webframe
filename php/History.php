@@ -14,6 +14,9 @@
    * A screen shows its history with BS\History::Glyph(): a button that opens the history popup (history.php) for the
    * tables it edits, optionally only the rows matching a JSON object. What it may show travels in a signed token
    * (Token(), Scope()), so the popup never shows tables or rows the screen didn't name.
+   *
+   * A storage that implements Storage\History (since 1.49.3: one whose database the site can't query, such as an API's)
+   * answers Changes(), Change() and Undo(); otherwise they query audit.change through DB.
    */
   class History
   {
@@ -54,7 +57,7 @@
         return null;
       }
       return ['page' => $Read->Get('page'), 'tables' => array_map('strval', $Read->Get('tables')),
-        'match' => (array)$Read->Get('match'), 'title' => (string)$Read->Get('title')];
+        'match' => (array)json_decode((string)json_encode($Read->Get('match') ?? []), true), 'title' => (string)$Read->Get('title')];
     }
 
     /**
@@ -126,6 +129,10 @@
      */
     public static function Changes(array $Scope, int $Days = 7, string $Search = '', ?string $Table = null, int $Limit = self::LIMIT): array
     {
+      if (($Storage = self::Storage()) !== null)
+      {
+        return $Storage->Changes($Scope['tables'], $Scope['match'], $Days, trim($Search), $Table, max(1, min($Limit, 1000)));
+      }
       $Parameters = [];
       $Where = [self::Where($Scope, $Parameters, $Table)];
       if ($Days === 1)
@@ -153,6 +160,10 @@
      */
     public static function Change(array $Scope, int $ID): ?array
     {
+      if (($Storage = self::Storage()) !== null)
+      {
+        return $Storage->Change($ID, $Scope['tables'], $Scope['match']);
+      }
       $Parameters = [$ID];
       $Row = DB::Row('select ' . self::COLUMNS . ' from audit.change c where c.id = $1 and ' . self::Where($Scope, $Parameters), $Parameters);
       return $Row === null ? null : self::Decoded($Row);
@@ -165,6 +176,10 @@
      */
     public static function Undo(array $Scope, int $ID): array
     {
+      if (($Storage = self::Storage()) !== null)
+      {
+        return $Storage->Undo($ID, \Auth\Base::AuditName(), $Scope['tables'], $Scope['match']);
+      }
       if (self::Change($Scope, $ID) === null)
       {
         return ['message' => 'There\'s no such change here.', 'undone' => false];
@@ -173,6 +188,15 @@
         $Message = (string)DB::Value('select audit.undo($1, $2)', [$ID, \Auth\Base::AuditName()]);
         return ['message' => $Message, 'undone' => DB::Exists('select 1 from audit.change where undo_of = $1', [$ID])];
       });
+    }
+
+    /**
+     * The storage, when it keeps the history itself (Storage\History)
+     */
+    private static function Storage(): ?\Storage\History
+    {
+      $Storage = \Storage\Store::Get();
+      return $Storage instanceof \Storage\History ? $Storage : null;
     }
 
     private static function Decoded(array $Row): array
