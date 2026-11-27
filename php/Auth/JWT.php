@@ -250,6 +250,15 @@
      */
     private static function KeyFile(string $Name): string
     {
+      // The settings say where the keys are (auth.secret, auth.keys_dir): read them, also for a token checked before
+      // the page's Config::Init() (1.49.1's history popup); without a settings file the default folder is used
+      try
+      {
+        \Config::Load();
+      }
+      catch (\RuntimeException)
+      {
+      }
       if ($Name === self::LOCAL_KEY && !empty($Secret = \Config::Get('auth.secret')))
       {
         return (string)$Secret;

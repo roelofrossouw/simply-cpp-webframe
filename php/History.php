@@ -45,6 +45,8 @@
      */
     public static function Scope(string $Token): ?array
     {
+      // Called before the page's Config::Init(): the settings (keys, origin) must be read first
+      Config::Load();
       $Read = \Auth\JWT::FromToken($Token);
       if ($Read === null || $Read->Get('purpose') !== 'history' || $Read->Get('iss') !== Config::Origin()
         || !is_string($Read->Get('page')) || !is_array($Read->Get('tables')) || empty($Read->Get('tables')))
