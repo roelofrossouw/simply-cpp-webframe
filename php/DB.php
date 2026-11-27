@@ -13,10 +13,17 @@
    *
    * Values come back as the pgsql functions give them: text, 't' or 'f' for booleans, null for null. Parameters may be
    * strings, numbers, booleans (sent as true and false), null, or arrays (sent as PostgreSQL arrays, e.g. for = any($1)).
+   *
+   * Every statement runs with the setting audit.user set to the signed-in user (Auth\Base::AuditName(), empty when
+   * nobody is), so a database that keeps a change history (a trigger reading current_setting('audit.user', true)) says
+   * who changed what. It's set on the connection before a request's first statement, and again when the user changes,
+   * so a persistent connection never carries an earlier request's user.
    */
   class DB
   {
     private static ?\PgSql\Connection $Connection = null;
+    // audit.user as this request last set it on the connection; null before it has
+    private static ?string $AuditUser = null;
 
     public static function Connection(): \PgSql\Connection
     {
@@ -63,6 +70,7 @@
      */
     public static function Query(string $Query, array $Parameters = []): \PgSql\Result
     {
+      self::SetAuditUser();
       $Result = @pg_query_params(self::Connection(), $Query, array_map([self::class, 'Parameter'], array_values($Parameters)));
       if ($Result === false)
       {
@@ -147,6 +155,8 @@
       catch (Throwable $Error)
       {
         @pg_query(self::Connection(), 'rollback');
+        // A change of audit.user inside the transaction is rolled back with it
+        self::$AuditUser = null;
         throw $Error;
       }
     }
@@ -179,6 +189,29 @@
       }
       // Only one of the page's own fields, so it may be an expression such as u.name
       return ' order by ' . $Field . (empty(QueryString::Get('_desc')) ? ' asc' : ' desc');
+    }
+
+    /**
+     * The signed-in user as audit.user on the connection, when it isn't already (see the class's comment)
+     */
+    private static function SetAuditUser(): void
+    {
+      try
+      {
+        $Who = \Auth\Base::AuditName() ?? '';
+      }
+      catch (Throwable)
+      {
+        $Who = '';
+      }
+      if ($Who === self::$AuditUser)
+      {
+        return;
+      }
+      if (@pg_query_params(self::Connection(), 'select set_config(\'audit.user\', $1, false)', [$Who]) !== false)
+      {
+        self::$AuditUser = $Who;
+      }
     }
 
     private static function Parameter(mixed $Value): ?string

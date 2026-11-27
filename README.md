@@ -286,6 +286,38 @@ $Table->CellWidth('30rem');                   // how wide a one-line cell gets b
 
 Sortable headings (`TableHeadingCell::Sort()`, `DB::SortAction()`) keep the page's own query parameters (since 1.10.4).
 
+## Change history (since 1.49.0)
+
+`DB` sets the PostgreSQL setting `audit.user` to the signed-in user (their email, else their name; empty when nobody is
+signed in, `Auth\Base::AuditName()`) before a request's first statement and again whenever the user changes. A database
+that keeps a history of changes with a trigger reads it with `current_setting('audit.user', true)` and so records who
+changed what, for the framework's own pages (menu, users, profile, settings) and every page that writes through `DB`.
+The persistent connection never carries one request's user into the next. Inline inputs that save on change
+(`BS\DataInput`) turn browser autofill and password managers off (since 1.48.3).
+
+A screen shows its history with a small clock button, `BS\History::Glyph()`, which opens the history popup
+(`framework/history.php`) on `audit.change` (`id, at, tbl, row_key, action, old, new, changed_by, source, undo_of`, and
+`about`, the row's parent ids, when the column is there; an update holds only the changed columns):
+
+```php
+// The whole screen: the tables it edits; who may view the page sees the history, who may edit it may undo
+$Heading->AddChild(BS\History::Glyph('/app/templates.php', ['servers.template', 'servers.lxc_setting']));
+// One row: its own key, and its children by their parent id (per table; or one object for every table)
+$Cell->AddChild(BS\History::Glyph('/app/templates.php', ['servers.template', 'servers.lxc_setting'],
+  ['servers.template' => ['id' => 632], 'servers.lxc_setting' => ['template_id' => 632]], 'template web1'));
+```
+
+- The popup lists the newest changes first (200 at most): when (today, 7 or 30 days, a year, all), a search (text in the
+  row's key, its values, who or where from) and the table; per change who, the row, and each column before → after
+  (long values shortened). The eye opens one change in full.
+- Undo puts a change back with `audit.undo(id, by)` as the signed-in user, and its answer shows as a toast; only for
+  those with the Edit right on the glyph's page.
+- What the popup may show travels in a signed token that expires after 12 hours (`History::Token()`, `History::Scope()`):
+  a changed link shows nothing, and never another table or row than the glyph named. A match is `about || row_key`
+  containing the object (`@>`), or, without `about`, the row's key and values.
+- Menu (all, and per item: its row and its `framework.menu_access` rows) and Users (all, and per user) have glyphs.
+  Config has none: its settings are a file, not a table.
+
 ## Popups on popups (since 1.19.0)
 
 A button in a popup can open its page in a popup on top, e.g. an Add or Edit from a list that is itself in a popup.

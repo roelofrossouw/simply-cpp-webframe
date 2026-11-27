@@ -51,6 +51,10 @@
     . 'item to visitors who are signed in or out. Pages check all this themselves, also when opened without the menu. '
     . 'Changes save as you leave a field and show when the page is next loaded; reopen Menu to see a new order.'));
   $About->Format->Color(Color::BodySecondary);
+  // The menu's change history (in a database that keeps one, audit.change): the whole menu here, one item per row
+  $HistoryTables = ['framework.menu', 'framework.menu_access'];
+  $About->AddChild(' ');
+  $About->AddChild(\BS\History::Glyph($Here, $HistoryTables, [], 'the menu'));
 
   // A text input that saves one field of an item
   $Input = function (array $Item, string $Field, ?string $Value, \HTML\InputType $Type = \HTML\InputType::Text) use ($Update): \BS\DataInput
@@ -192,19 +196,18 @@
         $Row->AddCell($Rights)->AddClass('border-start');
       }
 
+      $Cell = $Row->AddCell(null);
+      $Cell->AddClasses(['border-start', 'text-nowrap']);
+      $Cell->AddChild(\BS\History::Glyph($Here, $HistoryTables,
+        ['framework.menu' => ['id' => (int)$ID], 'framework.menu_access' => ['menu_id' => (int)$ID]], $Item['name']))->AddClass('me-2');
       if ($CanEdit && empty($HasChildren[$ID]))
       {
-        $Cell = $Row->AddCell($Remove = new Button(null, Icon::Trash,
+        $Cell->AddChild($Remove = new Button(null, Icon::Trash,
           $Here . '?' . http_build_query(['action' => 'delete', 'id' => $ID, 'section' => $Section])));
         $Remove->Color(Color::Danger);
         $Remove->AddClass('btn-sm');
         $Remove->AddAttribute('aria-label', 'Remove ' . $Item['name']);
       }
-      else
-      {
-        $Cell = $Row->AddCell(null);
-      }
-      $Cell->AddClass('border-start');
     }
 
     if (!$CanEdit)

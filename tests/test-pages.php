@@ -203,6 +203,35 @@
       'exp' => time() + 60])), '+/', '-_'), '=') . '.' . $Signature);
   Check($Forged === null || $Forged->Get('userid') !== '1', 'a changed token is refused');
 
+  // A history glyph's token: only ours, only for history, its match per table
+  $Token = History::Token('/framework/admin/menu.php', ['framework.menu', 'framework.menu_access'],
+    ['framework.menu' => ['id' => 29], 'framework.menu_access' => ['menu_id' => 29]], 'Sign in');
+  $Scope = History::Scope($Token);
+  Same(['framework.menu', 'framework.menu_access'], $Scope['tables'] ?? null, 'a history token keeps its tables');
+  Same(['framework.menu' => ['id' => 29], 'framework.menu_access' => ['menu_id' => 29]], $Scope['match'] ?? null, 'and its match per table');
+  Same(['a.b' => ['id' => 1], 'a.c' => ['id' => 1]], History::Scope(History::Token('/x.php', ['a.b', 'a.c'], ['id' => 1]))['match'] ?? null,
+    'one match applies to every table');
+  [$H, $P, $S] = explode('.', $Token);
+  Same(null, History::Scope($H . '.' . rtrim(strtr(base64_encode(str_replace('framework.menu_access', 'access.passwords', base64_decode(strtr($P, '-_', '+/')))), '+/', '-_'), '=') . '.' . $S),
+    'a changed token is refused');
+  Same(null, History::Scope((string)$Read), 'a sign-in token isn\'t a history token');
+  Same(['a' => [1, 2], 'b' => [null, 3]], History::Columns(['action' => 'update', 'old' => ['a' => 1], 'new' => ['a' => 2, 'b' => 3]]), 'an update\'s columns, before and after');
+  Same(['a' => [null, 2]], History::Columns(['action' => 'insert', 'old' => null, 'new' => ['a' => 2]]), 'an insert\'s');
+  Same('menu_id 29, access_id 3', History::KeyText(['menu_id' => 29, 'access_id' => 3]), 'a key as words');
+  Same('abcd…', History::ValueText('abcdefgh', 5), 'a long value shortened');
+
+  // Who a change history names (audit.user): the email, else the name, else the user id; nobody when signed out
+  Same(null, Auth\Base::AuditName(), 'signed out: no audit user');
+  $_COOKIE['auth_token'] = (string)new Auth\JWT(['userid' => '7', 'email' => 'ann@example.com', 'firstname' => 'Ann', 'access' => ['public']], 60);
+  Auth\Base::Factory(new Auth\GitHub());
+  Same('ann@example.com', Auth\Base::AuditName(), 'signed in: the email');
+  $_COOKIE['auth_token'] = (string)new Auth\JWT(['userid' => '7', 'firstname' => 'Ann', 'lastname' => 'Example', 'access' => ['public']], 60);
+  Auth\Base::Factory(new Auth\GitHub());
+  Same('Ann Example', Auth\Base::AuditName(), 'no email: the name');
+  unset($_COOKIE['auth_token']);
+  Auth\Base::Factory(new Auth\GitHub());
+  Same(null, Auth\Base::AuditName(), 'signed out again');
+
   // User's display names
   Same('Ann', User::DisplayName($Storage->Profile(7)), 'the first name by default');
   Same('Ann Example', User::DisplayName(['display_as' => 'full'] + $Storage->Profile(7)), 'the full name');

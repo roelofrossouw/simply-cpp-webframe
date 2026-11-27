@@ -34,6 +34,12 @@
     $Add->Modal();
     $Add->Format->Margin(\BS\Side::Bottom, \BS\PadSize::Pad3);
   }
+  // Their change history (in a database that keeps one, audit.change): everyone's here, one user's beside their name
+  $Here = Config::FrameworkURL('admin/users.php');
+  $HistoryTables = ['access.users', 'access.grants', 'access.levels'];
+  $Result->AddChild($Tools = new HTML\Div());
+  $Tools->AddClasses(['d-flex', 'justify-content-end', 'mb-1']);
+  $Tools->AddChild(\BS\History::Glyph($Here, $HistoryTables, [], 'users and access'));
   // Scrolls sideways inside its own box on screens narrower than large, instead of running off the page
   $Result->AddChild($Wrapper = new \BS\ResponsiveTable(\BS\ScreenSize::Large));
   $Table = $Wrapper->Table();
@@ -61,7 +67,10 @@
   {
     $Access = $Record['access'];
     $Row = $Table->Body()->AddRow();
-    $Row->AddCell(($Record['name'] ?: '-') . (User::Blocked($Access) ? ' (blocked)' : ''));
+    $Name = $Row->AddCell(($Record['name'] ?: '-') . (User::Blocked($Access) ? ' (blocked)' : '') . ' ');
+    $Name->AddChild(\BS\History::Glyph($Here, ['access.users', 'access.grants'],
+      ['access.users' => ['user_id' => (int)$Record['user_id']], 'access.grants' => ['user_id' => (int)$Record['user_id']]],
+      $Record['name'] ?: ($Record['email'] ?? 'user ' . $Record['user_id'])));
     $Row->AddCell($Record['email'] ?? '-');
     // A password account works once a link chose its password
     $Provider = $Row->AddCell(User::ProviderTitle($Record['provider']) . (($Record['verified'] ?? null) === 'f' ? ' (invited)' : ''));

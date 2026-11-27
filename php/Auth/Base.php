@@ -216,6 +216,25 @@
       return false;
     }
 
+    /**
+     * Who the signed-in user is in a change history (the setting audit.user, see DB): their email, else their name, else
+     * their user id; null when nobody is signed in. Reads only the sign-in token, never the database.
+     */
+    public static function AuditName(): ?string
+    {
+      if (!isset(self::$Shared) || empty($ID = self::ID()))
+      {
+        return null;
+      }
+      $Email = self::$Shared->GetData('email', null);
+      if (!empty($Email))
+      {
+        return (string)$Email;
+      }
+      $Name = trim(self::$Shared->GetData('firstname', '') . ' ' . self::$Shared->GetData('lastname', ''));
+      return $Name !== '' ? $Name : 'user ' . $ID;
+    }
+
     public static function ID(): ?string
     {
       return isset(self::$Shared) ? self::$Shared->GetData('userid', null) : null;

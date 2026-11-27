@@ -29,6 +29,64 @@
     'the schema\'s items, Administer, Users, Menu and the profile among them');
   $Storage = Store::Get();
 
+  // The change history (History): audit.change as 1webman's sql/916 keeps it, and a stand-in audit.undo
+  DB::Exec('create schema if not exists audit');
+  DB::Exec('drop table if exists audit.change');
+  DB::Exec('create table audit.change (id bigserial primary key, at timestamptz not null default now(), tbl text not null, row_key jsonb not null,
+    action text not null, old jsonb, new jsonb, changed_by text, source text, undo_of bigint)');
+  DB::Exec('create or replace function audit.undo(p_id bigint, p_by text default null) returns text language plpgsql as $f$
+    begin
+      if exists (select 1 from audit.change where undo_of = p_id) then return \'It is undone already.\'; end if;
+      insert into audit.change (tbl, row_key, action, old, new, changed_by, undo_of)
+        select tbl, row_key, \'update\', new, old, p_by, p_id from audit.change where id = p_id;
+      return \'Put back.\';
+    end $f$');
+  DB::Exec('insert into audit.change (at, tbl, row_key, action, old, new, changed_by) values
+    (now() - interval \'2 days\', \'framework.menu\', \'{"id": 29}\', \'update\', \'{"name": "Sign in"}\', \'{"name": "ann@example.com"}\', \'bob@example.com\'),
+    (now() - interval \'40 days\', \'framework.menu\', \'{"id": 30}\', \'update\', \'{"position": 1}\', \'{"position": 2}\', null),
+    (now(), \'framework.menu_access\', \'{"menu_id": 29, "access_id": 3}\', \'insert\', null, \'{"menu_id": 29, "access_id": 3, "edit": false}\', \'bob@example.com\'),
+    (now(), \'access.passwords\', \'{"user_id": 7}\', \'update\', \'{"hash": "a"}\', \'{"hash": "b"}\', null)');
+  $Menu = History::Scope(History::Token('/framework/admin/menu.php', ['framework.menu', 'framework.menu_access']));
+  $Item = History::Scope(History::Token('/framework/admin/menu.php', ['framework.menu', 'framework.menu_access'],
+    ['framework.menu' => ['id' => 29], 'framework.menu_access' => ['menu_id' => 29]]));
+  $Ids = fn(array $Rows) => array_map(fn($Row) => (int)$Row['id'], $Rows);
+  Same([3, 1], $Ids(History::Changes($Menu, 7)), 'the menu\'s changes in 7 days, newest first, never another table\'s');
+  Same([3, 2, 1], $Ids(History::Changes($Menu, 0)), 'all of them');
+  Same([3], $Ids(History::Changes($Menu, 1)), 'today\'s');
+  Same([3, 1], $Ids(History::Changes($Item, 0)), 'one item\'s, its access rows by menu_id');
+  Same([1], $Ids(History::Changes($Menu, 0, 'ann@exa')), 'a search in the values');
+  Same([3], $Ids(History::Changes($Menu, 0, '', 'framework.menu_access')), 'one table\'s');
+  Same([], $Ids(History::Changes($Menu, 0, '100%')), 'a search\'s % is only text');
+  Same('ann@example.com', History::Change($Menu, 1)['new']['name'] ?? null, 'one change, decoded');
+  Same(null, History::Change($Menu, 4), 'not another table\'s');
+  Same(null, History::Change($Item, 2), 'nor another row\'s');
+  Same(['message' => 'There\'s no such change here.', 'undone' => false], History::Undo($Menu, 4), 'no undo outside the scope');
+  Same(['message' => 'Put back.', 'undone' => true], History::Undo($Menu, 1), 'an undo');
+  Same('5', (string)(History::Change($Menu, 1)['undone_by'] ?? ''), 'and the change says what undid it');
+  Same(['message' => 'It is undone already.', 'undone' => true], History::Undo($Menu, 1), 'not twice');
+  DB::Exec('drop schema audit cascade');
+
+  // audit.user: empty while nobody is signed in, the signed-in user's email once someone is, set again when that changes
+  Auth\Base::Factory(new Auth\GitHub());
+  Same('', DB::Value('select current_setting(\'audit.user\', true)'), 'signed out: audit.user is empty');
+  $_COOKIE['auth_token'] = (string)new Auth\JWT(['userid' => '7', 'email' => 'ann@example.com', 'access' => ['public']], 60);
+  Auth\Base::Factory(new Auth\GitHub());
+  Same('ann@example.com', DB::Value('select current_setting(\'audit.user\', true)'), 'signed in: audit.user is the email');
+  try
+  {
+    DB::Transaction(function () {
+      unset($_COOKIE['auth_token']);
+      Auth\Base::Factory(new Auth\GitHub());
+      DB::Exec('select 1');
+      throw new RuntimeException('undone');
+    });
+  }
+  catch (RuntimeException)
+  {
+  }
+  Same('', DB::Value('select current_setting(\'audit.user\', true)'), 'after a rolled back transaction: set again');
+  Auth\Base::Factory(new Auth\GitHub());
+
   // The first admin: nobody is one in a fresh database. With auth.first_admin an email, only that address becomes it;
   // with false nobody; by default the first sign-in
   $Admins = fn() => DB::Value('select count(*) from access.grants g join access.levels l using (access_id) where l.code = \'admin\' and g.revoked is null');

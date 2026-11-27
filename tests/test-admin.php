@@ -67,6 +67,11 @@
   Check(str_contains($Menu, 'Main menu') && str_contains($Menu, '/framework/admin/menuupdate.php'), 'Menu shows the sections, saving through menuupdate.php');
   Check(!preg_match('/Warning|Deprecated|Fatal|Something Went Wrong/', $Menu), 'Menu without errors' . (preg_match('/(Warning|Deprecated|Fatal)[^\n]*/', $Menu, $M) ? ': ' . $M[0] : ''));
 
+  // History glyphs: the whole menu's, one per item; everyone's on Users, one per user; a token the popup checks
+  Check(substr_count($Menu, 'bi-clock-history') > 1 && str_contains($Menu, '\\/framework\\/history.php?t='), 'Menu has history glyphs, for it and per item');
+  Check(substr_count($Users, 'bi-clock-history') > 1 && str_contains($Users, '\\/framework\\/history.php?t='), 'Users has history glyphs, for all and per user');
+  Check(str_contains(Render('history.php', []), 'This link has expired'), 'the history popup refuses a missing token');
+
   $Config = Render('admin/config.php');
   Check(preg_match('/class="sticky-bottom[^"]*"[^>]*>.*?Save/s', $Config) === 1, 'Config\'s Save stays in sight at the foot');
   Check(preg_match('#<details[^>]*open>\s*<summary[^>]*>Application#', $Config) === 1, 'Config\'s groups are sections, open when something is set');
